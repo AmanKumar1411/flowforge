@@ -1,0 +1,29 @@
+# Dependencies and generated output
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Local configuration and secrets
+.env
+.env.local
+infra/.env
+
+# Prisma generated client
+backend/src/generated/prisma/
+
+# Tooling and editor state
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+backend/.agents/
+backend/.claude/
+backend/.windsurf/
+backend/skills-lock.json
+
+# Logs and temporary files
+*.log
+npm-debug.log*
+*.tmp
