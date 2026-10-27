@@ -28,7 +28,8 @@ export interface NewUser {
   avatarUrl: string | null;
   role: Role;
   batchYear: number | null;
-  lastLoginAt: Date;
+  /** Null for an account created ahead of its first sign-in, such as a demo account. */
+  lastLoginAt: Date | null;
 }
 
 /** Refreshed from the identity provider on every login. Never includes batchYear. */

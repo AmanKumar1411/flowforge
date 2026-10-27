@@ -11,7 +11,7 @@ flowchart TB
   subgraph auth
     direction TB
     P[presentation<br/>AuthController, guards, AccessTokenStrategy, cookies, DTOs]
-    A[application<br/>AuthService, SignInService, SessionService, FacultyAccessService<br/>ports: IdentityProvider, DevIdentityProvider, FacultyDirectory, RefreshTokenRepository, TokenSigner]
+    A[application<br/>AuthService, SignInService, SessionService, FacultyAccessService, DemoAccountsService<br/>ports: IdentityProvider, DevIdentityProvider, FacultyDirectory, RefreshTokenRepository, TokenSigner]
     D[domain<br/>RoleResolver, BatchYearPolicy, UniversityIdentityParser, roles, errors]
     I[infrastructure<br/>GoogleIdentityProvider, LocalDevIdentityProvider, RishihoodIdentityParser,<br/>JwtTokenSigner, PrismaRefreshTokenRepository, PrismaFacultyDirectory]
     P --> A --> D
@@ -164,6 +164,22 @@ Every error has the shape `{ code, message }` (`ApiExceptionFilter`). The code â
 | Where is DIP? | Services depend on ports (`IdentityProvider`, `TokenSigner`, `FacultyDirectory`, `RefreshTokenRepository`, `Clock`, `TransactionRunner`) | `auth/application/ports/*` |
 | How would the CSV import fit? | One `FacultyAccessService.importCsv` method writing `source = CSV_IMPORT` | `faculty-access.service.ts` |
 | How would another identity provider fit? | Implement `IdentityProvider`; `SignInService` is unchanged | `ports/identity-provider.ts` |
+
+## Demo accounts (development)
+
+`DemoAccountsService` creates the accounts listed in `application/demo-accounts.ts` ahead of their
+first dev login (`npm run seed:demo`, which boots the app context and calls `seed()`), and lists
+them for the login page (`GET /auth/dev-login/accounts`). Both check
+`DevIdentityProvider.assertEnabled()` first, so they refuse exactly when dev login does.
+
+- Users get the provider sub `dev|<email>` (`devSubject`), so the later dev login finds them
+  instead of hitting `IDENTITY_CONFLICT`. Their `lastLoginAt` stays empty until then.
+- Each account is checked against the configured email rules first; one that does not fit (for
+  example with another university's patterns) is skipped, never forced.
+- Faculty go onto the allowlist through `FacultyAccessService.addToAllowlist`, with a demo admin as
+  the actor, because the role resolver demotes faculty who are not on it at their next login.
+- Every write is audited with `reason: "DEMO_SEED"` and no actor; the allowlist entries carry the
+  demo admin as actor like any manual entry.
 
 ## Testing
 

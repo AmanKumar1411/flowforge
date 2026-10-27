@@ -26,11 +26,13 @@ import { OriginGuard } from "../../common/http/origin.guard";
 import { AppConfig } from "../../config/app-config";
 import { AuthenticatedUser } from "../application/authenticated-user";
 import { AuthService } from "../application/auth.service";
+import { DemoAccountsService } from "../application/demo-accounts.service";
 import { AuthCookies, REFRESH_COOKIE } from "./auth-cookies";
 import { CurrentUser } from "./decorators/current-user.decorator";
 import { Public } from "./decorators/public.decorator";
 import { ALL_ROLES, Roles } from "./decorators/roles.decorator";
 import { AccessTokenResponseDto } from "./dto/access-token-response.dto";
+import { DemoAccountDto } from "./dto/demo-account.dto";
 import { DevLoginDto } from "./dto/dev-login.dto";
 import { MeResponseDto } from "./dto/me-response.dto";
 
@@ -43,6 +45,7 @@ const userAgentOf = (request: Request): string | null =>
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
+    private readonly demoAccounts: DemoAccountsService,
     private readonly cookies: AuthCookies,
     private readonly config: AppConfig,
   ) {}
@@ -123,6 +126,21 @@ export class AuthController {
       userAgentOf(request),
     );
     this.cookies.setRefreshToken(response, signedIn.refreshToken);
+  }
+
+  @Get("dev-login/accounts")
+  @Public()
+  @SkipThrottle({ login: true, refresh: true })
+  @ApiOperation({
+    summary: "Demo accounts for dev login",
+    description:
+      "The accounts `npm run seed:demo` creates, for one-click dev login. Returns 404 DEV_LOGIN_DISABLED unless dev login is enabled.",
+  })
+  @ApiOkResponse({ type: DemoAccountDto, isArray: true })
+  listDemoAccounts(): DemoAccountDto[] {
+    return this.demoAccounts
+      .list()
+      .map((account) => DemoAccountDto.from(account));
   }
 
   @Post("refresh")

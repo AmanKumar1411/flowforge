@@ -553,6 +553,55 @@ h2 {
   width: 100%;
 }
 
+.demo-accounts {
+  margin-bottom: 18px;
+}
+
+.demo-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: .84rem;
+}
+
+.demo-group {
+  margin: 14px 0 8px;
+  color: var(--muted);
+  font-size: .76rem;
+  font-weight: 800;
+}
+
+.demo-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(125px, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.demo-account {
+  width: 100%;
+  border: 1px solid var(--line);
+  padding: 7px 9px;
+  background: white;
+  color: var(--ink);
+  font: inherit;
+  font-size: .84rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.demo-account:hover:not(:disabled),
+.demo-account:focus-visible {
+  border-color: var(--coral);
+}
+
+.demo-account:disabled {
+  cursor: wait;
+  opacity: .6;
+}
+
 .login-card .text-button {
   display: block;
   margin-top: 14px;

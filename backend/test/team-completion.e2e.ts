@@ -151,7 +151,7 @@ describe("Team completion and electives", () => {
       assert.equal(hidden.body.code, "CYCLE_NOT_FOUND");
     });
 
-    it("import student emails and report the rows they refuse", async () => {
+    it("import student emails and report each row they refuse once", async () => {
       const elective = await openCycle({ kind: "ELECTIVE" });
       const result = await owner.post(
         `/course-cycles/${elective}/enrollments`,
@@ -162,6 +162,7 @@ describe("Team completion and electives", () => {
               EMAILS.neha,
               `prakriti.p${DOMAIN}`,
               "someone@gmail.com",
+              `PRAKRITI.P${DOMAIN}`,
             ],
           },
         },

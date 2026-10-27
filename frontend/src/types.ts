@@ -16,6 +16,14 @@ export interface CurrentUser {
   facultyRequestStatus: FacultyRequestStatus | null;
 }
 
+/** A ready-made account for dev login; `npm run seed:demo` gives it this role. */
+export interface DemoAccount {
+  email: string;
+  name: string;
+  role: "ADMIN" | "FACULTY" | "STUDENT";
+  batchYear: number | null;
+}
+
 export interface Cycle {
   id: string;
   courseName: string;

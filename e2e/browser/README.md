@@ -1,6 +1,6 @@
 # Browser end-to-end checks
 
-Two scripts drive the real React app in headless Chrome against the real API:
+Three scripts drive the real React app in headless Chrome against the real API:
 
 - `auth-ui.e2e.cjs` (Phase 3) runs 20 checks: the Google redirect (state, nonce, PKCE), token
   storage, single-flight refresh, the student / pending staff / admin / faculty journeys,
@@ -11,8 +11,20 @@ Two scripts drive the real React app in headless Chrome against the real API:
   - "already in a team" in another leader's search;
   - swapping a member, the faculty's team table, disbanding;
   - a team fixed after its deadline.
-  It sets up its faculty member and students through the API, so it can run after
-  `auth-ui.e2e.cjs` on the same database.
+- `completion-ui.e2e.cjs` (Phase 5) runs 11 checks:
+  - creating an elective in the editor, enrolling students by pasted emails and by CSV, and only
+    enrolled students seeing it;
+  - "Looking for a team" with a note, seen by a leader;
+  - after the students' deadline: the student told the faculty will place them, the faculty's list
+    of students without a team, a faculty-built team with a chosen leader, adding a student to a
+    team with room;
+  - auto-group preview, re-roll and confirmation, and the auto-grouped student seeing their team.
+  It waits 45 seconds for a formation deadline to pass.
+
+The Phase 4 and Phase 5 scripts set up their faculty member and students through the API, so all
+three run one after another on the same database. Each owns a batch, so their counts never mix:
+`auth-ui` uses 2023 (its batch-correction check moves a student to 2025), `teams-ui` 2026 and
+`completion-ui` 2024. Shared helpers (dev sign-in, API sessions, dates) are in `support.cjs`.
 
 It uses `playwright-core` with your installed Google Chrome, so nothing is downloaded and the app
 gets no new dependency.
@@ -41,12 +53,14 @@ node auth-ui.e2e.cjs "/Applications/Google Chrome.app/Contents/MacOS/Google Chro
   http://localhost:5173 http://localhost:3100/api ./out
 node teams-ui.e2e.cjs "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   http://localhost:5173 http://localhost:3100/api ./out
+node completion-ui.e2e.cjs "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  http://localhost:5173 http://localhost:3100/api ./out
 ```
 
 To keep a development frontend on 5173 running, start this one on another port (for example
 `npx vite --port 5174`), start the API with `FRONTEND_URL=http://localhost:5174`, and pass
 `http://localhost:5174` to the scripts.
 
-Each check prints `PASS` or `FAIL`. Results are written to `out/browser-e2e.json` and
-`out/teams-browser-e2e.json`, with a screenshot of the page for every failure. Each script exits
-with code 1 if any check fails.
+Each check prints `PASS` or `FAIL`. Results are written to `out/browser-e2e.json`,
+`out/teams-browser-e2e.json` and `out/completion-browser-e2e.json`, with a screenshot of the page
+for every failure. Each script exits with code 1 if any check fails.

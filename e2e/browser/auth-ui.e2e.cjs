@@ -219,11 +219,11 @@ const panel = (page, heading) =>
     await check("Batch correction applies to the student's next session (cycle for 2023 disappears)", async () => {
       await admin.reload();
       const row = panel(admin, "Users").locator("tr", { hasText: `aman.k23csai${DOMAIN}` });
-      await row.locator("input[type=number]").fill("2024");
+      await row.locator("input[type=number]").fill("2025");
       await row.getByRole("button", { name: "Save" }).click();
       await row.getByRole("button", { name: "Save" }).waitFor({ state: "detached" });
       await student.reload();
-      await student.getByText("Student workspace / Batch 2024").waitFor();
+      await student.getByText("Student workspace / Batch 2025").waitFor();
       await student.getByText("Nothing open for your batch").waitFor();
     }, student);
 

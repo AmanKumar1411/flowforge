@@ -203,7 +203,7 @@ const teamPanel = (page) => page.locator(".team-panel");
       const row = faculty.locator(".team-panel tbody tr", { hasText: "Falcon" });
       await row.waitFor();
       const cells = await row.locator("td").allInnerTexts();
-      assert(JSON.stringify(cells) === JSON.stringify(["Falcon", "Isha", "Zoya", "2"]), `row ${JSON.stringify(cells)}`);
+      assert(JSON.stringify(cells) === JSON.stringify(["Falcon", "Isha", "Zoya", "2", "Students"]), `row ${JSON.stringify(cells)}`);
       return cells.join(" | ");
     }, faculty);
 

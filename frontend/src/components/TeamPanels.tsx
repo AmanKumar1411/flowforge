@@ -27,16 +27,23 @@ import {
 } from "../teams";
 import type { Cycle, Person, Team, TeamCandidate } from "../types";
 
-export function FormationNote({ cycle, open }: { cycle: Cycle; open: boolean }) {
+export function FormationNote({ cycle, now }: { cycle: Cycle; now: number }) {
   const deadline = formatDate(cycle.teamFormationDeadline);
+  let completion = "";
+  if (hasCompletionWindow(cycle)) {
+    completion =
+      cycle.status === "PUBLISHED" &&
+      now < Date.parse(cycle.teamCompletionDeadline)
+        ? `The faculty place anyone still without a team by ${formatDate(cycle.teamCompletionDeadline)}.`
+        : "The faculty's time to place students without a team has ended.";
+  }
   return (
     <p className="field-hint">
       {describeTeamSize(cycle)} members, leader included.{" "}
-      {open
+      {isFormationOpen(cycle, now)
         ? `Students can change their teams until ${deadline}.`
         : `Students' own changes ended${cycle.status === "CLOSED" ? "" : ` on ${deadline}`}.`}{" "}
-      {hasCompletionWindow(cycle) &&
-        `The faculty place anyone still without a team by ${formatDate(cycle.teamCompletionDeadline)}.`}
+      {completion}
     </p>
   );
 }
@@ -115,7 +122,7 @@ export function StudentTeamPanel({ cycle }: { cycle: Cycle }) {
           </div>
         )}
       </div>
-      <FormationNote cycle={cycle} open={open} />
+      <FormationNote cycle={cycle} now={now} />
       {error && <p className="form-error">{error}</p>}
       {editing ? (
         <TeamEditor

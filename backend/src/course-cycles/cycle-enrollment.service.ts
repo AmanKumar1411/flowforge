@@ -79,9 +79,11 @@ export class CycleEnrollmentService {
       rejected: [],
     };
     const candidates = new Set<string>();
+    const seen = new Set<string>();
     for (const raw of rawEmails) {
       const email = normalizeEmail(raw);
-      if (candidates.has(email)) continue;
+      if (seen.has(email)) continue;
+      seen.add(email);
       const identity = this.identities.parse(email);
       if (identity.kind === "STUDENT") {
         candidates.add(email);

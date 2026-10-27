@@ -8,6 +8,7 @@ import { Clock } from "../common/clock";
 import { AppConfig } from "../config/app-config";
 import { UsersModule } from "../users/users.module";
 import { AuthService } from "./application/auth.service";
+import { DemoAccountsService } from "./application/demo-accounts.service";
 import { FacultyAccessService } from "./application/faculty-access.service";
 import { DevIdentityProvider } from "./application/ports/dev-identity-provider";
 import { FacultyDirectory } from "./application/ports/faculty-directory";
@@ -61,6 +62,7 @@ const ONE_MINUTE_MS = 60_000;
   controllers: [AuthController],
   providers: [
     AuthService,
+    DemoAccountsService,
     SignInService,
     SessionService,
     FacultyAccessService,

@@ -3,6 +3,7 @@ import { strict as assert } from "node:assert";
 import { spawnSync } from "node:child_process";
 import { AddressInfo, createServer } from "node:net";
 import { join } from "node:path";
+import { DemoAccountsService } from "../src/auth/application/demo-accounts.service";
 import { DOMAIN, startTestApp, TestApp } from "./support/test-app";
 
 const BACKEND = join(__dirname, "..");
@@ -106,6 +107,18 @@ describe("Dev login switched off", () => {
     const result = await app.browser().devLogin(`rahul.25${DOMAIN}`);
     assert.equal(result.status, 404);
     assert.equal(result.body.code, "DEV_LOGIN_DISABLED");
+    assert.equal(await app.prisma.user.count(), 0);
+  });
+
+  it("hides the demo accounts and refuses to create them", async () => {
+    const result = await app
+      .browser()
+      .get("/auth/dev-login/accounts", { token: null });
+    assert.equal(result.status, 404);
+    assert.equal(result.body.code, "DEV_LOGIN_DISABLED");
+    await assert.rejects(app.get(DemoAccountsService).seed(), {
+      code: "DEV_LOGIN_DISABLED",
+    });
     assert.equal(await app.prisma.user.count(), 0);
   });
 
