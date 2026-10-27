@@ -1,6 +1,9 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { AdminModule } from "./admin/admin.module";
 import { AuthModule } from "./auth/auth.module";
+import { CommonModule } from "./common/common.module";
+import { AppConfigModule } from "./config/app-config.module";
 import { validateEnvironment } from "./config/env.validation";
 import { CourseCyclesModule } from "./course-cycles/course-cycles.module";
 import { PrismaModule } from "./prisma/prisma.module";
@@ -11,8 +14,11 @@ import { PrismaModule } from "./prisma/prisma.module";
       isGlobal: true,
       validate: validateEnvironment,
     }),
+    AppConfigModule,
+    CommonModule,
     PrismaModule,
     AuthModule,
+    AdminModule,
     CourseCyclesModule,
   ],
 })

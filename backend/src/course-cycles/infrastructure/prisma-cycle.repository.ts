@@ -54,6 +54,16 @@ export class PrismaCycleRepository extends CycleRepository {
     return cycles.map(toDomain);
   }
 
+  async listPublishedOrClosed(): Promise<Cycle[]> {
+    const cycles = await this.prisma.courseProjectCycle.findMany({
+      where: {
+        status: { in: [PrismaCycleStatus.PUBLISHED, PrismaCycleStatus.CLOSED] },
+      },
+      orderBy: { publishedAt: "desc" },
+    });
+    return cycles.map(toDomain);
+  }
+
   async updateFields(
     id: string,
     expectedStatus: CycleStatus,

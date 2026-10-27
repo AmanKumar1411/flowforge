@@ -1,54 +1,37 @@
-import { Injectable } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import {
-  InvalidUniversityIdentityError,
   normalizeEmail,
   UniversityIdentity,
   UniversityIdentityParser,
 } from "../domain/university-identity-parser";
 
-@Injectable()
-export class RishihoodIdentityParser extends UniversityIdentityParser {
-  private readonly allowedDomains: ReadonlySet<string>;
-  private readonly batchEmailPattern: RegExp;
-  private readonly batchBaseYear: number;
+export interface IdentityPatterns {
+  /** Full-address pattern whose first capture group is the two-digit admission year. */
+  studentEmailPattern: RegExp;
+  staffEmailPattern: RegExp;
+  batchBaseYear: number;
+}
 
-  constructor(config: ConfigService) {
+export class RishihoodIdentityParser extends UniversityIdentityParser {
+  constructor(private readonly patterns: IdentityPatterns) {
     super();
-    this.allowedDomains = new Set(
-      config
-        .getOrThrow<string>("ALLOWED_UNIVERSITY_EMAIL_DOMAINS")
-        .split(",")
-        .map((domain) => domain.trim().toLowerCase()),
-    );
-    this.batchEmailPattern = new RegExp(
-      config.getOrThrow<string>("BATCH_EMAIL_PATTERN"),
-    );
-    this.batchBaseYear = Number(config.getOrThrow<string>("BATCH_BASE_YEAR"));
   }
 
   parse(email: string): UniversityIdentity {
     const normalizedEmail = normalizeEmail(email);
-    const separator = normalizedEmail.lastIndexOf("@");
-    if (
-      separator <= 0 ||
-      separator !== normalizedEmail.indexOf("@") ||
-      separator === normalizedEmail.length - 1
-    ) {
-      throw new InvalidUniversityIdentityError("Email address is malformed");
+
+    const student = this.patterns.studentEmailPattern.exec(normalizedEmail);
+    if (student) {
+      return {
+        kind: "STUDENT",
+        email: normalizedEmail,
+        batchYear: this.patterns.batchBaseYear + Number(student[1]),
+      };
     }
 
-    const localPart = normalizedEmail.slice(0, separator);
-    const domain = normalizedEmail.slice(separator + 1);
-    if (!this.allowedDomains.has(domain)) {
-      throw new InvalidUniversityIdentityError("Email domain is not allowed");
+    if (this.patterns.staffEmailPattern.test(normalizedEmail)) {
+      return { kind: "STAFF", email: normalizedEmail };
     }
 
-    const match = this.batchEmailPattern.exec(localPart);
-    const batchToken = match?.groups?.["batch"];
-    return {
-      email: normalizedEmail,
-      batchYear: batchToken ? this.batchBaseYear + Number(batchToken) : null,
-    };
+    return { kind: "UNRECOGNIZED", email: normalizedEmail };
   }
 }

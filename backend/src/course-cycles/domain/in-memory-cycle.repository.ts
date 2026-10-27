@@ -42,6 +42,15 @@ export class InMemoryCycleRepository extends CycleRepository {
       );
   }
 
+  async listPublishedOrClosed(): Promise<Cycle[]> {
+    return [...this.cycles.values()]
+      .filter((cycle) => cycle.status !== "DRAFT")
+      .sort(
+        (a, b) =>
+          (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0),
+      );
+  }
+
   async updateFields(
     id: string,
     expectedStatus: CycleStatus,

@@ -27,3 +27,6 @@ backend/skills-lock.json
 *.log
 npm-debug.log*
 *.tmp
+
+# Browser end-to-end run output
+e2e/browser/out/
