@@ -155,6 +155,75 @@ describe("CourseCycleService", () => {
     ).rejects.toMatchObject({ code: "CYCLE_NOT_FOUND" });
   });
 
+  it("defaults team rules: 1 to 4 members, formed by the time submissions open", async () => {
+    const created = await service.create(owner, createDto());
+    expect(created).toMatchObject({
+      minTeamSize: 1,
+      maxTeamSize: 4,
+      teamFormationDeadline: "2026-10-01T09:00:00.000Z",
+    });
+  });
+
+  it("validates team rules on create and on every edit", async () => {
+    await expect(
+      service.create(owner, { ...createDto(), minTeamSize: 5 }),
+    ).rejects.toMatchObject({ code: "INVALID_TEAM_SIZE" });
+    await expect(
+      service.create(owner, {
+        ...createDto(),
+        teamFormationDeadline: "2026-12-01T17:00:00.000Z",
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_TEAM_FORMATION_DEADLINE" });
+
+    const created = await service.create(owner, {
+      ...createDto(),
+      minTeamSize: 2,
+      maxTeamSize: 3,
+    });
+    await expect(
+      service.update(owner, created.id, { maxTeamSize: 1 }),
+    ).rejects.toMatchObject({ code: "INVALID_TEAM_SIZE" });
+    await expect(
+      service.update(owner, created.id, {
+        submissionDeadline: "2026-09-30T17:00:00.000Z",
+        submissionStartAt: "2026-09-01T09:00:00.000Z",
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_TEAM_FORMATION_DEADLINE" });
+  });
+
+  it("fixes team sizes at publish but lets an open formation deadline move forward", async () => {
+    // The clock reads 2026-10-23T09:00Z.
+    const created = await service.create(owner, {
+      ...createDto(),
+      teamFormationDeadline: "2026-10-25T12:00:00.000Z",
+    });
+    await service.publish(owner, created.id);
+
+    await expect(
+      service.update(owner, created.id, { maxTeamSize: 5 }),
+    ).rejects.toMatchObject({ code: "CYCLE_FIELD_LOCKED" });
+    await expect(
+      service.update(owner, created.id, {
+        teamFormationDeadline: "2026-10-22T12:00:00.000Z",
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_TEAM_FORMATION_DEADLINE" });
+    const extended = await service.update(owner, created.id, {
+      teamFormationDeadline: "2026-10-28T12:00:00.000Z",
+    });
+    expect(extended.teamFormationDeadline).toBe("2026-10-28T12:00:00.000Z");
+  });
+
+  it("never reopens team formation once its deadline has passed", async () => {
+    // Defaults to submissionStartAt (2026-10-01), already behind the clock.
+    const created = await service.create(owner, createDto());
+    await service.publish(owner, created.id);
+    await expect(
+      service.update(owner, created.id, {
+        teamFormationDeadline: "2026-11-01T12:00:00.000Z",
+      }),
+    ).rejects.toMatchObject({ code: "CYCLE_FIELD_LOCKED" });
+  });
+
   it("rejects student creation", async () => {
     await expect(
       service.create(student("s26", 2026), createDto()),

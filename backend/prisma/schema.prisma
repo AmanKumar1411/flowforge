@@ -54,6 +54,9 @@ enum AuditAction {
   LOGOUT
   LOGOUT_ALL
   REFRESH_TOKEN_REUSE_DETECTED
+  TEAM_CREATED
+  TEAM_UPDATED
+  TEAM_DISBANDED
 }
 
 model User {
@@ -76,6 +79,8 @@ model User {
   decidedFacultyRequests FacultyAccessRequest[]  @relation("RequestDecider")
   addedAllowlistEntries  FacultyAllowlistEntry[]
   auditLogs              AuditLog[]
+  ledTeams               Team[]                  @relation("TeamLeader")
+  teamMemberships        TeamMember[]
 
   @@index([role])
   @@index([batchYear])
@@ -148,23 +153,64 @@ enum CycleStatus {
 }
 
 model CourseProjectCycle {
-  id                 String      @id @default(uuid())
-  courseName         String
-  title              String
-  description        String?
-  batchYear          Int
-  semester           Int
-  academicYear       String
-  submissionStartAt  DateTime
-  submissionDeadline DateTime
-  status             CycleStatus @default(DRAFT)
-  createdByFacultyId String
-  createdByFaculty   User        @relation(fields: [createdByFacultyId], references: [id], onDelete: Restrict)
-  publishedAt        DateTime?
-  closedAt           DateTime?
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
+  id                    String      @id @default(uuid())
+  courseName            String
+  title                 String
+  description           String?
+  batchYear             Int
+  semester              Int
+  academicYear          String
+  submissionStartAt     DateTime
+  submissionDeadline    DateTime
+  // Team rules. The migration adds a CHECK: 1 <= min <= max <= 10.
+  minTeamSize           Int         @default(1)
+  maxTeamSize           Int         @default(4)
+  // Shared with idea submission (Phase 5). After it, team membership is fixed.
+  teamFormationDeadline DateTime
+  status                CycleStatus @default(DRAFT)
+  createdByFacultyId    String
+  createdByFaculty      User        @relation(fields: [createdByFacultyId], references: [id], onDelete: Restrict)
+  publishedAt           DateTime?
+  closedAt              DateTime?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  teams                 Team[]
 
   @@index([createdByFacultyId, createdAt])
   @@index([batchYear, status, publishedAt])
+}
+
+// Teams
+
+model Team {
+  id        String             @id @default(uuid())
+  cycleId   String
+  cycle     CourseProjectCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict)
+  name      String
+  // The student who created the team. Leadership is never transferred.
+  leaderId  String
+  leader    User               @relation("TeamLeader", fields: [leaderId], references: [id], onDelete: Restrict)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  members   TeamMember[]
+
+  // Target of TeamMember's composite foreign key, which keeps every member row in its team's cycle.
+  @@unique([id, cycleId])
+  @@unique([cycleId, leaderId])
+  @@index([cycleId, createdAt])
+}
+
+// The leader has a row too, so the unique key below covers leaders and members alike.
+model TeamMember {
+  teamId  String
+  // Copied from the team so the database can enforce one team per student per cycle.
+  cycleId String
+  team    Team     @relation(fields: [teamId, cycleId], references: [id, cycleId], onDelete: Cascade)
+  userId  String
+  user    User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  addedAt DateTime @default(now())
+
+  @@id([teamId, userId])
+  @@unique([cycleId, userId])
+  @@index([userId])
 }

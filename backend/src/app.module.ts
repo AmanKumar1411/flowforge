@@ -7,6 +7,7 @@ import { AppConfigModule } from "./config/app-config.module";
 import { validateEnvironment } from "./config/env.validation";
 import { CourseCyclesModule } from "./course-cycles/course-cycles.module";
 import { PrismaModule } from "./prisma/prisma.module";
+import { TeamsModule } from "./teams/teams.module";
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     AuthModule,
     AdminModule,
     CourseCyclesModule,
+    TeamsModule,
   ],
 })
 export class AppModule {}

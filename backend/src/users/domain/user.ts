@@ -57,3 +57,10 @@ export interface UserPage {
   items: User[];
   nextCursor: string | null;
 }
+
+export interface StudentSearch {
+  batchYear: number;
+  /** Matches a name containing it or an email starting with it, ignoring case. */
+  query: string;
+  limit: number;
+}

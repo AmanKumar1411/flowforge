@@ -23,6 +23,10 @@ export interface Cycle {
   academicYear: string;
   submissionStartAt: string;
   submissionDeadline: string;
+  minTeamSize: number;
+  maxTeamSize: number;
+  /** Team membership (and, from Phase 5, the project idea) is fixed after this. */
+  teamFormationDeadline: string;
   status: CycleStatus;
   publishedAt: string | null;
   closedAt: string | null;
@@ -39,6 +43,40 @@ export interface CycleInput {
   academicYear: string;
   submissionStartAt: string;
   submissionDeadline: string;
+  minTeamSize: number;
+  maxTeamSize: number;
+  teamFormationDeadline: string;
+}
+
+export interface TeamMember {
+  userId: string;
+  name: string;
+  email: string;
+  isLeader: boolean;
+  addedAt: string;
+}
+
+export interface Team {
+  id: string;
+  cycleId: string;
+  name: string;
+  leaderId: string;
+  /** Leader first. */
+  members: TeamMember[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CandidateAvailability =
+  | "AVAILABLE"
+  | "IN_YOUR_TEAM"
+  | "IN_ANOTHER_TEAM";
+
+export interface TeamCandidate {
+  id: string;
+  name: string;
+  email: string;
+  availability: CandidateAvailability;
 }
 
 export interface AdminUser {

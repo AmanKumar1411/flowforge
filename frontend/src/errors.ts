@@ -34,12 +34,18 @@ const messages: Record<string, string> = {
   FACULTY_REQUEST_ALREADY_DECIDED: "That request has already been decided.",
   CANNOT_DEACTIVATE_SELF: "You cannot deactivate your own account.",
   USER_NOT_A_STUDENT: "Only students have a batch year.",
-  // Course cycles
-  CYCLE_FIELD_LOCKED: "That field is locked once a cycle is published.",
+  // Course cycles (CYCLE_FIELD_LOCKED keeps the API's message, which names the reason)
   CYCLE_ALREADY_CLOSED: "Closed cycles are immutable.",
   INVALID_DEADLINE: "The submission start must be before the deadline.",
   INVALID_ACADEMIC_YEAR: "Use consecutive years in the form 2026-27.",
   CYCLE_NOT_FOUND: "That cycle is not available.",
+  INVALID_TEAM_SIZE:
+    "Team size must be between 1 and 10, and the minimum cannot exceed the maximum.",
+  // Teams (size, eligibility and "already in a team" keep the API's message, which names the numbers or people)
+  TEAM_NOT_FOUND: "That team is not available.",
+  NOT_TEAM_LEADER: "Only the team leader can change the team.",
+  TEAM_FORMATION_CLOSED:
+    "Team formation has closed for this cycle, so teams can no longer change.",
 };
 
 export function messageForCode(code: string | null | undefined): string | null {

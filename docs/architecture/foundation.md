@@ -20,6 +20,9 @@ address as student (with the two-digit admission year from `STUDENT_EMAIL_PATTER
 (`STAFF_EMAIL_PATTERN`) or unrecognized. Unrecognized addresses are denied, never guessed.
 `batchYear` is set once when the user is created; later logins and requests use the persisted value.
 
+Phase 4 adds a layered `teams` module (see [teams.md](teams.md)). It reads cycles and users only
+through ports whose adapters call `CourseCycleService` and `UsersService`.
+
 ## Data and security decisions
 
 Users are identified by the unique Google `sub`; `User.email` is unique and normalized. No passwords are stored. `JwtAuthGuard` and `RolesGuard` are global, with an explicit `@Public()` opt-out, and every request reads the user's role, status and `tokenVersion` by primary key. Resource-level rules stay in policy objects such as `CycleAuthorizationPolicy`. Global DTO validation strips or rejects unexpected fields. CORS accepts only `FRONTEND_URL` and uses credentials. Every error has the shape `{ code, message }`.

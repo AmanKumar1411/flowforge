@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { getCycle } from "../api/cycles";
 import { Info } from "../components/CycleParts";
+import { CycleTeamsPanel, StudentTeamPanel } from "../components/TeamPanels";
 import { formatDate } from "../dates";
 import { readableError } from "../errors";
+import { describeTeamSize } from "../teams";
 import type { Cycle } from "../types";
 
 export function CycleDetailPage({ faculty }: { faculty: boolean }) {
@@ -60,7 +62,15 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
           value={formatDate(cycle.submissionStartAt)}
         />
         <Info label="Deadline" value={formatDate(cycle.submissionDeadline)} />
+        <Info label="Team size" value={`${describeTeamSize(cycle)} members`} />
+        <Info
+          label="Teams fixed after"
+          value={formatDate(cycle.teamFormationDeadline)}
+        />
       </div>
+      {faculty
+        ? cycle.status !== "DRAFT" && <CycleTeamsPanel cycle={cycle} />
+        : <StudentTeamPanel cycle={cycle} />}
     </section>
   );
 }

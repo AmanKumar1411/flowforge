@@ -6,7 +6,12 @@ import {
 } from "./domain/cycle-authorization-policy";
 import { CycleDomainError } from "./domain/cycle.errors";
 import { CycleRepository } from "./domain/cycle-repository";
-import { CyclePatch, Cycle } from "./domain/cycle.types";
+import {
+  Cycle,
+  CycleCreateData,
+  CyclePatch,
+  DEFAULT_TEAM_SIZE,
+} from "./domain/cycle.types";
 import { CycleWorkflow } from "./domain/cycle-workflow";
 import { CreateCycleDto } from "./dto/create-cycle.dto";
 import { CycleResponseDto } from "./dto/cycle-response.dto";
@@ -30,9 +35,7 @@ export class CourseCycleService {
       dto.submissionStartAt,
       dto.submissionDeadline,
     );
-    this.workflow.assertValidDeadline(dates.start, dates.deadline);
-    this.assertAcademicYear(dto.academicYear);
-    const cycle = await this.repository.create({
+    const data: CycleCreateData = {
       courseName: dto.courseName.trim(),
       title: dto.title.trim(),
       description: dto.description?.trim() || null,
@@ -41,8 +44,17 @@ export class CourseCycleService {
       academicYear: dto.academicYear,
       submissionStartAt: dates.start,
       submissionDeadline: dates.deadline,
+      minTeamSize: dto.minTeamSize ?? DEFAULT_TEAM_SIZE.min,
+      maxTeamSize: dto.maxTeamSize ?? DEFAULT_TEAM_SIZE.max,
+      // By default teams must be formed by the time submissions open.
+      teamFormationDeadline: dto.teamFormationDeadline
+        ? new Date(dto.teamFormationDeadline)
+        : dates.start,
       createdByFacultyId: actor.id,
-    });
+    };
+    this.workflow.assertValidSchedule(data);
+    this.assertAcademicYear(dto.academicYear);
+    const cycle = await this.repository.create(data);
     return CycleResponseDto.fromCycle(cycle);
   }
 
@@ -64,9 +76,14 @@ export class CourseCycleService {
   }
 
   async findById(actor: CycleActor, id: string): Promise<CycleResponseDto> {
-    const cycle = await this.getCycle(id);
+    return CycleResponseDto.fromCycle(await this.getVisibleCycle(actor, id));
+  }
+
+  /** For modules that build on cycles (teams): the cycle, or CYCLE_NOT_FOUND when the actor may not see it. */
+  async getVisibleCycle(actor: CycleActor, id: string): Promise<Cycle> {
+    const cycle = await this.getById(id);
     this.policy.assertCanRead(actor, cycle);
-    return CycleResponseDto.fromCycle(cycle);
+    return cycle;
   }
 
   async update(
@@ -74,22 +91,29 @@ export class CourseCycleService {
     id: string,
     dto: UpdateCycleDto,
   ): Promise<CycleResponseDto> {
-    const cycle = await this.getCycle(id);
+    const cycle = await this.getById(id);
     this.policy.assertOwner(actor, cycle);
     const patch = this.toPatch(dto);
     this.workflow.assertEditable(
       cycle.status,
       Object.keys(patch) as (keyof CyclePatch)[],
     );
+    if (
+      cycle.status === "PUBLISHED" &&
+      patch.teamFormationDeadline !== undefined
+    ) {
+      this.workflow.assertTeamDeadlineChange(
+        cycle.teamFormationDeadline,
+        patch.teamFormationDeadline,
+        this.clock.now(),
+      );
+    }
     const merged = {
       ...cycle,
       ...patch,
     };
     this.assertAcademicYear(merged.academicYear);
-    this.workflow.assertValidDeadline(
-      merged.submissionStartAt,
-      merged.submissionDeadline,
-    );
+    this.workflow.assertValidSchedule(merged);
     const updated = await this.repository.updateFields(id, cycle.status, patch);
     if (!updated) {
       throw new CycleDomainError(
@@ -101,13 +125,10 @@ export class CourseCycleService {
   }
 
   async publish(actor: CycleActor, id: string): Promise<CycleResponseDto> {
-    const cycle = await this.getCycle(id);
+    const cycle = await this.getById(id);
     this.policy.assertOwner(actor, cycle);
     const nextStatus = this.workflow.transition(cycle.status, "PUBLISH");
-    this.workflow.validatePublishRules(
-      cycle.submissionStartAt,
-      cycle.submissionDeadline,
-    );
+    this.workflow.validatePublishRules(cycle);
     const published = await this.repository.transitionStatus(
       id,
       cycle.status,
@@ -124,7 +145,7 @@ export class CourseCycleService {
   }
 
   async close(actor: CycleActor, id: string): Promise<CycleResponseDto> {
-    const cycle = await this.getCycle(id);
+    const cycle = await this.getById(id);
     this.policy.assertOwner(actor, cycle);
     const nextStatus = this.workflow.transition(cycle.status, "CLOSE");
     const closed = await this.repository.transitionStatus(
@@ -142,7 +163,8 @@ export class CourseCycleService {
     return CycleResponseDto.fromCycle(closed);
   }
 
-  private async getCycle(id: string): Promise<Cycle> {
+  /** For modules that build on cycles, when the rule does not depend on the caller (a team's own cycle). */
+  async getById(id: string): Promise<Cycle> {
     const cycle = await this.repository.findById(id);
     if (!cycle) {
       throw new CycleDomainError("CYCLE_NOT_FOUND", "Course cycle not found");
@@ -183,6 +205,11 @@ export class CourseCycleService {
     }
     if (dto.submissionDeadline !== undefined) {
       patch.submissionDeadline = new Date(dto.submissionDeadline);
+    }
+    if (dto.minTeamSize !== undefined) patch.minTeamSize = dto.minTeamSize;
+    if (dto.maxTeamSize !== undefined) patch.maxTeamSize = dto.maxTeamSize;
+    if (dto.teamFormationDeadline !== undefined) {
+      patch.teamFormationDeadline = new Date(dto.teamFormationDeadline);
     }
     return patch;
   }

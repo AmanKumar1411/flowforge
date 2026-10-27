@@ -7,6 +7,8 @@ export type CycleErrorCode =
   | "CYCLE_ALREADY_CLOSED"
   | "CYCLE_FIELD_LOCKED"
   | "INVALID_DEADLINE"
-  | "INVALID_ACADEMIC_YEAR";
+  | "INVALID_ACADEMIC_YEAR"
+  | "INVALID_TEAM_SIZE"
+  | "INVALID_TEAM_FORMATION_DEADLINE";
 
 export class CycleDomainError extends DomainError<CycleErrorCode> {}

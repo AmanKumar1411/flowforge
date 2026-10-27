@@ -1,6 +1,7 @@
 import { Transaction } from "../../common/transaction";
 import {
   NewUser,
+  StudentSearch,
   User,
   UserAccessChange,
   UserAccessState,
@@ -30,4 +31,7 @@ export abstract class UsersRepository {
     tx: Transaction,
   ): Promise<User>;
   abstract list(query: UserListQuery): Promise<UserPage>;
+  abstract findByIds(ids: readonly string[], tx?: Transaction): Promise<User[]>;
+  /** Active students of one batch, ordered by name. */
+  abstract searchActiveStudents(search: StudentSearch): Promise<User[]>;
 }

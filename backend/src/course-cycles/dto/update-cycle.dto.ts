@@ -9,6 +9,7 @@ import {
   MaxLength,
   Min,
 } from "class-validator";
+import { TEAM_SIZE_LIMIT } from "../domain/cycle.types";
 
 export class UpdateCycleDto {
   @ApiPropertyOptional({ example: "Software Design & System Development" })
@@ -58,4 +59,27 @@ export class UpdateCycleDto {
   @IsOptional()
   @IsISO8601()
   submissionDeadline?: string;
+
+  @ApiPropertyOptional({ example: 2, minimum: 1, maximum: TEAM_SIZE_LIMIT })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(TEAM_SIZE_LIMIT)
+  minTeamSize?: number;
+
+  @ApiPropertyOptional({ example: 4, minimum: 1, maximum: TEAM_SIZE_LIMIT })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(TEAM_SIZE_LIMIT)
+  maxTeamSize?: number;
+
+  @ApiPropertyOptional({
+    example: "2026-10-20T17:00:00.000Z",
+    description:
+      "Editable on a published cycle only while formation is open, and only to a future time.",
+  })
+  @IsOptional()
+  @IsISO8601()
+  teamFormationDeadline?: string;
 }

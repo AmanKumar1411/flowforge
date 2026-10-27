@@ -14,16 +14,23 @@ export type AuditAction =
   | "USER_REACTIVATED"
   | "LOGOUT"
   | "LOGOUT_ALL"
-  | "REFRESH_TOKEN_REUSE_DETECTED";
+  | "REFRESH_TOKEN_REUSE_DETECTED"
+  | "TEAM_CREATED"
+  | "TEAM_UPDATED"
+  | "TEAM_DISBANDED";
 
 export type AuditEntityType =
   | "User"
   | "LoginAttempt"
   | "FacultyAccessRequest"
   | "FacultyAllowlistEntry"
-  | "RefreshTokenFamily";
+  | "RefreshTokenFamily"
+  | "Team";
 
-export type AuditMetadata = Record<string, string | number | boolean | null>;
+export type AuditMetadata = Record<
+  string,
+  string | number | boolean | null | readonly string[]
+>;
 
 export interface AuditEvent {
   action: AuditAction;

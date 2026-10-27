@@ -1,5 +1,11 @@
 import { CycleDomainError } from "./cycle.errors";
-import { CycleAction, CyclePatch, CycleStatus } from "./cycle.types";
+import {
+  CycleAction,
+  CyclePatch,
+  CycleSchedule,
+  CycleStatus,
+  TEAM_SIZE_LIMIT,
+} from "./cycle.types";
 
 const transitions: Record<
   CycleStatus,
@@ -20,8 +26,12 @@ const editableFields: Record<CycleStatus, readonly (keyof CyclePatch)[]> = {
     "academicYear",
     "submissionStartAt",
     "submissionDeadline",
+    "minTeamSize",
+    "maxTeamSize",
+    "teamFormationDeadline",
   ],
-  PUBLISHED: ["description", "submissionDeadline"],
+  // Team sizes are fixed once students can form teams; the deadline can still move (see assertTeamDeadlineChange).
+  PUBLISHED: ["description", "submissionDeadline", "teamFormationDeadline"],
   CLOSED: [],
 };
 
@@ -75,7 +85,53 @@ export class CycleWorkflow {
     }
   }
 
-  validatePublishRules(start: Date, deadline: Date): void {
-    this.assertValidDeadline(start, deadline);
+  /** Every date and team-size rule that holds for any saved cycle. */
+  assertValidSchedule(schedule: CycleSchedule): void {
+    this.assertValidDeadline(
+      schedule.submissionStartAt,
+      schedule.submissionDeadline,
+    );
+    const { minTeamSize: min, maxTeamSize: max } = schedule;
+    if (
+      !Number.isInteger(min) ||
+      !Number.isInteger(max) ||
+      min < 1 ||
+      min > max ||
+      max > TEAM_SIZE_LIMIT
+    ) {
+      throw new CycleDomainError(
+        "INVALID_TEAM_SIZE",
+        `Team size must satisfy 1 <= minimum <= maximum <= ${TEAM_SIZE_LIMIT}`,
+      );
+    }
+    if (!(schedule.teamFormationDeadline < schedule.submissionDeadline)) {
+      throw new CycleDomainError(
+        "INVALID_TEAM_FORMATION_DEADLINE",
+        "Team formation must end before the submission deadline",
+      );
+    }
+  }
+
+  /**
+   * On a published cycle the formation deadline may move only while formation
+   * is still open, and never into the past: teams that are fixed stay fixed.
+   */
+  assertTeamDeadlineChange(current: Date, next: Date, now: Date): void {
+    if (current <= now) {
+      throw new CycleDomainError(
+        "CYCLE_FIELD_LOCKED",
+        "Team formation has ended, so its deadline can no longer change",
+      );
+    }
+    if (next <= now) {
+      throw new CycleDomainError(
+        "INVALID_TEAM_FORMATION_DEADLINE",
+        "The new team formation deadline must be in the future",
+      );
+    }
+  }
+
+  validatePublishRules(schedule: CycleSchedule): void {
+    this.assertValidSchedule(schedule);
   }
 }

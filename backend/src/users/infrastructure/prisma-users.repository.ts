@@ -3,6 +3,7 @@ import { Transaction } from "../../common/transaction";
 import { PrismaService } from "../../prisma/prisma.service";
 import {
   NewUser,
+  StudentSearch,
   User,
   UserAccessChange,
   UserAccessState,
@@ -85,5 +86,28 @@ export class PrismaUsersRepository extends UsersRepository {
       items,
       nextCursor: rows.length > query.limit ? items[items.length - 1].id : null,
     };
+  }
+
+  findByIds(ids: readonly string[], tx?: Transaction): Promise<User[]> {
+    return this.prisma.client(tx).user.findMany({
+      where: { id: { in: [...ids] } },
+    });
+  }
+
+  searchActiveStudents(search: StudentSearch): Promise<User[]> {
+    return this.prisma.user.findMany({
+      where: {
+        role: "STUDENT",
+        status: "ACTIVE",
+        batchYear: search.batchYear,
+        OR: [
+          { name: { contains: search.query, mode: "insensitive" } },
+          // Emails are stored lower-case.
+          { email: { startsWith: search.query.toLowerCase() } },
+        ],
+      },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      take: search.limit,
+    });
   }
 }
