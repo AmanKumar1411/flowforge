@@ -1,18 +1,23 @@
+import { CycleRoster } from "../../course-cycles/domain/cycle-roster";
 import { TeamDomainError } from "./team.errors";
 import { TeamRules } from "./team-rules";
-import { DirectoryUser, Team, TeamCycle } from "./team";
+import { DirectoryUser, ProposedTeam, Team, TeamCycle } from "./team";
 
 const rules = new TeamRules();
 const DEADLINE = new Date("2026-11-01T12:00:00.000Z");
+const COMPLETION = new Date("2026-11-05T12:00:00.000Z");
+const batch2026 = CycleRoster.wholeBatch(2026);
 
 const cycle = (overrides: Partial<TeamCycle> = {}): TeamCycle => ({
   id: "cycle",
   status: "PUBLISHED",
+  kind: "CORE",
   batchYear: 2026,
   createdByFacultyId: "faculty",
   minTeamSize: 2,
   maxTeamSize: 4,
   teamFormationDeadline: DEADLINE,
+  teamCompletionDeadline: COMPLETION,
   ...overrides,
 });
 
@@ -34,10 +39,12 @@ const team = (leaderId: string, otherIds: string[]): Team => ({
   cycleId: "cycle",
   name: "Falcon",
   leaderId,
+  origin: "STUDENT",
   members: [leaderId, ...otherIds].map((userId) => ({
     userId,
     name: userId,
     email: `${userId}@x`,
+    addedById: leaderId,
     addedAt: new Date(),
   })),
   createdAt: new Date(),
@@ -133,7 +140,7 @@ describe("TeamRules", () => {
   describe("eligibility", () => {
     it("accepts active students of the cycle's batch", () => {
       expect(() =>
-        rules.assertEligible(cycle(), ["a", "b"], [user("a"), user("b")]),
+        rules.assertEligible(batch2026, ["a", "b"], [user("a"), user("b")]),
       ).not.toThrow();
     });
 
@@ -146,14 +153,97 @@ describe("TeamRules", () => {
       ["deactivated", user("x", { status: "DEACTIVATED" })],
     ])("refuses %s", (_label, candidate) => {
       expect(
-        codeOf(() => rules.assertEligible(cycle(), ["x"], [candidate])),
+        codeOf(() => rules.assertEligible(batch2026, ["x"], [candidate])),
       ).toBe("INELIGIBLE_TEAM_MEMBER");
     });
 
     it("refuses an id that matches nobody, without saying so differently", () => {
-      expect(() => rules.assertEligible(cycle(), ["ghost"], [])).toThrow(
+      expect(() => rules.assertEligible(batch2026, ["ghost"], [])).toThrow(
         "1 selected person is not an active student of batch 2026",
       );
+    });
+
+    it("follows an elective's roster instead of the batch", () => {
+      const roster = CycleRoster.enrolled(["a@nst.rishihood.edu.in"]);
+      expect(() =>
+        // Batch does not matter for an elective: the roster decides.
+        rules.assertEligible(roster, ["a"], [user("a", { batchYear: 2025 })]),
+      ).not.toThrow();
+      expect(() => rules.assertEligible(roster, ["b"], [user("b")])).toThrow(
+        "1 selected person is not an active student enrolled in this elective",
+      );
+    });
+  });
+
+  describe("faculty completion window", () => {
+    const before = new Date(DEADLINE.getTime() - 1);
+    const end = COMPLETION;
+
+    it("opens exactly at the formation deadline and closes at the completion deadline", () => {
+      expect(rules.isCompletionOpen(cycle(), before)).toBe(false);
+      expect(rules.isCompletionOpen(cycle(), DEADLINE)).toBe(true);
+      expect(rules.isCompletionOpen(cycle(), new Date(end.getTime() - 1))).toBe(
+        true,
+      );
+      expect(rules.isCompletionOpen(cycle(), end)).toBe(false);
+    });
+
+    it("never overlaps the students' window", () => {
+      for (const now of [before, DEADLINE, end]) {
+        expect(
+          rules.isFormationOpen(cycle(), now) &&
+            rules.isCompletionOpen(cycle(), now),
+        ).toBe(false);
+      }
+    });
+
+    it("says why it is closed", () => {
+      expect(() => rules.assertCompletionOpen(cycle(), before)).toThrow(
+        /Students are still forming their own teams/,
+      );
+      expect(() => rules.assertCompletionOpen(cycle(), end)).toThrow(
+        "Team completion for this cycle has ended",
+      );
+      expect(
+        codeOf(() =>
+          rules.assertCompletionOpen(cycle({ status: "CLOSED" }), DEADLINE),
+        ),
+      ).toBe("TEAM_COMPLETION_CLOSED");
+    });
+
+    it("does not exist when both deadlines are equal (the default)", () => {
+      const noWindow = cycle({ teamCompletionDeadline: DEADLINE });
+      expect(rules.isCompletionOpen(noWindow, DEADLINE)).toBe(false);
+    });
+  });
+
+  describe("faculty placements", () => {
+    it("adds to a team only while it has room", () => {
+      expect(() =>
+        rules.assertHasRoom(team("lead", ["a", "b"]), cycle()),
+      ).not.toThrow();
+      expect(() =>
+        rules.assertHasRoom(team("lead", ["a", "b", "c"]), cycle()),
+      ).toThrow("Falcon already has the maximum of 4 members");
+    });
+
+    it("refuses a student in two proposed teams, leaders included", () => {
+      const proposal = (
+        leaderId: string,
+        memberIds: string[],
+      ): ProposedTeam => ({
+        name: "T",
+        leaderId,
+        memberIds,
+      });
+      expect(() =>
+        rules.assertNoOverlap([proposal("a", ["b"]), proposal("c", ["d"])]),
+      ).not.toThrow();
+      expect(
+        codeOf(() =>
+          rules.assertNoOverlap([proposal("a", ["b"]), proposal("b", ["c"])]),
+        ),
+      ).toBe("DUPLICATE_TEAM_MEMBER");
     });
   });
 

@@ -15,6 +15,7 @@ const DATE_FIELDS: (keyof CycleInput)[] = [
   "submissionStartAt",
   "submissionDeadline",
   "teamFormationDeadline",
+  "teamCompletionDeadline",
 ];
 
 /** Form values (local date inputs) to API values (ISO timestamps). */
@@ -46,8 +47,8 @@ export function CycleEditorPage() {
   const navigate = useNavigate();
   const [cycle, setCycle] = useState<Cycle | null>(null);
   const [loadedForm, setLoadedForm] = useState<CycleInput | null>(null);
-  // The API refuses to move a formation deadline that has passed: those teams are fixed.
-  const [formationEnded, setFormationEnded] = useState(false);
+  // The API refuses to move a team deadline that has passed: that stage is over.
+  const [ended, setEnded] = useState({ formation: false, completion: false });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const year = new Date().getFullYear();
@@ -63,6 +64,8 @@ export function CycleEditorPage() {
     minTeamSize: 1,
     maxTeamSize: 4,
     teamFormationDeadline: localDateInput(),
+    teamCompletionDeadline: localDateInput(),
+    kind: "CORE",
   });
   useEffect(() => {
     if (cycleId)
@@ -80,13 +83,20 @@ export function CycleEditorPage() {
             minTeamSize: loaded.minTeamSize,
             maxTeamSize: loaded.maxTeamSize,
             teamFormationDeadline: localDateInput(loaded.teamFormationDeadline),
+            teamCompletionDeadline: localDateInput(
+              loaded.teamCompletionDeadline,
+            ),
+            kind: loaded.kind,
           };
           setCycle(loaded);
           setLoadedForm(loadedValues);
-          setFormationEnded(
-            loaded.status !== "DRAFT" &&
-              Date.parse(loaded.teamFormationDeadline) <= Date.now(),
-          );
+          const now = Date.now();
+          const passed = (deadline: string) =>
+            loaded.status !== "DRAFT" && Date.parse(deadline) <= now;
+          setEnded({
+            formation: passed(loaded.teamFormationDeadline),
+            completion: passed(loaded.teamCompletionDeadline),
+          });
           setForm(loadedValues);
         })
         .catch((caught) => setError(readableError(caught)));
@@ -164,6 +174,17 @@ export function CycleEditorPage() {
             />
           </label>
           <label>
+            Course type
+            <select
+              value={form.kind}
+              onChange={(event) => setField("kind", event.target.value)}
+              disabled={published}
+            >
+              <option value="CORE">Core course: the whole batch</option>
+              <option value="ELECTIVE">Elective: enrolled students only</option>
+            </select>
+          </label>
+          <label>
             Batch year
             <input
               type="number"
@@ -224,9 +245,12 @@ export function CycleEditorPage() {
         <fieldset className="form-section">
           <legend>Teams</legend>
           <p className="field-hint">
-            Students form teams of this size, leader included. Teams and
-            project ideas are due by the formation deadline; members are fixed
-            after it. Sizes cannot change once the cycle is published.
+            Students form teams of this size, leader included, until the
+            formation deadline. Between that and the completion deadline you
+            place anyone still without a team, by hand or by auto-grouping;
+            project ideas are due at the completion deadline. Use the same
+            date for both to skip that step. Sizes cannot change once the cycle
+            is published.
           </p>
           <div className="form-grid">
             <label>
@@ -253,15 +277,27 @@ export function CycleEditorPage() {
                 required
               />
             </label>
-            <label className="wide">
-              Team formation deadline
+            <label>
+              Team formation deadline (students)
               <input
                 type="datetime-local"
                 value={form.teamFormationDeadline}
                 onChange={(event) =>
                   setField("teamFormationDeadline", event.target.value)
                 }
-                disabled={formationEnded}
+                disabled={ended.formation}
+                required
+              />
+            </label>
+            <label>
+              Team completion deadline (faculty)
+              <input
+                type="datetime-local"
+                value={form.teamCompletionDeadline}
+                onChange={(event) =>
+                  setField("teamCompletionDeadline", event.target.value)
+                }
+                disabled={ended.completion}
                 required
               />
             </label>

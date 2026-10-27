@@ -2,6 +2,9 @@ export type CycleStatus = "DRAFT" | "PUBLISHED" | "CLOSED";
 
 export type CycleAction = "PUBLISH" | "CLOSE";
 
+/** CORE: the whole batch takes part. ELECTIVE: only the students the faculty enrolled. */
+export type CourseKind = "CORE" | "ELECTIVE";
+
 /** Applied when a faculty member leaves the team size out. */
 export const DEFAULT_TEAM_SIZE = { min: 1, max: 4 } as const;
 /** Largest team any cycle may allow; the database checks it too. */
@@ -19,8 +22,11 @@ export interface Cycle {
   submissionDeadline: Date;
   minTeamSize: number;
   maxTeamSize: number;
-  /** After this moment team membership is fixed. Phase 5 uses it for idea submission too. */
+  /** Students change their own teams until this moment. */
   teamFormationDeadline: Date;
+  /** The owning faculty complete teams until this moment; it is also the idea deadline. */
+  teamCompletionDeadline: Date;
+  kind: CourseKind;
   status: CycleStatus;
   createdByFacultyId: string;
   publishedAt: Date | null;
@@ -41,6 +47,8 @@ export interface CycleCreateData {
   minTeamSize: number;
   maxTeamSize: number;
   teamFormationDeadline: Date;
+  teamCompletionDeadline: Date;
+  kind: CourseKind;
   createdByFacultyId: string;
 }
 
@@ -52,7 +60,17 @@ export type CycleSchedule = Pick<
   | "minTeamSize"
   | "maxTeamSize"
   | "teamFormationDeadline"
+  | "teamCompletionDeadline"
 >;
+
+/** The two deadlines that end a stage of team building. */
+export type TeamDeadline = "teamFormationDeadline" | "teamCompletionDeadline";
+
+export interface Enrollment {
+  /** Normalized; the student may not have signed in yet. */
+  email: string;
+  createdAt: Date;
+}
 
 export interface CyclePatch {
   courseName?: string;
@@ -66,4 +84,6 @@ export interface CyclePatch {
   minTeamSize?: number;
   maxTeamSize?: number;
   teamFormationDeadline?: Date;
+  teamCompletionDeadline?: Date;
+  kind?: CourseKind;
 }

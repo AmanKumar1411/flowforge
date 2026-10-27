@@ -1,5 +1,12 @@
+import { CycleRoster } from "../../course-cycles/domain/cycle-roster";
 import { TeamDomainError } from "./team.errors";
-import { DirectoryUser, Membership, Team, TeamCycle } from "./team";
+import {
+  DirectoryUser,
+  Membership,
+  ProposedTeam,
+  Team,
+  TeamCycle,
+} from "./team";
 
 export interface MemberPlan {
   /** Size after the change, leader included. */
@@ -9,13 +16,23 @@ export interface MemberPlan {
 }
 
 /**
- * The team-formation rules of a cycle, free of I/O. Sizes always count the
- * leader, and a saved team is always within the cycle's size range, so later
- * phases never meet an incomplete team.
+ * The team rules of a cycle, free of I/O. Sizes always count the leader, and a
+ * saved team is always within the cycle's size range, so later phases never
+ * meet an incomplete team. Two windows follow each other: students form their
+ * own teams until the formation deadline, then the owning faculty complete
+ * teams until the completion deadline.
  */
 export class TeamRules {
   isFormationOpen(cycle: TeamCycle, now: Date): boolean {
     return cycle.status === "PUBLISHED" && now < cycle.teamFormationDeadline;
+  }
+
+  isCompletionOpen(cycle: TeamCycle, now: Date): boolean {
+    return (
+      cycle.status === "PUBLISHED" &&
+      cycle.teamFormationDeadline <= now &&
+      now < cycle.teamCompletionDeadline
+    );
   }
 
   /** Teams change only in a published cycle, strictly before its formation deadline. */
@@ -26,6 +43,17 @@ export class TeamRules {
         "Team formation for this cycle has ended; teams can no longer change",
       );
     }
+  }
+
+  /** The faculty's window: after students' formation ends, before completion ends. */
+  assertCompletionOpen(cycle: TeamCycle, now: Date): void {
+    if (this.isCompletionOpen(cycle, now)) return;
+    throw new TeamDomainError(
+      "TEAM_COMPLETION_CLOSED",
+      this.isFormationOpen(cycle, now)
+        ? "Students are still forming their own teams; faculty completion opens at the team formation deadline"
+        : "Team completion for this cycle has ended",
+    );
   }
 
   assertSize(size: number, cycle: TeamCycle): void {
@@ -57,28 +85,47 @@ export class TeamRules {
     };
   }
 
-  /** Only active students of the cycle's batch may join; unknown ids are refused the same way. */
+  /** A team with room for one more member. */
+  assertHasRoom(team: Team, cycle: TeamCycle): void {
+    if (team.members.length >= cycle.maxTeamSize) {
+      throw new TeamDomainError(
+        "TEAM_SIZE_OUT_OF_RANGE",
+        `${team.name} already has the maximum of ${cycle.maxTeamSize} members`,
+      );
+    }
+  }
+
+  /** Only participants of the cycle may join: its batch, or an elective's roster. Unknown ids are refused the same way. */
   assertEligible(
-    cycle: TeamCycle,
+    roster: CycleRoster,
     requestedIds: readonly string[],
     found: readonly DirectoryUser[],
   ): void {
     const eligible = new Set(
-      found
-        .filter(
-          (user) =>
-            user.role === "STUDENT" &&
-            user.status === "ACTIVE" &&
-            user.batchYear === cycle.batchYear,
-        )
-        .map((user) => user.id),
+      found.filter((user) => roster.includes(user)).map((user) => user.id),
     );
     const refused = requestedIds.filter((id) => !eligible.has(id));
     if (refused.length > 0) {
       throw new TeamDomainError(
         "INELIGIBLE_TEAM_MEMBER",
-        `${refused.length} selected ${refused.length === 1 ? "person is" : "people are"} not an active student of batch ${cycle.batchYear}`,
+        `${refused.length} selected ${refused.length === 1 ? "person is" : "people are"} not ${roster.describe()}`,
       );
+    }
+  }
+
+  /** Every student appears once across the proposed teams, leaders included. */
+  assertNoOverlap(teams: readonly ProposedTeam[]): void {
+    const seen = new Set<string>();
+    for (const team of teams) {
+      for (const id of [team.leaderId, ...team.memberIds]) {
+        if (seen.has(id)) {
+          throw new TeamDomainError(
+            "DUPLICATE_TEAM_MEMBER",
+            "A student appears in more than one proposed team",
+          );
+        }
+        seen.add(id);
+      }
     }
   }
 

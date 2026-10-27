@@ -3,9 +3,10 @@ import { Clock } from "../../common/clock";
 import { TeamAccessPolicy, TeamActor } from "../domain/team-access.policy";
 import { TeamDomainError } from "../domain/team.errors";
 import { TeamRules } from "../domain/team-rules";
-import { Team, TeamCandidate } from "../domain/team";
+import { Team, TeamCandidate, TeamCycle, TeamSeeker } from "../domain/team";
 import { StudentDirectory } from "./ports/student-directory";
 import { TeamCycles } from "./ports/team-cycles";
+import { TeamSeekerRepository } from "./ports/team-seeker.repository";
 import { TeamRepository } from "./ports/team.repository";
 
 export const CANDIDATE_LIMIT = 20;
@@ -15,6 +16,7 @@ export const CANDIDATE_LIMIT = 20;
 export class TeamQueryService {
   constructor(
     private readonly teams: TeamRepository,
+    private readonly seekers: TeamSeekerRepository,
     private readonly cycles: TeamCycles,
     private readonly directory: StudentDirectory,
     private readonly rules: TeamRules,
@@ -51,19 +53,19 @@ export class TeamQueryService {
   }
 
   /**
-   * Batch-mates the caller could add, with whether each is free. Only while
-   * formation is open: the search exists to form teams, not to browse people.
+   * Fellow participants the caller could add, with whether each is free and
+   * looking for a team. Only while formation is open: the search exists to
+   * form teams, not to browse people.
    */
   async searchCandidates(
     actor: TeamActor,
     cycleId: string,
     query: string,
   ): Promise<TeamCandidate[]> {
-    const cycle = await this.cycles.getVisible(actor, cycleId);
-    this.rules.assertFormationOpen(cycle, this.clock.now());
+    const cycle = await this.openCycleFor(actor, cycleId);
     const found = (
-      await this.directory.searchStudents(
-        cycle.batchYear,
+      await this.directory.search(
+        await this.cycles.rosterOf(cycle),
         query.trim(),
         CANDIDATE_LIMIT + 1,
       )
@@ -78,6 +80,7 @@ export class TeamQueryService {
       memberships.map((membership) => [membership.userId, membership.teamId]),
     );
     const ownTeam = teamOf.get(actor.id);
+    const seeking = await this.seekingIn(cycle.id);
     return found.map((user) => {
       const teamId = teamOf.get(user.id);
       return {
@@ -90,7 +93,60 @@ export class TeamQueryService {
             : teamId === ownTeam
               ? "IN_YOUR_TEAM"
               : "IN_ANOTHER_TEAM",
+        lookingForTeam: teamId === undefined && seeking.has(user.id),
+        note:
+          teamId === undefined ? (seeking.get(user.id)?.note ?? null) : null,
       };
     });
+  }
+
+  /** Participants without a team who switched on "Looking for a team", the caller included. */
+  async listSeekers(
+    actor: TeamActor,
+    cycleId: string,
+  ): Promise<TeamCandidate[]> {
+    const cycle = await this.openCycleFor(actor, cycleId);
+    const seeking = await this.seekingIn(cycle.id);
+    const roster = await this.cycles.rosterOf(cycle);
+    const users = (await this.directory.findByIds([...seeking.keys()])).filter(
+      (user) => roster.includes(user),
+    );
+    const placed = new Set(
+      (
+        await this.teams.findMemberships(
+          cycle.id,
+          users.map((user) => user.id),
+        )
+      ).map((membership) => membership.userId),
+    );
+    return users
+      .filter((user) => !placed.has(user.id))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((user) => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        availability: "AVAILABLE",
+        lookingForTeam: true,
+        note: seeking.get(user.id)?.note ?? null,
+      }));
+  }
+
+  private async openCycleFor(
+    actor: TeamActor,
+    cycleId: string,
+  ): Promise<TeamCycle> {
+    const cycle = await this.cycles.getVisible(actor, cycleId);
+    this.rules.assertFormationOpen(cycle, this.clock.now());
+    return cycle;
+  }
+
+  private async seekingIn(cycleId: string): Promise<Map<string, TeamSeeker>> {
+    return new Map(
+      (await this.seekers.list(cycleId)).map((seeker) => [
+        seeker.userId,
+        seeker,
+      ]),
+    );
   }
 }

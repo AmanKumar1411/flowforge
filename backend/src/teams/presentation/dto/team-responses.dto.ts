@@ -1,5 +1,17 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { CandidateAvailability, Team, TeamCandidate } from "../../domain/team";
+import {
+  AutoGroupPreview,
+  CompletionOverview,
+} from "../../application/team-completion.service";
+import {
+  CandidateAvailability,
+  Team,
+  TeamCandidate,
+  TeamOrigin,
+  UnassignedStudent,
+} from "../../domain/team";
+
+const ORIGINS: TeamOrigin[] = ["STUDENT", "FACULTY", "AUTO_GROUP"];
 
 const AVAILABILITY: CandidateAvailability[] = [
   "AVAILABLE",
@@ -29,6 +41,8 @@ export class TeamResponseDto {
   name!: string;
   @ApiProperty()
   leaderId!: string;
+  @ApiProperty({ enum: ORIGINS, description: "Who formed the team" })
+  origin!: TeamOrigin;
   @ApiProperty({
     type: TeamMemberDto,
     isArray: true,
@@ -46,6 +60,7 @@ export class TeamResponseDto {
     response.cycleId = team.cycleId;
     response.name = team.name;
     response.leaderId = team.leaderId;
+    response.origin = team.origin;
     response.members = team.members
       .map((member) => ({
         userId: member.userId,
@@ -73,8 +88,86 @@ export class TeamCandidateDto {
     description: "IN_ANOTHER_TEAM students cannot be added",
   })
   availability!: CandidateAvailability;
+  @ApiProperty({ description: "Switched on 'Looking for a team'" })
+  lookingForTeam!: boolean;
+  @ApiProperty({ type: String, nullable: true })
+  note!: string | null;
 
   static from(candidate: TeamCandidate): TeamCandidateDto {
     return Object.assign(new TeamCandidateDto(), candidate);
+  }
+}
+
+export class UnassignedStudentDto {
+  @ApiProperty()
+  id!: string;
+  @ApiProperty()
+  name!: string;
+  @ApiProperty()
+  email!: string;
+  @ApiProperty()
+  lookingForTeam!: boolean;
+  @ApiProperty({ type: String, nullable: true })
+  note!: string | null;
+
+  static from(student: UnassignedStudent): UnassignedStudentDto {
+    return Object.assign(new UnassignedStudentDto(), student);
+  }
+}
+
+export class CompletionOverviewDto {
+  @ApiProperty({
+    description:
+      "Faculty can complete teams now: after the formation deadline, before the completion deadline",
+  })
+  open!: boolean;
+  @ApiProperty({ type: UnassignedStudentDto, isArray: true })
+  unassigned!: UnassignedStudentDto[];
+  @ApiProperty({
+    type: [String],
+    description:
+      "Enrolled emails with no account yet (electives); they cannot be placed until they sign in",
+  })
+  notSignedIn!: string[];
+
+  static from(overview: CompletionOverview): CompletionOverviewDto {
+    return Object.assign(new CompletionOverviewDto(), {
+      ...overview,
+      unassigned: overview.unassigned.map(UnassignedStudentDto.from),
+    });
+  }
+}
+
+class PersonDto {
+  @ApiProperty()
+  id!: string;
+  @ApiProperty()
+  name!: string;
+  @ApiProperty()
+  email!: string;
+}
+
+class ProposedTeamPreviewDto {
+  @ApiProperty()
+  name!: string;
+  @ApiProperty({ type: PersonDto, description: "Picked at random" })
+  leader!: PersonDto;
+  @ApiProperty({ type: PersonDto, isArray: true })
+  members!: PersonDto[];
+}
+
+export class AutoGroupPreviewDto {
+  @ApiProperty({ type: ProposedTeamPreviewDto, isArray: true })
+  teams!: ProposedTeamPreviewDto[];
+  @ApiProperty({
+    type: PersonDto,
+    isArray: true,
+    description:
+      "Students no valid split could place; add them to a team with room",
+  })
+  unplaced!: PersonDto[];
+
+  static from(preview: AutoGroupPreview): AutoGroupPreviewDto {
+    return Object.assign(new AutoGroupPreviewDto(), preview);
   }
 }

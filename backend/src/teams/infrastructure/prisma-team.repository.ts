@@ -21,10 +21,12 @@ const toDomain = (row: TeamRow): Team => ({
   cycleId: row.cycleId,
   name: row.name,
   leaderId: row.leaderId,
+  origin: row.origin,
   members: row.members.map((member) => ({
     userId: member.userId,
     name: member.user.name,
     email: member.user.email,
+    addedById: member.addedById,
     addedAt: member.addedAt,
   })),
   createdAt: row.createdAt,
@@ -96,6 +98,17 @@ export class PrismaTeamRepository extends TeamRepository {
     });
   }
 
+  async findMembershipByEmail(
+    cycleId: string,
+    email: string,
+    tx: Transaction,
+  ): Promise<Membership | null> {
+    return this.prisma.client(tx).teamMember.findFirst({
+      where: { cycleId, user: { email } },
+      select: { userId: true, teamId: true },
+    });
+  }
+
   async create(team: NewTeam, tx: Transaction): Promise<Team> {
     return this.mapConflict(async () =>
       toDomain(
@@ -104,11 +117,13 @@ export class PrismaTeamRepository extends TeamRepository {
             cycleId: team.cycleId,
             name: team.name,
             leaderId: team.leaderId,
+            origin: team.origin,
             // Nested rows take teamId and cycleId from the team, so they cannot point at another cycle.
             members: {
               createMany: {
                 data: [team.leaderId, ...team.memberIds].map((userId) => ({
                   userId,
+                  addedById: team.addedById,
                 })),
               },
             },
@@ -131,7 +146,10 @@ export class PrismaTeamRepository extends TeamRepository {
             members: {
               deleteMany: { userId: { in: [...change.removeMemberIds] } },
               createMany: {
-                data: change.addMemberIds.map((userId) => ({ userId })),
+                data: change.addMemberIds.map((userId) => ({
+                  userId,
+                  addedById: change.addedById,
+                })),
               },
             },
           },

@@ -245,7 +245,7 @@ const teamPanel = (page) => page.locator(".team-panel");
 
       await tara.goto(`${FRONTEND}/student/cycles/${created.body.id}`);
       await teamPanel(tara).getByRole("heading", { name: "Kestrel" }).waitFor();
-      await tara.getByText(/Teams are fixed since/).waitFor();
+      await tara.getByText(/Students' own changes ended on/).waitFor();
       assert(await teamPanel(tara).getByRole("button", { name: "Edit team" }).count() === 0, "Edit team is offered after the deadline");
       const late = await taraApi.call("PATCH", `/teams/${team.body.id}`, { name: "Late rename" });
       assert(late.status === 409 && late.body.code === "TEAM_FORMATION_CLOSED", `API allowed a late change: ${late.status}`);

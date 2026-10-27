@@ -6,6 +6,7 @@ export type CycleActor = {
   id: string;
   role: Role;
   batchYear: number | null;
+  email: string;
 };
 
 /**
@@ -29,16 +30,16 @@ export class CycleAuthorizationPolicy {
     }
   }
 
-  canRead(actor: CycleActor, cycle: Cycle): boolean {
+  /** `enrolled`: whether a student actor is on the cycle's elective roster (ignored for core courses). */
+  canRead(actor: CycleActor, cycle: Cycle, enrolled: boolean): boolean {
     switch (actor.role) {
       case "FACULTY":
         return cycle.createdByFacultyId === actor.id;
       case "STUDENT":
-        return (
-          cycle.status === "PUBLISHED" &&
-          actor.batchYear !== null &&
-          cycle.batchYear === actor.batchYear
-        );
+        if (cycle.status !== "PUBLISHED") return false;
+        return cycle.kind === "ELECTIVE"
+          ? enrolled
+          : actor.batchYear !== null && cycle.batchYear === actor.batchYear;
       case "ADMIN":
         return cycle.status !== "DRAFT";
       case "PENDING_STAFF":
@@ -46,9 +47,20 @@ export class CycleAuthorizationPolicy {
     }
   }
 
-  assertCanRead(actor: CycleActor, cycle: Cycle): void {
-    if (!this.canRead(actor, cycle)) {
+  assertCanRead(actor: CycleActor, cycle: Cycle, enrolled: boolean): void {
+    if (!this.canRead(actor, cycle, enrolled)) {
       throw this.notFound();
+    }
+  }
+
+  /** Elective rosters change only before the cycle closes, and only for electives. */
+  assertCanManageRoster(actor: CycleActor, cycle: Cycle): void {
+    this.assertOwner(actor, cycle);
+    if (cycle.kind !== "ELECTIVE") {
+      throw new CycleDomainError(
+        "CYCLE_NOT_ELECTIVE",
+        "Only electives have an enrollment list; a core course includes the whole batch",
+      );
     }
   }
 

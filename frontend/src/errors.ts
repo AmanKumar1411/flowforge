@@ -46,6 +46,12 @@ const messages: Record<string, string> = {
   NOT_TEAM_LEADER: "Only the team leader can change the team.",
   TEAM_FORMATION_CLOSED:
     "Team formation has closed for this cycle, so teams can no longer change.",
+  DUPLICATE_TEAM_MEMBER: "A student appears in more than one proposed team.",
+  // Electives (completion-window messages keep the API's wording, which says which window)
+  CYCLE_NOT_ELECTIVE: "Only electives have an enrollment list.",
+  ENROLLMENT_NOT_FOUND: "That student is not enrolled in this elective.",
+  ENROLLED_STUDENT_IN_TEAM:
+    "This student is in a team, so they cannot be removed from the elective.",
 };
 
 export function messageForCode(code: string | null | undefined): string | null {

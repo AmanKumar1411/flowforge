@@ -1,32 +1,47 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import {
   createTeam,
   disbandTeam,
   listCycleTeams,
+  listSeekers,
   searchTeamCandidates,
+  startLooking,
+  stopLooking,
   updateTeam,
 } from "../api/teams";
 import { useAuth } from "../auth/useAuth";
 import { formatDate } from "../dates";
 import { readableError } from "../errors";
-import { cleanSearch, describeTeamSize, isFormationOpen } from "../teams";
-import type { Cycle, Team, TeamCandidate } from "../types";
+import {
+  cleanSearch,
+  describeTeamSize,
+  hasCompletionWindow,
+  isCompletionOpen,
+  isFormationOpen,
+} from "../teams";
+import type { Cycle, Person, Team, TeamCandidate } from "../types";
 
-type Person = { id: string; name: string; email: string };
-
-function FormationNote({ cycle, open }: { cycle: Cycle; open: boolean }) {
+export function FormationNote({ cycle, open }: { cycle: Cycle; open: boolean }) {
   const deadline = formatDate(cycle.teamFormationDeadline);
   return (
     <p className="field-hint">
       {describeTeamSize(cycle)} members, leader included.{" "}
       {open
-        ? `Teams can change until ${deadline}; after that they are fixed.`
-        : `Teams are fixed${cycle.status === "CLOSED" ? "" : ` since ${deadline}`}.`}
+        ? `Students can change their teams until ${deadline}.`
+        : `Students' own changes ended${cycle.status === "CLOSED" ? "" : ` on ${deadline}`}.`}{" "}
+      {hasCompletionWindow(cycle) &&
+        `The faculty place anyone still without a team by ${formatDate(cycle.teamCompletionDeadline)}.`}
     </p>
   );
 }
 
-function MemberList({ team }: { team: Team }) {
+export function MemberList({ team }: { team: Team }) {
   return (
     <ul className="member-list">
       {team.members.map((member) => (
@@ -123,23 +138,123 @@ export function StudentTeamPanel({ cycle }: { cycle: Cycle }) {
           )}
         </>
       ) : team === null && open ? (
-        <div className="team-empty">
-          <p>
-            Create a team to become its leader and pick your teammates, or wait
-            for a leader to add you. Added students join at once.
-          </p>
-          <button className="primary-button" onClick={() => setEditing(true)}>
-            Create a team
-          </button>
-        </div>
+        <>
+          <div className="team-empty">
+            <p>
+              Create a team to become its leader and pick your teammates, or
+              wait for a leader to add you. Added students join at once.
+            </p>
+            <button
+              className="primary-button"
+              onClick={() => setEditing(true)}
+            >
+              Create a team
+            </button>
+          </div>
+          <LookingSwitch cycleId={cycle.id} myId={myId} />
+        </>
       ) : (
         team === null && (
           <p className="muted">
-            You are not in a team for this cycle. Contact your faculty.
+            {isCompletionOpen(cycle, now)
+              ? `You are not in a team yet. Your faculty will place you in one by ${formatDate(cycle.teamCompletionDeadline)}.`
+              : "You are not in a team for this cycle. Contact your faculty."}
           </p>
         )
       )}
     </section>
+  );
+}
+
+/** "Looking for a team": lets leaders find the student. */
+function LookingSwitch({ cycleId, myId }: { cycleId: string; myId: string }) {
+  const [mine, setMine] = useState<TeamCandidate | null | undefined>(
+    undefined,
+  );
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+  const load = useCallback(() => {
+    listSeekers(cycleId)
+      .then((seekers) =>
+        setMine(seekers.find((seeker) => seeker.id === myId) ?? null),
+      )
+      .catch((caught) => setError(readableError(caught)));
+  }, [cycleId, myId]);
+  useEffect(load, [load]);
+
+  const act = async (work: () => Promise<void>) => {
+    setError("");
+    try {
+      await work();
+      load();
+    } catch (caught) {
+      setError(readableError(caught));
+    }
+  };
+
+  if (mine === undefined) return null;
+  return (
+    <div className="looking-box">
+      {mine ? (
+        <>
+          <p>
+            <strong>You are listed as looking for a team.</strong>{" "}
+            {mine.note && `“${mine.note}”. `}Leaders and your faculty can see
+            this.
+          </p>
+          <button
+            className="text-button"
+            onClick={() => act(() => stopLooking(cycleId))}
+          >
+            Stop looking
+          </button>
+        </>
+      ) : (
+        <form
+          onSubmit={(event: FormEvent) => {
+            event.preventDefault();
+            void act(() => startLooking(cycleId, note));
+          }}
+        >
+          <label>
+            Note for leaders (optional)
+            <input
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="e.g. good at backend, free on weekends"
+              maxLength={200}
+            />
+          </label>
+          <button className="dark-button compact">
+            I'm looking for a team
+          </button>
+        </form>
+      )}
+      {error && <p className="form-error">{error}</p>}
+    </div>
+  );
+}
+
+function CandidateRow({
+  candidate,
+  action,
+}: {
+  candidate: TeamCandidate;
+  action: ReactNode;
+}) {
+  return (
+    <li>
+      <span>
+        <strong>
+          {candidate.name}
+          {candidate.lookingForTeam && (
+            <span className="looking-tag">Looking</span>
+          )}
+        </strong>
+        <small>{candidate.note ?? candidate.email}</small>
+      </span>
+      {action}
+    </li>
   );
 }
 
@@ -163,11 +278,18 @@ function TeamEditor({
   );
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<TeamCandidate[]>([]);
+  const [seekers, setSeekers] = useState<TeamCandidate[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const search = cleanSearch(query);
   const size = selected.length + 1;
   const sizeOk = size >= cycle.minTeamSize && size <= cycle.maxTeamSize;
+
+  useEffect(() => {
+    listSeekers(cycle.id)
+      .then(setSeekers)
+      .catch((caught) => setError(readableError(caught)));
+  }, [cycle.id]);
 
   useEffect(() => {
     if (search.length < 2) return;
@@ -210,6 +332,23 @@ function TeamEditor({
   };
 
   const candidates = search.length >= 2 ? results : [];
+  const { state } = useAuth();
+  const myId = state.status === "signed-in" ? state.user.id : "";
+  const lookingOthers = seekers.filter((seeker) => seeker.id !== myId);
+  const addButton = (candidate: TeamCandidate) => {
+    const chosen = selected.some((person) => person.id === candidate.id);
+    const taken = candidate.availability === "IN_ANOTHER_TEAM";
+    return (
+      <button
+        type="button"
+        className="text-button"
+        disabled={chosen || taken || size >= cycle.maxTeamSize}
+        onClick={() => add(candidate)}
+      >
+        {taken ? "Already in a team" : chosen ? "Added" : "Add"}
+      </button>
+    );
+  };
   return (
     <form className="team-editor" onSubmit={submit}>
       <label>
@@ -232,27 +371,28 @@ function TeamEditor({
       </label>
       {candidates.length > 0 && (
         <ul className="candidate-list" aria-label="Search results">
-          {candidates.map((candidate) => {
-            const chosen = selected.some((person) => person.id === candidate.id);
-            const taken = candidate.availability === "IN_ANOTHER_TEAM";
-            return (
-              <li key={candidate.id}>
-                <span>
-                  <strong>{candidate.name}</strong>
-                  <small>{candidate.email}</small>
-                </span>
-                <button
-                  type="button"
-                  className="text-button"
-                  disabled={chosen || taken || size >= cycle.maxTeamSize}
-                  onClick={() => add(candidate)}
-                >
-                  {taken ? "Already in a team" : chosen ? "Added" : "Add"}
-                </button>
-              </li>
-            );
-          })}
+          {candidates.map((candidate) => (
+            <CandidateRow
+              key={candidate.id}
+              candidate={candidate}
+              action={addButton(candidate)}
+            />
+          ))}
         </ul>
+      )}
+      {search.length < 2 && lookingOthers.length > 0 && (
+        <>
+          <h3 className="member-count">Looking for a team</h3>
+          <ul className="candidate-list" aria-label="Looking for a team">
+            {lookingOthers.map((candidate) => (
+              <CandidateRow
+                key={candidate.id}
+                candidate={candidate}
+                action={addButton(candidate)}
+              />
+            ))}
+          </ul>
+        </>
       )}
       {search.length >= 2 && candidates.length === 0 && (
         <p className="muted">No batch-mate matches “{search}”.</p>
@@ -297,62 +437,5 @@ function TeamEditor({
         </button>
       </div>
     </form>
-  );
-}
-
-/** Every team of a cycle, read-only: for the owning faculty. */
-export function CycleTeamsPanel({ cycle }: { cycle: Cycle }) {
-  const [teams, setTeams] = useState<Team[] | null>(null);
-  const [error, setError] = useState("");
-  const [now] = useState(() => Date.now());
-  useEffect(() => {
-    listCycleTeams(cycle.id)
-      .then(setTeams)
-      .catch((caught) => setError(readableError(caught)));
-  }, [cycle.id]);
-
-  return (
-    <section className="team-panel" aria-labelledby="teams-heading">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">Teams</p>
-          <h2 id="teams-heading">
-            {teams ? `${teams.length} team${teams.length === 1 ? "" : "s"}` : "Loading…"}
-          </h2>
-        </div>
-      </div>
-      <FormationNote cycle={cycle} open={isFormationOpen(cycle, now)} />
-      {error && <p className="form-error">{error}</p>}
-      {teams && teams.length === 0 && (
-        <p className="muted">No team has been formed yet.</p>
-      )}
-      {teams && teams.length > 0 && (
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>Team</th>
-              <th>Leader</th>
-              <th>Members</th>
-              <th>Size</th>
-            </tr>
-          </thead>
-          <tbody>
-            {teams.map((team) => (
-              <tr key={team.id}>
-                <td>{team.name}</td>
-                <td>{team.members.find((member) => member.isLeader)?.name}</td>
-                <td>
-                  {team.members
-                    .filter((member) => !member.isLeader)
-                    .map((member) => member.name)
-                    .join(", ") || "—"}
-                </td>
-                <td>{team.members.length}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </section>
   );
 }

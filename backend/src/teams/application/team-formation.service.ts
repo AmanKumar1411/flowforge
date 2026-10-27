@@ -2,12 +2,14 @@ import { Injectable } from "@nestjs/common";
 import { AuditService } from "../../audit/audit.service";
 import { Clock } from "../../common/clock";
 import { Transaction, TransactionRunner } from "../../common/transaction";
+import { CycleRoster } from "../../course-cycles/domain/cycle-roster";
 import { TeamAccessPolicy, TeamActor } from "../domain/team-access.policy";
 import { TeamDomainError } from "../domain/team.errors";
 import { TeamRules } from "../domain/team-rules";
 import { Team, TeamCycle } from "../domain/team";
 import { StudentDirectory } from "./ports/student-directory";
 import { TeamCycles } from "./ports/team-cycles";
+import { TeamSeekerRepository } from "./ports/team-seeker.repository";
 import { TeamRepository } from "./ports/team.repository";
 
 export interface CreateTeamInput {
@@ -23,14 +25,15 @@ export interface UpdateTeamInput {
 }
 
 /**
- * Team formation use cases. The leader adds members directly (no invitations)
- * and may change or disband the team until the cycle's formation deadline.
- * Every change runs in one transaction with its audit row.
+ * Students forming their own teams. The leader adds members directly (no
+ * invitations) and may change or disband the team until the cycle's formation
+ * deadline. Every change runs in one transaction with its audit row.
  */
 @Injectable()
 export class TeamFormationService {
   constructor(
     private readonly teams: TeamRepository,
+    private readonly seekers: TeamSeekerRepository,
     private readonly cycles: TeamCycles,
     private readonly directory: StudentDirectory,
     private readonly rules: TeamRules,
@@ -49,9 +52,10 @@ export class TeamFormationService {
     this.rules.assertFormationOpen(cycle, this.clock.now());
     const others = this.rules.otherMembers(actor.id, input.memberIds);
     this.rules.assertSize(others.length + 1, cycle);
+    const roster = await this.cycles.rosterOf(cycle);
     return this.transactions.run(async (tx) => {
       // The caller passed the role guard and can see the cycle, so only the others need the eligibility check.
-      const users = await this.assertEligible(cycle, others, tx);
+      const users = await this.assertEligible(roster, others, tx);
       const memberships = await this.teams.findMemberships(
         cycle.id,
         [actor.id, ...others],
@@ -70,15 +74,18 @@ export class TeamFormationService {
           name: input.name.trim(),
           leaderId: actor.id,
           memberIds: others,
+          origin: "STUDENT",
+          addedById: actor.id,
         },
         tx,
       );
+      await this.seekers.removeMany(cycle.id, [actor.id, ...others], tx);
       await this.audit.record(tx, {
         action: "TEAM_CREATED",
         actorId: actor.id,
         entityType: "Team",
         entityId: team.id,
-        metadata: { cycleId, memberIds: others },
+        metadata: { cycleId, memberIds: others, origin: team.origin },
       });
       return team;
     });
@@ -90,6 +97,7 @@ export class TeamFormationService {
     input: UpdateTeamInput,
   ): Promise<Team> {
     const cycle = await this.cycleForLeader(actor, teamId);
+    const roster = await this.cycles.rosterOf(cycle);
     return this.transactions.run(async (tx) => {
       const team = await this.lock(teamId, tx);
       const name = input.name?.trim();
@@ -99,7 +107,7 @@ export class TeamFormationService {
         : { size: team.members.length, added: [], removed: [] };
       if (input.memberIds) this.rules.assertSize(plan.size, cycle);
       if (plan.added.length > 0) {
-        const users = await this.assertEligible(cycle, plan.added, tx);
+        const users = await this.assertEligible(roster, plan.added, tx);
         this.rules.assertAvailable(
           await this.teams.findMemberships(cycle.id, plan.added, tx),
           users,
@@ -115,9 +123,11 @@ export class TeamFormationService {
           name: renamed ? name : undefined,
           addMemberIds: plan.added,
           removeMemberIds: plan.removed,
+          addedById: actor.id,
         },
         tx,
       );
+      await this.seekers.removeMany(cycle.id, plan.added, tx);
       await this.audit.record(tx, {
         action: "TEAM_UPDATED",
         actorId: actor.id,
@@ -153,6 +163,28 @@ export class TeamFormationService {
     });
   }
 
+  /** "Looking for a team": lets leaders and the faculty find the student. Only without a team, while formation is open. */
+  async startLooking(
+    actor: TeamActor,
+    cycleId: string,
+    note: string | null,
+  ): Promise<void> {
+    const cycle = await this.cycles.getVisible(actor, cycleId);
+    this.rules.assertFormationOpen(cycle, this.clock.now());
+    if ((await this.teams.findMemberships(cycle.id, [actor.id])).length > 0) {
+      throw new TeamDomainError(
+        "STUDENT_ALREADY_IN_TEAM",
+        "You are already in a team for this cycle",
+      );
+    }
+    await this.seekers.save(cycle.id, actor.id, note?.trim() || null);
+  }
+
+  async stopLooking(actor: TeamActor, cycleId: string): Promise<void> {
+    const cycle = await this.cycles.getVisible(actor, cycleId);
+    await this.seekers.remove(cycle.id, actor.id);
+  }
+
   /** The team's cycle, after checking the caller leads the team and formation is still open. */
   private async cycleForLeader(
     actor: TeamActor,
@@ -178,12 +210,12 @@ export class TeamFormationService {
   }
 
   private async assertEligible(
-    cycle: TeamCycle,
+    roster: CycleRoster,
     ids: readonly string[],
     tx: Transaction,
   ) {
     const users = ids.length > 0 ? await this.directory.findByIds(ids, tx) : [];
-    this.rules.assertEligible(cycle, ids, users);
+    this.rules.assertEligible(roster, ids, users);
     return users;
   }
 }

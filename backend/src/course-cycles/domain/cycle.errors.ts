@@ -9,6 +9,9 @@ export type CycleErrorCode =
   | "INVALID_DEADLINE"
   | "INVALID_ACADEMIC_YEAR"
   | "INVALID_TEAM_SIZE"
-  | "INVALID_TEAM_FORMATION_DEADLINE";
+  | "INVALID_TEAM_FORMATION_DEADLINE"
+  | "INVALID_TEAM_COMPLETION_DEADLINE"
+  | "CYCLE_NOT_ELECTIVE"
+  | "ENROLLMENT_NOT_FOUND";
 
 export class CycleDomainError extends DomainError<CycleErrorCode> {}

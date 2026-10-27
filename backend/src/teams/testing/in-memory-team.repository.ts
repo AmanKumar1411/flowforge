@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { TeamRepository } from "../application/ports/team.repository";
 import { TeamDomainError } from "../domain/team.errors";
-import { Membership, NewTeam, Team, TeamChange } from "../domain/team";
+import {
+  Membership,
+  NewTeam,
+  Team,
+  TeamChange,
+  TeamOrigin,
+} from "../domain/team";
 import { InMemoryStudentDirectory } from "./in-memory-student-directory";
 
 interface StoredTeam {
@@ -9,7 +15,8 @@ interface StoredTeam {
   cycleId: string;
   name: string;
   leaderId: string;
-  members: { userId: string; addedAt: Date }[];
+  origin: TeamOrigin;
+  members: { userId: string; addedById: string; addedAt: Date }[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -65,6 +72,20 @@ export class InMemoryTeamRepository extends TeamRepository {
       );
   }
 
+  async findMembershipByEmail(
+    cycleId: string,
+    email: string,
+  ): Promise<Membership | null> {
+    for (const team of this.teams.values()) {
+      if (team.cycleId !== cycleId) continue;
+      const member = team.members.find(
+        (candidate) => this.directory.get(candidate.userId)?.email === email,
+      );
+      if (member) return { userId: member.userId, teamId: team.id };
+    }
+    return null;
+  }
+
   async create(team: NewTeam): Promise<Team> {
     const userIds = [team.leaderId, ...team.memberIds];
     this.assertFree(team.cycleId, userIds);
@@ -74,7 +95,12 @@ export class InMemoryTeamRepository extends TeamRepository {
       cycleId: team.cycleId,
       name: team.name,
       leaderId: team.leaderId,
-      members: userIds.map((userId) => ({ userId, addedAt: now })),
+      origin: team.origin,
+      members: userIds.map((userId) => ({
+        userId,
+        addedById: team.addedById,
+        addedAt: now,
+      })),
       createdAt: now,
       updatedAt: now,
     };
@@ -94,7 +120,11 @@ export class InMemoryTeamRepository extends TeamRepository {
         ...team.members.filter(
           (member) => !change.removeMemberIds.includes(member.userId),
         ),
-        ...change.addMemberIds.map((userId) => ({ userId, addedAt: now })),
+        ...change.addMemberIds.map((userId) => ({
+          userId,
+          addedById: change.addedById,
+          addedAt: now,
+        })),
       ],
       updatedAt: now,
     };

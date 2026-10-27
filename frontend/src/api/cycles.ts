@@ -1,4 +1,9 @@
-import type { Cycle, CycleInput } from "../types";
+import type {
+  Cycle,
+  CycleInput,
+  EnrolledStudent,
+  EnrollmentResult,
+} from "../types";
 import { apiRequest } from "./client";
 
 export function listCycles() {
@@ -33,4 +38,22 @@ export function publishCycle(id: string) {
 
 export function closeCycle(id: string) {
   return apiRequest<Cycle>(`/course-cycles/${id}/close`, { method: "POST" });
+}
+
+export function listEnrollments(cycleId: string) {
+  return apiRequest<EnrolledStudent[]>(`/course-cycles/${cycleId}/enrollments`);
+}
+
+export function addEnrollments(cycleId: string, emails: string[]) {
+  return apiRequest<EnrollmentResult>(`/course-cycles/${cycleId}/enrollments`, {
+    method: "POST",
+    body: JSON.stringify({ emails }),
+  });
+}
+
+export function removeEnrollment(cycleId: string, email: string) {
+  return apiRequest<void>(
+    `/course-cycles/${cycleId}/enrollments/${encodeURIComponent(email)}`,
+    { method: "DELETE" },
+  );
 }

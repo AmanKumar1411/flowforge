@@ -17,6 +17,12 @@ export abstract class TeamRepository {
     userIds: readonly string[],
     tx?: Transaction,
   ): Promise<Membership[]>;
+  /** The team membership of the student with this email, if any. */
+  abstract findMembershipByEmail(
+    cycleId: string,
+    email: string,
+    tx: Transaction,
+  ): Promise<Membership | null>;
   /**
    * Inserts the team with its leader and members. Fails with
    * STUDENT_ALREADY_IN_TEAM when a concurrent request placed one of them first.

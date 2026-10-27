@@ -1,8 +1,15 @@
 import { Injectable } from "@nestjs/common";
 import { Transaction } from "../../common/transaction";
+import { CycleRoster } from "../../course-cycles/domain/cycle-roster";
+import { StudentScope } from "../../users/domain/user";
 import { UsersService } from "../../users/users.service";
 import { StudentDirectory } from "../application/ports/student-directory";
 import { DirectoryUser } from "../domain/team";
+
+const scopeOf = ({ scope }: CycleRoster): StudentScope =>
+  scope.kind === "BATCH"
+    ? { batchYear: scope.batchYear }
+    : { emails: [...scope.emails] };
 
 @Injectable()
 export class UsersStudentDirectory extends StudentDirectory {
@@ -17,11 +24,19 @@ export class UsersStudentDirectory extends StudentDirectory {
     return this.users.findByIds(ids, tx);
   }
 
-  searchStudents(
-    batchYear: number,
+  search(
+    roster: CycleRoster,
     query: string,
     limit: number,
   ): Promise<DirectoryUser[]> {
-    return this.users.searchActiveStudents({ batchYear, query, limit });
+    return this.users.searchActiveStudents({
+      scope: scopeOf(roster),
+      query,
+      limit,
+    });
+  }
+
+  listParticipants(roster: CycleRoster): Promise<DirectoryUser[]> {
+    return this.users.listActiveStudents(scopeOf(roster));
   }
 }

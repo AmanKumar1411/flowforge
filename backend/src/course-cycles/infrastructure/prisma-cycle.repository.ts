@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { Transaction } from "../../common/transaction";
 import {
   CourseProjectCycle as PrismaCycle,
   CycleStatus as PrismaCycleStatus,
@@ -10,6 +11,7 @@ import {
   CycleCreateData,
   CyclePatch,
   CycleStatus,
+  Enrollment,
 } from "../domain/cycle.types";
 import { CycleRepository } from "../domain/cycle-repository";
 
@@ -46,9 +48,22 @@ export class PrismaCycleRepository extends CycleRepository {
     return cycles.map(toDomain);
   }
 
-  async listPublishedForBatch(batchYear: number): Promise<Cycle[]> {
+  async listPublishedForStudent(
+    batchYear: number | null,
+    email: string,
+  ): Promise<Cycle[]> {
+    const electives: Prisma.CourseProjectCycleWhereInput = {
+      kind: "ELECTIVE",
+      enrollments: { some: { email } },
+    };
     const cycles = await this.prisma.courseProjectCycle.findMany({
-      where: { batchYear, status: PrismaCycleStatus.PUBLISHED },
+      where: {
+        status: PrismaCycleStatus.PUBLISHED,
+        OR:
+          batchYear === null
+            ? [electives]
+            : [{ kind: "CORE", batchYear }, electives],
+      },
       orderBy: { publishedAt: "desc" },
     });
     return cycles.map(toDomain);
@@ -98,5 +113,44 @@ export class PrismaCycleRepository extends CycleRepository {
       return null;
     }
     return this.findById(id);
+  }
+
+  async isEnrolled(cycleId: string, email: string): Promise<boolean> {
+    const row = await this.prisma.cycleEnrollment.findUnique({
+      where: { cycleId_email: { cycleId, email } },
+      select: { email: true },
+    });
+    return row !== null;
+  }
+
+  listEnrollments(cycleId: string, tx?: Transaction): Promise<Enrollment[]> {
+    return this.prisma.client(tx).cycleEnrollment.findMany({
+      where: { cycleId },
+      select: { email: true, createdAt: true },
+      orderBy: { email: "asc" },
+    });
+  }
+
+  async addEnrollments(
+    cycleId: string,
+    emails: readonly string[],
+    addedById: string,
+    tx: Transaction,
+  ): Promise<void> {
+    await this.prisma.client(tx).cycleEnrollment.createMany({
+      data: emails.map((email) => ({ cycleId, email, addedById })),
+      skipDuplicates: true,
+    });
+  }
+
+  async removeEnrollment(
+    cycleId: string,
+    email: string,
+    tx: Transaction,
+  ): Promise<boolean> {
+    const { count } = await this.prisma.client(tx).cycleEnrollment.deleteMany({
+      where: { cycleId, email },
+    });
+    return count > 0;
   }
 }

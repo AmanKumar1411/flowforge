@@ -6,6 +6,7 @@ export type TeamActor = {
   id: string;
   role: Role;
   batchYear: number | null;
+  email: string;
 };
 
 /**
@@ -30,6 +31,14 @@ export class TeamAccessPolicy {
     if (!this.canRead(actor, team, cycle)) {
       throw new TeamDomainError("TEAM_NOT_FOUND", "Team not found");
     }
+  }
+
+  /** Only the faculty who own the cycle complete its teams; anyone else is told the team does not exist. */
+  assertCycleOwner(actor: TeamActor, team: Team, cycle: TeamCycle): void {
+    if (actor.role !== "FACULTY" || cycle.createdByFacultyId !== actor.id) {
+      throw new TeamDomainError("TEAM_NOT_FOUND", "Team not found");
+    }
+    this.assertCanRead(actor, team, cycle);
   }
 
   /** Members can see their team but only the leader changes it. Leadership never moves. */

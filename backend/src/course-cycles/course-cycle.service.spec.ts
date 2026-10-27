@@ -22,19 +22,27 @@ const faculty = (id: string): CycleActor => ({
   id,
   role: "FACULTY",
   batchYear: null,
+  email: `${id}@nst.rishihood.edu.in`,
 });
 
 const student = (id: string, batchYear: number | null): CycleActor => ({
   id,
   role: "STUDENT",
   batchYear,
+  email: `${id}@nst.rishihood.edu.in`,
 });
 
-const admin: CycleActor = { id: "admin", role: "ADMIN", batchYear: null };
+const admin: CycleActor = {
+  id: "admin",
+  role: "ADMIN",
+  batchYear: null,
+  email: "coordinator.x@nst.rishihood.edu.in",
+};
 const pendingStaff: CycleActor = {
   id: "pending",
   role: "PENDING_STAFF",
   batchYear: null,
+  email: "sahil.a@nst.rishihood.edu.in",
 };
 
 const createDto = (batchYear = 2026): CreateCycleDto => ({

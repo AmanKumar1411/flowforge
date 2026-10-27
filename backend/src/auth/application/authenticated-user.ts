@@ -5,4 +5,6 @@ export interface AuthenticatedUser {
   id: string;
   role: Role;
   batchYear: number | null;
+  /** Normalized. Elective rosters are keyed by email. */
+  email: string;
 }

@@ -213,7 +213,7 @@ describe("Teams", () => {
         [
           {
             action: "TEAM_CREATED",
-            metadata: { cycleId, memberIds: [ids.neha] },
+            metadata: { cycleId, memberIds: [ids.neha], origin: "STUDENT" },
           },
         ],
       );
@@ -530,12 +530,12 @@ describe("Teams", () => {
 
       await assert.rejects(
         app.prisma
-          .$executeRaw`INSERT INTO "TeamMember" ("teamId", "cycleId", "userId") VALUES (${other.id}, ${cycleA}, ${ids.neha})`,
+          .$executeRaw`INSERT INTO "TeamMember" ("teamId", "cycleId", "userId", "addedById") VALUES (${other.id}, ${cycleA}, ${ids.neha}, ${ids.ravi})`,
         /TeamMember_cycleId_userId_key|Unique constraint/,
       );
       await assert.rejects(
         app.prisma
-          .$executeRaw`INSERT INTO "TeamMember" ("teamId", "cycleId", "userId") VALUES (${team.id}, ${cycleB}, ${ids.kiran})`,
+          .$executeRaw`INSERT INTO "TeamMember" ("teamId", "cycleId", "userId", "addedById") VALUES (${team.id}, ${cycleB}, ${ids.kiran}, ${ids.aman})`,
         /TeamMember_teamId_cycleId_fkey|Foreign key constraint/,
       );
       await assert.rejects(

@@ -8,6 +8,7 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
 } from "@nestjs/common";
 import {
   ApiNoContentResponse,
@@ -18,9 +19,10 @@ import {
 import { AuthenticatedUser } from "../../auth/application/authenticated-user";
 import { CurrentUser } from "../../auth/presentation/decorators/current-user.decorator";
 import { Roles } from "../../auth/presentation/decorators/roles.decorator";
+import { TeamCompletionService } from "../application/team-completion.service";
 import { TeamFormationService } from "../application/team-formation.service";
 import { TeamQueryService } from "../application/team-query.service";
-import { UpdateTeamDto } from "./dto/team-requests.dto";
+import { AddTeamMemberDto, UpdateTeamDto } from "./dto/team-requests.dto";
 import { TeamResponseDto } from "./dto/team-responses.dto";
 
 @ApiTags("teams")
@@ -29,6 +31,7 @@ export class TeamsController {
   constructor(
     private readonly formation: TeamFormationService,
     private readonly queries: TeamQueryService,
+    private readonly completion: TeamCompletionService,
   ) {}
 
   // Declared before ":teamId" so "mine" is never parsed as an id.
@@ -85,5 +88,24 @@ export class TeamsController {
     @Param("teamId", new ParseUUIDPipe()) teamId: string,
   ): Promise<void> {
     return this.formation.disband(user, teamId);
+  }
+
+  @Post(":teamId/members")
+  @HttpCode(HttpStatus.OK)
+  @Roles("FACULTY")
+  @ApiOperation({
+    summary: "Add a student without a team to this team (owning faculty)",
+    description:
+      "During team completion only: after the formation deadline, before the completion deadline. The team must have room.",
+  })
+  @ApiOkResponse({ type: TeamResponseDto })
+  async addMember(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("teamId", new ParseUUIDPipe()) teamId: string,
+    @Body() dto: AddTeamMemberDto,
+  ): Promise<TeamResponseDto> {
+    return TeamResponseDto.from(
+      await this.completion.addMember(user, teamId, dto.userId),
+    );
   }
 }

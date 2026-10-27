@@ -29,11 +29,13 @@ const ACTORS: Actor[] = [
 ];
 
 interface Case {
-  method: "GET" | "POST" | "PATCH" | "DELETE";
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   path: () => string;
   body?: () => unknown;
   /** Unlisted signed-in actors expect 403, anonymous expects 401. */
   allowed: Partial<Record<Actor, number>>;
+  /** The code of a 404; by default CYCLE_NOT_FOUND under /course-cycles and TEAM_NOT_FOUND under /teams. */
+  notFound?: string;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -56,6 +58,8 @@ describe("RBAC matrix", () => {
   const browsers = new Map<Actor, TestBrowser>();
   let published = "";
   let draft = "";
+  // An elective with only the "student" actor enrolled.
+  let elective = "";
   // A bystander: correcting an actor's batch would (correctly) revoke that actor's token.
   let bystanderId = "";
   // The bystander's team: no actor in the matrix is a member of it.
@@ -99,6 +103,17 @@ describe("RBAC matrix", () => {
     draft = String(
       (await owner.post("/course-cycles", { body: cycleInput })).body.id,
     );
+    elective = String(
+      (
+        await owner.post("/course-cycles", {
+          body: { ...cycleInput, title: "Elective", kind: "ELECTIVE" },
+        })
+      ).body.id,
+    );
+    await owner.post(`/course-cycles/${elective}/publish`);
+    await owner.post(`/course-cycles/${elective}/enrollments`, {
+      body: { emails: [`neha.t26csai${DOMAIN}`] },
+    });
     const bystander = await app.browser().signIn(`ravi.b26csai${DOMAIN}`);
     bystanderId = String((await bystander.get("/auth/me")).body.id);
     bystanderTeam = String(
@@ -202,6 +217,84 @@ describe("RBAC matrix", () => {
     },
 
     {
+      method: "GET",
+      path: () => `/course-cycles/${elective}`,
+      allowed: {
+        admin: 200,
+        facultyOwner: 200,
+        otherFaculty: 404,
+        student: 200,
+        otherBatchStudent: 404,
+      },
+    },
+    {
+      method: "GET",
+      path: () => `/course-cycles/${elective}/enrollments`,
+      allowed: { facultyOwner: 200, otherFaculty: 404 },
+    },
+    {
+      method: "POST",
+      path: () => `/course-cycles/${elective}/enrollments`,
+      body: () => ({ emails: [`matrix.m26csai${DOMAIN}`] }),
+      allowed: { facultyOwner: 201, otherFaculty: 404 },
+    },
+    {
+      method: "DELETE",
+      path: () =>
+        `/course-cycles/${elective}/enrollments/${encodeURIComponent(`nobody.n26csai${DOMAIN}`)}`,
+      allowed: { facultyOwner: 404, otherFaculty: 404 },
+      notFound: "*",
+    },
+    {
+      method: "GET",
+      path: () => `/course-cycles/${published}/looking-for-team`,
+      allowed: { student: 200, otherBatchStudent: 404 },
+    },
+    {
+      method: "PUT",
+      path: () => `/course-cycles/${published}/looking-for-team`,
+      body: () => ({ note: "Matrix" }),
+      allowed: { student: 204, otherBatchStudent: 404 },
+    },
+    {
+      method: "DELETE",
+      path: () => `/course-cycles/${published}/looking-for-team`,
+      allowed: { student: 204, otherBatchStudent: 404 },
+    },
+    {
+      method: "GET",
+      path: () => `/course-cycles/${published}/team-completion`,
+      allowed: { admin: 200, facultyOwner: 200, otherFaculty: 404 },
+    },
+    // Formation is still open in the matrix cycle, so the owner's completion tools answer 409.
+    {
+      method: "POST",
+      path: () => `/course-cycles/${published}/team-completion/teams`,
+      body: () => ({ name: "Matrix", leaderId: bystanderId, memberIds: [] }),
+      allowed: { facultyOwner: 409, otherFaculty: 404 },
+    },
+    {
+      method: "POST",
+      path: () =>
+        `/course-cycles/${published}/team-completion/auto-group/preview`,
+      allowed: { facultyOwner: 409, otherFaculty: 404 },
+    },
+    {
+      method: "POST",
+      path: () => `/course-cycles/${published}/team-completion/auto-group`,
+      body: () => ({
+        teams: [{ name: "Matrix", leaderId: bystanderId, memberIds: [] }],
+      }),
+      allowed: { facultyOwner: 409, otherFaculty: 404 },
+    },
+    {
+      method: "POST",
+      path: () => `/teams/${bystanderTeam}/members`,
+      body: () => ({ userId: bystanderId }),
+      allowed: { facultyOwner: 409, otherFaculty: 404 },
+    },
+
+    {
       method: "POST",
       path: () => `/course-cycles/${published}/teams`,
       body: () => ({ name: "Matrix", memberIds: [] }),
@@ -289,11 +382,14 @@ describe("RBAC matrix", () => {
               : "FORBIDDEN_ROLE",
           );
         }
-        if (expected === 404 && testCase.path().startsWith("/course-cycles/")) {
-          assert.equal(result.body.code, "CYCLE_NOT_FOUND");
-        }
-        if (expected === 404 && testCase.path().startsWith("/teams/")) {
-          assert.equal(result.body.code, "TEAM_NOT_FOUND");
+        const defaultNotFound = testCase.path().startsWith("/teams/")
+          ? "TEAM_NOT_FOUND"
+          : testCase.path().startsWith("/course-cycles/")
+            ? "CYCLE_NOT_FOUND"
+            : undefined;
+        const notFound = testCase.notFound ?? defaultNotFound;
+        if (expected === 404 && notFound && notFound !== "*") {
+          assert.equal(result.body.code, notFound);
         }
         if (expected === 401) {
           assert.equal(result.body.code, "UNAUTHENTICATED");

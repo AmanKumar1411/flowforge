@@ -53,7 +53,10 @@ export function CycleCard({
           <span className={`status status-${cycle.status.toLowerCase()}`}>
             {cycle.status === "PUBLISHED" ? "Open" : cycle.status}
           </span>
-          <span>Batch {cycle.batchYear}</span>
+          <span>
+            {cycle.kind === "ELECTIVE" ? "Elective · " : ""}Batch{" "}
+            {cycle.batchYear}
+          </span>
         </div>
         <h2>{cycle.title}</h2>
         <p className="course-name">

@@ -1,7 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { Transform } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   ArrayUnique,
   IsArray,
   IsOptional,
@@ -10,6 +11,7 @@ import {
   Matches,
   MaxLength,
   MinLength,
+  ValidateNested,
 } from "class-validator";
 import { TEAM_SIZE_LIMIT } from "../../../course-cycles/domain/cycle.types";
 
@@ -74,4 +76,51 @@ export class TeamCandidatesQueryDto {
     message: "q may contain letters, digits, spaces and . @ ' - only",
   })
   q!: string;
+}
+
+export class LookingForTeamDto {
+  @ApiPropertyOptional({
+    example: "Good at backend; free on weekends",
+    maxLength: 200,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  note?: string;
+}
+
+/** A team the faculty create: by hand, or confirmed from an auto-group preview. */
+export class FacultyTeamDto {
+  @ApiProperty({ example: "Auto team 1", maxLength: NAME_MAX_LENGTH })
+  @IsString()
+  @Matches(/\S/, { message: "name must not be blank" })
+  @MaxLength(NAME_MAX_LENGTH)
+  name!: string;
+
+  @ApiProperty({ description: "The student who leads the team; never changes" })
+  @IsUUID("all")
+  leaderId!: string;
+
+  @ApiProperty({ type: [String], description: "The other members" })
+  @IsArray()
+  @ArrayMaxSize(TEAM_SIZE_LIMIT)
+  @ArrayUnique()
+  @IsUUID("all", { each: true })
+  memberIds!: string[];
+}
+
+export class AddTeamMemberDto {
+  @ApiProperty()
+  @IsUUID("all")
+  userId!: string;
+}
+
+export class ApplyAutoGroupDto {
+  @ApiProperty({ type: FacultyTeamDto, isArray: true })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => FacultyTeamDto)
+  teams!: FacultyTeamDto[];
 }

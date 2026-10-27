@@ -1,3 +1,4 @@
+import { CycleRoster } from "../../course-cycles/domain/cycle-roster";
 import { StudentDirectory } from "../application/ports/student-directory";
 import { DirectoryUser } from "../domain/team";
 
@@ -12,26 +13,35 @@ export class InMemoryStudentDirectory extends StudentDirectory {
     return this.users.get(id);
   }
 
+  /** For the users-service double in specs. */
+  findByEmails(emails: readonly string[]): DirectoryUser[] {
+    return [...this.users.values()].filter((user) =>
+      emails.includes(user.email),
+    );
+  }
+
   async findByIds(ids: readonly string[]): Promise<DirectoryUser[]> {
     return ids.flatMap((id) => this.users.get(id) ?? []);
   }
 
-  async searchStudents(
-    batchYear: number,
+  async search(
+    roster: CycleRoster,
     query: string,
     limit: number,
   ): Promise<DirectoryUser[]> {
     const needle = query.toLowerCase();
-    return [...this.users.values()]
+    return (await this.listParticipants(roster))
       .filter(
         (user) =>
-          user.role === "STUDENT" &&
-          user.status === "ACTIVE" &&
-          user.batchYear === batchYear &&
-          (user.name.toLowerCase().includes(needle) ||
-            user.email.startsWith(needle)),
+          user.name.toLowerCase().includes(needle) ||
+          user.email.startsWith(needle),
       )
-      .sort((a, b) => a.name.localeCompare(b.name))
       .slice(0, limit);
+  }
+
+  async listParticipants(roster: CycleRoster): Promise<DirectoryUser[]> {
+    return [...this.users.values()]
+      .filter((user) => roster.includes(user))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }
 }

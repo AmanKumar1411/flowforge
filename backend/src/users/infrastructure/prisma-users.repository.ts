@@ -3,6 +3,7 @@ import { Transaction } from "../../common/transaction";
 import { PrismaService } from "../../prisma/prisma.service";
 import {
   NewUser,
+  StudentScope,
   StudentSearch,
   User,
   UserAccessChange,
@@ -12,6 +13,14 @@ import {
   UserProfile,
 } from "../domain/user";
 import { UsersRepository } from "../domain/users.repository";
+
+const activeStudentsIn = (scope: StudentScope) => ({
+  role: "STUDENT" as const,
+  status: "ACTIVE" as const,
+  ...("batchYear" in scope
+    ? { batchYear: scope.batchYear }
+    : { email: { in: [...scope.emails] } }),
+});
 
 @Injectable()
 export class PrismaUsersRepository extends UsersRepository {
@@ -32,6 +41,7 @@ export class PrismaUsersRepository extends UsersRepository {
         status: true,
         tokenVersion: true,
         batchYear: true,
+        email: true,
       },
     });
   }
@@ -94,12 +104,21 @@ export class PrismaUsersRepository extends UsersRepository {
     });
   }
 
+  findByEmails(emails: readonly string[]): Promise<User[]> {
+    return this.prisma.user.findMany({ where: { email: { in: [...emails] } } });
+  }
+
+  listActiveStudents(scope: StudentScope): Promise<User[]> {
+    return this.prisma.user.findMany({
+      where: activeStudentsIn(scope),
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+    });
+  }
+
   searchActiveStudents(search: StudentSearch): Promise<User[]> {
     return this.prisma.user.findMany({
       where: {
-        role: "STUDENT",
-        status: "ACTIVE",
-        batchYear: search.batchYear,
+        ...activeStudentsIn(search.scope),
         OR: [
           { name: { contains: search.query, mode: "insensitive" } },
           // Emails are stored lower-case.

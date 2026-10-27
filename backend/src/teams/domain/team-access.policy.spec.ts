@@ -8,11 +8,13 @@ const policy = new TeamAccessPolicy();
 const cycle: TeamCycle = {
   id: "cycle",
   status: "PUBLISHED",
+  kind: "CORE",
   batchYear: 2026,
   createdByFacultyId: "owner",
   minTeamSize: 1,
   maxTeamSize: 4,
   teamFormationDeadline: new Date("2026-11-01T12:00:00.000Z"),
+  teamCompletionDeadline: new Date("2026-11-05T12:00:00.000Z"),
 };
 
 const team: Team = {
@@ -20,10 +22,12 @@ const team: Team = {
   cycleId: "cycle",
   name: "Falcon",
   leaderId: "leader",
+  origin: "STUDENT",
   members: ["leader", "member"].map((userId) => ({
     userId,
     name: userId,
     email: `${userId}@x`,
+    addedById: "leader",
     addedAt: new Date(),
   })),
   createdAt: new Date(),
@@ -34,6 +38,7 @@ const actor = (id: string, role: Role): TeamActor => ({
   id,
   role,
   batchYear: role === "STUDENT" ? 2026 : null,
+  email: `${id}@nst.rishihood.edu.in`,
 });
 
 const codeOf = (work: () => void): string | undefined => {
@@ -93,5 +98,20 @@ describe("TeamAccessPolicy", () => {
         policy.assertLeader(actor("outsider", "STUDENT"), team, cycle),
       ),
     ).toBe("TEAM_NOT_FOUND");
+  });
+
+  it("lets only the owning faculty complete a team", () => {
+    expect(() =>
+      policy.assertCycleOwner(actor("owner", "FACULTY"), team, cycle),
+    ).not.toThrow();
+    for (const who of [
+      actor("other", "FACULTY"),
+      actor("admin", "ADMIN"),
+      actor("leader", "STUDENT"),
+    ]) {
+      expect(codeOf(() => policy.assertCycleOwner(who, team, cycle))).toBe(
+        "TEAM_NOT_FOUND",
+      );
+    }
   });
 });

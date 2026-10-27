@@ -340,6 +340,7 @@ h2 {
 
 .login-card input,
 .cycle-form input,
+.cycle-form select,
 .cycle-form textarea {
   width: 100%;
   border: 1px solid #c6c9bd;
@@ -352,6 +353,7 @@ h2 {
 
 .login-card input:focus,
 .cycle-form input:focus,
+.cycle-form select:focus,
 .cycle-form textarea:focus {
   border-color: var(--coral);
   box-shadow: 0 0 0 3px rgba(235, 119, 94, .15);
@@ -435,16 +437,16 @@ h2 {
 
 .detail-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
 
-.detail-grid .info-block:nth-child(3n) {
+.detail-grid .info-block:nth-child(4n) {
   border-right: 0;
 }
 
-.detail-grid .info-block:nth-child(n + 4) {
+.detail-grid .info-block:nth-child(n + 5) {
   border-top: 1px solid var(--line);
 }
 
@@ -816,4 +818,147 @@ h2 {
   .detail-grid .info-block + .info-block {
     border-top: 1px solid var(--line);
   }
+}
+
+/* Team completion and electives */
+
+.notice {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid #c9d98a;
+  background: #f6fadf;
+  font-size: .9rem;
+  line-height: 1.5;
+}
+
+.notice ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.looking-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 18px;
+  margin-top: 22px;
+  padding: 16px;
+  border: 1px dashed #c6c9bd;
+}
+
+.looking-box p {
+  flex: 1 1 280px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.looking-box form {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.looking-box label {
+  display: flex;
+  flex: 1 1 260px;
+  flex-direction: column;
+  gap: 6px;
+  font-size: .85rem;
+  font-weight: 700;
+}
+
+.looking-box input,
+.team-panel select,
+.team-editor textarea {
+  border: 1px solid #c6c9bd;
+  padding: 10px 12px;
+  background: white;
+  color: var(--ink);
+  font-weight: 400;
+}
+
+.looking-tag {
+  margin-left: 8px;
+  padding: 2px 8px;
+  background: var(--lime);
+  font-size: .68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.completion-list .select-student {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  font-weight: 400;
+}
+
+.completion-list .select-student span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.completion-list .row-actions {
+  flex-wrap: wrap;
+}
+
+.proposal {
+  margin-bottom: 22px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: white;
+}
+
+.proposal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.proposal-card {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+}
+
+.proposal-card h4 {
+  margin: 0 0 8px;
+  font-family: Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 400;
+}
+
+.proposal-card ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  line-height: 1.9;
+}
+
+.file-button {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--ink);
+  padding: 8px 16px;
+  font-size: .85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.file-button input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.file-button:focus-within {
+  outline: 3px solid rgba(235, 119, 94, .4);
 }

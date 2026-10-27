@@ -17,7 +17,10 @@ export type AuditAction =
   | "REFRESH_TOKEN_REUSE_DETECTED"
   | "TEAM_CREATED"
   | "TEAM_UPDATED"
-  | "TEAM_DISBANDED";
+  | "TEAM_DISBANDED"
+  | "ENROLLMENT_ADDED"
+  | "ENROLLMENT_REMOVED"
+  | "AUTO_GROUP_APPLIED";
 
 export type AuditEntityType =
   | "User"
@@ -25,7 +28,8 @@ export type AuditEntityType =
   | "FacultyAccessRequest"
   | "FacultyAllowlistEntry"
   | "RefreshTokenFamily"
-  | "Team";
+  | "Team"
+  | "CourseProjectCycle";
 
 export type AuditMetadata = Record<
   string,

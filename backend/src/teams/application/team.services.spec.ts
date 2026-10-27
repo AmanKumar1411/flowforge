@@ -1,18 +1,16 @@
-import { AuditService } from "../../audit/audit.service";
 import { AuditEvent } from "../../audit/domain/audit-event";
 import { FixedClock } from "../../common/testing/fixed-clock";
-import { ImmediateTransactionRunner } from "../../common/testing/immediate-transaction.runner";
-import { Transaction } from "../../common/transaction";
 import { CourseCycleService } from "../../course-cycles/course-cycle.service";
-import { CycleAuthorizationPolicy } from "../../course-cycles/domain/cycle-authorization-policy";
-import { CycleWorkflow } from "../../course-cycles/domain/cycle-workflow";
-import { InMemoryCycleRepository } from "../../course-cycles/domain/in-memory-cycle.repository";
-import { TeamAccessPolicy, TeamActor } from "../domain/team-access.policy";
-import { TeamRules } from "../domain/team-rules";
-import { DirectoryUser } from "../domain/team";
-import { CourseCycleTeamCycles } from "../infrastructure/course-cycle-team-cycles";
-import { InMemoryStudentDirectory } from "../testing/in-memory-student-directory";
-import { InMemoryTeamRepository } from "../testing/in-memory-team.repository";
+import {
+  actor,
+  admin,
+  createTeamKit,
+  FORMATION_DEADLINE,
+  NOW,
+  otherFaculty,
+  owner,
+  student,
+} from "../testing/team-test-kit";
 import { TeamFormationService } from "./team-formation.service";
 import { TeamQueryService } from "./team-query.service";
 
@@ -25,28 +23,6 @@ jest.mock("@nestjs/swagger", () => ({
   ApiPropertyOptional: () => () => undefined,
 }));
 
-const NOW = "2026-10-27T09:00:00.000Z";
-const FORMATION_DEADLINE = "2026-10-30T12:00:00.000Z";
-
-const student = (
-  id: string,
-  overrides: Partial<DirectoryUser> = {},
-): DirectoryUser => ({
-  id,
-  name: id[0].toUpperCase() + id.slice(1),
-  email: `${id}.k26csai@nst.rishihood.edu.in`,
-  role: "STUDENT",
-  status: "ACTIVE",
-  batchYear: 2026,
-  ...overrides,
-});
-
-const actor = (user: DirectoryUser): TeamActor => ({
-  id: user.id,
-  role: user.role,
-  batchYear: user.batchYear,
-});
-
 const aman = student("aman");
 const neha = student("neha");
 const ravi = student("ravi");
@@ -54,71 +30,19 @@ const priya = student("priya");
 const kiran = student("kiran");
 const older = student("older", { batchYear: 2025 });
 const gone = student("gone", { status: "DEACTIVATED" });
-const owner: TeamActor = { id: "owner", role: "FACULTY", batchYear: null };
-const otherFaculty: TeamActor = {
-  id: "other-faculty",
-  role: "FACULTY",
-  batchYear: null,
-};
-const admin: TeamActor = { id: "admin", role: "ADMIN", batchYear: null };
 
 describe("Team services", () => {
   let clock: FixedClock;
   let cycles: CourseCycleService;
-  let directory: InMemoryStudentDirectory;
   let audited: AuditEvent[];
   let formation: TeamFormationService;
   let queries: TeamQueryService;
   let cycleId: string;
 
   beforeEach(async () => {
-    clock = new FixedClock(NOW);
-    cycles = new CourseCycleService(
-      new InMemoryCycleRepository(),
-      new CycleWorkflow(),
-      new CycleAuthorizationPolicy(),
-      clock,
-    );
-    directory = new InMemoryStudentDirectory();
-    directory.add(
-      aman,
-      neha,
-      ravi,
-      priya,
-      kiran,
-      older,
-      gone,
-      student("faculty-user", {
-        id: "owner",
-        role: "FACULTY",
-        batchYear: null,
-      }),
-    );
-    audited = [];
-    const teams = new InMemoryTeamRepository(directory);
-    const teamCycles = new CourseCycleTeamCycles(cycles);
-    formation = new TeamFormationService(
-      teams,
-      teamCycles,
-      directory,
-      new TeamRules(),
-      new TeamAccessPolicy(),
-      {
-        record: async (_tx: Transaction, event: AuditEvent) => {
-          audited.push(event);
-        },
-      } as unknown as AuditService,
-      new ImmediateTransactionRunner(),
-      clock,
-    );
-    queries = new TeamQueryService(
-      teams,
-      teamCycles,
-      directory,
-      new TeamRules(),
-      new TeamAccessPolicy(),
-      clock,
-    );
+    const kit = createTeamKit();
+    kit.directory.add(aman, neha, ravi, priya, kiran, older, gone);
+    ({ clock, cycles, audited, formation, queries } = kit);
     cycleId = await publishedCycle({ minTeamSize: 2, maxTeamSize: 3 });
   });
 
@@ -164,7 +88,7 @@ describe("Team services", () => {
           actorId: aman.id,
           entityType: "Team",
           entityId: team.id,
-          metadata: { cycleId, memberIds: [neha.id] },
+          metadata: { cycleId, memberIds: [neha.id], origin: "STUDENT" },
         },
       ]);
     });
@@ -255,7 +179,7 @@ describe("Team services", () => {
           memberIds: [neha.id, ravi.id],
         })
       ).id;
-      audited = [];
+      audited.length = 0;
     });
 
     it("lets only the leader change it", async () => {

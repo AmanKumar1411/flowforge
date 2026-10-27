@@ -18,7 +18,7 @@ export interface User {
 /** The columns every authenticated request needs, read by primary key. */
 export type UserAccessState = Pick<
   User,
-  "id" | "role" | "status" | "tokenVersion" | "batchYear"
+  "id" | "role" | "status" | "tokenVersion" | "batchYear" | "email"
 >;
 
 export interface NewUser {
@@ -58,8 +58,12 @@ export interface UserPage {
   nextCursor: string | null;
 }
 
+/** The students who take part in a cycle: a whole batch, or an elective's enrolled emails. */
+export type StudentScope =
+  { batchYear: number } | { emails: readonly string[] };
+
 export interface StudentSearch {
-  batchYear: number;
+  scope: StudentScope;
   /** Matches a name containing it or an email starting with it, ignoring case. */
   query: string;
   limit: number;
