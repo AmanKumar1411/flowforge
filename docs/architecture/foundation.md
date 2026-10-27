@@ -8,16 +8,24 @@ V1 implements one deployable NestJS API, one PostgreSQL database, and one React/
 
 `AppModule` assembles configuration, Prisma, and authentication. `ConfigModule` validates all required environment variables before the app bootstraps. `PrismaService` is the single Prisma client, connects at module initialization, and disconnects on shutdown.
 
-`AuthController` owns HTTP request/response handling. `AuthService` owns registration, password hashing/verification, and token issuance. `UsersRepository` contains the User persistence calls. The service depends on the runtime abstract class `UniversityIdentityParser`; `AuthModule` binds that abstraction to `RishihoodIdentityParser`.
+Phase 3 replaced password authentication with Google Sign-In restricted to the university domain,
+server-side roles and refresh-token sessions; see [auth-and-rbac.md](auth-and-rbac.md) and the
+[decision records](../decisions/). The `auth` module is layered into `domain/` (pure rules such as
+`RoleResolver` and `BatchYearPolicy`), `application/` (services and ports), `infrastructure/`
+(Google, JWT and Prisma adapters) and `presentation/` (controller, global guards, decorators).
+`users` owns the User table and `audit` owns the append-only audit log.
 
-The parser is called only during registration. It trims and lower-cases the address, checks the exact domain part against configuration, then applies one anchored configured local-part pattern. The named `batch` capture is converted with `BATCH_BASE_YEAR`. If a valid domain has no batch token, the persisted `batchYear` is `null`. Login and protected requests use the persisted User/token state and do not re-parse identity.
+`UniversityIdentityParser` is bound to `RishihoodIdentityParser`, which classifies the normalized
+address as student (with the two-digit admission year from `STUDENT_EMAIL_PATTERN`), staff
+(`STAFF_EMAIL_PATTERN`) or unrecognized. Unrecognized addresses are denied, never guessed.
+`batchYear` is set once when the user is created; later logins and requests use the persisted value.
 
 ## Data and security decisions
 
-`User.email` is unique, `passwordHash` is never returned from the auth service, and passwords are hashed with bcrypt at cost 12. JWT verification is in `JwtAuthGuard`; authorization policy can be added independently of authentication guards as protected resources appear. Global DTO validation strips or rejects unexpected fields. CORS accepts explicit configured origins only and uses credentials.
+Users are identified by the unique Google `sub`; `User.email` is unique and normalized. No passwords are stored. `JwtAuthGuard` and `RolesGuard` are global, with an explicit `@Public()` opt-out, and every request reads the user's role, status and `tokenVersion` by primary key. Resource-level rules stay in policy objects such as `CycleAuthorizationPolicy`. Global DTO validation strips or rejects unexpected fields. CORS accepts only `FRONTEND_URL` and uses credentials. Every error has the shape `{ code, message }`.
 
 Prisma 7 uses `prisma.config.ts`, a generated CJS client under an ignored output path, and the PostgreSQL driver adapter. The initial migration is the source of truth for recreating the schema.
 
 ## Extension direction
 
-New lifecycle modules should depend on the exported Prisma module and public auth guards, not instantiate Prisma or parsers directly. Add a module per bounded concern when the domain arrives; do not introduce queues, microservices, Redis, or orchestration infrastructure until a concrete requirement requires them.
+New lifecycle modules get authentication for free from the global guards; they declare `@Roles(...)` on each route, read the caller with `@CurrentUser()`, and depend on exported services rather than other modules' repositories. Add a module per bounded concern when the domain arrives; do not introduce queues, microservices, Redis, or orchestration infrastructure until a concrete requirement requires them.

@@ -5,8 +5,9 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../generated/prisma/client";
 import { Pool } from "pg";
+import { Transaction } from "../common/transaction";
+import { Prisma, PrismaClient } from "../generated/prisma/client";
 
 @Injectable()
 export class PrismaService
@@ -21,6 +22,11 @@ export class PrismaService
     });
     super({ adapter: new PrismaPg(pool) });
     this.pool = pool;
+  }
+
+  /** The client to query with: the open transaction if there is one, otherwise the pool. */
+  client(tx?: Transaction): Prisma.TransactionClient {
+    return tx ? (tx as unknown as Prisma.TransactionClient) : this;
   }
 
   async onModuleInit(): Promise<void> {

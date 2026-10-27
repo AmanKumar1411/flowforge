@@ -1,5 +1,5 @@
-import { BadRequestException, HttpException, Injectable } from "@nestjs/common";
-import type { JwtPayload } from "../auth/auth.service";
+import { Injectable } from "@nestjs/common";
+import { Clock } from "../common/clock";
 import {
   CycleAuthorizationPolicy,
   CycleActor,
@@ -12,30 +12,20 @@ import { CreateCycleDto } from "./dto/create-cycle.dto";
 import { CycleResponseDto } from "./dto/cycle-response.dto";
 import { UpdateCycleDto } from "./dto/update-cycle.dto";
 
-const errorStatus: Record<string, number> = {
-  CYCLE_NOT_FOUND: 404,
-  NOT_CYCLE_OWNER: 403,
-  UNAUTHORIZED_BATCH_ACCESS: 403,
-  INVALID_STATUS_TRANSITION: 409,
-  CYCLE_ALREADY_CLOSED: 409,
-  CYCLE_FIELD_LOCKED: 409,
-  INVALID_DEADLINE: 400,
-};
-
 @Injectable()
 export class CourseCycleService {
   constructor(
     private readonly repository: CycleRepository,
     private readonly workflow: CycleWorkflow,
     private readonly policy: CycleAuthorizationPolicy,
+    private readonly clock: Clock,
   ) {}
 
   async create(
-    actor: JwtPayload,
+    actor: CycleActor,
     dto: CreateCycleDto,
   ): Promise<CycleResponseDto> {
-    const cycleActor = this.actor(actor);
-    this.policy.assertFaculty(cycleActor);
+    this.policy.assertFaculty(actor);
     const dates = this.parseDates(
       dto.submissionStartAt,
       dto.submissionDeadline,
@@ -51,48 +41,41 @@ export class CourseCycleService {
       academicYear: dto.academicYear,
       submissionStartAt: dates.start,
       submissionDeadline: dates.deadline,
-      createdByFacultyId: cycleActor.id,
+      createdByFacultyId: actor.id,
     });
     return CycleResponseDto.fromCycle(cycle);
   }
 
-  async listForStudent(actor: JwtPayload): Promise<CycleResponseDto[]> {
-    const cycleActor = this.actor(actor);
-    if (cycleActor.role !== "STUDENT" || cycleActor.batchYear === null) {
-      return [];
+  /** Students see published cycles for their batch; admins see every cycle that has been published. */
+  async listVisible(actor: CycleActor): Promise<CycleResponseDto[]> {
+    let cycles: Cycle[] = [];
+    if (actor.role === "STUDENT" && actor.batchYear !== null) {
+      cycles = await this.repository.listPublishedForBatch(actor.batchYear);
+    } else if (actor.role === "ADMIN") {
+      cycles = await this.repository.listPublishedOrClosed();
     }
-    const cycles = await this.repository.listPublishedForBatch(
-      cycleActor.batchYear,
-    );
     return cycles.map(CycleResponseDto.fromCycle);
   }
 
-  async listMine(actor: JwtPayload): Promise<CycleResponseDto[]> {
-    const cycleActor = this.actor(actor);
-    this.policy.assertFaculty(cycleActor);
-    const cycles = await this.repository.listByOwner(cycleActor.id);
+  async listMine(actor: CycleActor): Promise<CycleResponseDto[]> {
+    this.policy.assertFaculty(actor);
+    const cycles = await this.repository.listByOwner(actor.id);
     return cycles.map(CycleResponseDto.fromCycle);
   }
 
-  async findById(actor: JwtPayload, id: string): Promise<CycleResponseDto> {
+  async findById(actor: CycleActor, id: string): Promise<CycleResponseDto> {
     const cycle = await this.getCycle(id);
-    const cycleActor = this.actor(actor);
-    if (cycleActor.role === "FACULTY") {
-      this.policy.assertOwner(cycleActor, cycle);
-    } else {
-      this.policy.assertStudentBatchAccess(cycleActor, cycle);
-    }
+    this.policy.assertCanRead(actor, cycle);
     return CycleResponseDto.fromCycle(cycle);
   }
 
   async update(
-    actor: JwtPayload,
+    actor: CycleActor,
     id: string,
     dto: UpdateCycleDto,
   ): Promise<CycleResponseDto> {
     const cycle = await this.getCycle(id);
-    const cycleActor = this.actor(actor);
-    this.policy.assertOwner(cycleActor, cycle);
+    this.policy.assertOwner(actor, cycle);
     const patch = this.toPatch(dto);
     this.workflow.assertEditable(
       cycle.status,
@@ -117,10 +100,9 @@ export class CourseCycleService {
     return CycleResponseDto.fromCycle(updated);
   }
 
-  async publish(actor: JwtPayload, id: string): Promise<CycleResponseDto> {
+  async publish(actor: CycleActor, id: string): Promise<CycleResponseDto> {
     const cycle = await this.getCycle(id);
-    const cycleActor = this.actor(actor);
-    this.policy.assertOwner(cycleActor, cycle);
+    this.policy.assertOwner(actor, cycle);
     const nextStatus = this.workflow.transition(cycle.status, "PUBLISH");
     this.workflow.validatePublishRules(
       cycle.submissionStartAt,
@@ -130,7 +112,7 @@ export class CourseCycleService {
       id,
       cycle.status,
       nextStatus,
-      new Date(),
+      this.clock.now(),
     );
     if (!published) {
       throw new CycleDomainError(
@@ -141,16 +123,15 @@ export class CourseCycleService {
     return CycleResponseDto.fromCycle(published);
   }
 
-  async close(actor: JwtPayload, id: string): Promise<CycleResponseDto> {
+  async close(actor: CycleActor, id: string): Promise<CycleResponseDto> {
     const cycle = await this.getCycle(id);
-    const cycleActor = this.actor(actor);
-    this.policy.assertOwner(cycleActor, cycle);
+    this.policy.assertOwner(actor, cycle);
     const nextStatus = this.workflow.transition(cycle.status, "CLOSE");
     const closed = await this.repository.transitionStatus(
       id,
       cycle.status,
       nextStatus,
-      new Date(),
+      this.clock.now(),
     );
     if (!closed) {
       throw new CycleDomainError(
@@ -159,10 +140,6 @@ export class CourseCycleService {
       );
     }
     return CycleResponseDto.fromCycle(closed);
-  }
-
-  private actor(actor: JwtPayload): CycleActor {
-    return { id: actor.sub, role: actor.role, batchYear: actor.batchYear };
   }
 
   private async getCycle(id: string): Promise<Cycle> {
@@ -213,19 +190,10 @@ export class CourseCycleService {
   private assertAcademicYear(value: string): void {
     const match = /^(\d{4})-(\d{2})$/.exec(value);
     if (!match || Number(match[2]) !== (Number(match[1]) + 1) % 100) {
-      throw new BadRequestException(
+      throw new CycleDomainError(
+        "INVALID_ACADEMIC_YEAR",
         "Academic year must use the YYYY-YY format with consecutive years",
       );
     }
-  }
-
-  static toHttpException(error: unknown): HttpException | unknown {
-    if (!(error instanceof CycleDomainError)) {
-      return error;
-    }
-    return new HttpException(
-      { code: error.code, message: error.message },
-      errorStatus[error.code],
-    );
   }
 }

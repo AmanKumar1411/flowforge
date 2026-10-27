@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider     = "prisma-client"
   output       = "../src/generated/prisma"
@@ -13,33 +11,140 @@ datasource db {
   provider = "postgresql"
 }
 
-// FlowForge V1 - User identity model
+// Identity and access
 
 enum UserRole {
   STUDENT
   FACULTY
+  ADMIN
+  PENDING_STAFF
 }
+
+enum UserStatus {
+  ACTIVE
+  DEACTIVATED
+}
+
+enum FacultyAllowlistSource {
+  MANUAL
+  APPROVED_REQUEST
+  CSV_IMPORT
+}
+
+enum FacultyAccessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AuditAction {
+  LOGIN_SUCCEEDED
+  LOGIN_DENIED
+  USER_CREATED
+  ROLE_ASSIGNED
+  FACULTY_REQUEST_CREATED
+  FACULTY_REQUEST_APPROVED
+  FACULTY_REQUEST_REJECTED
+  FACULTY_ALLOWLIST_ADDED
+  FACULTY_ALLOWLIST_REMOVED
+  ELEVATION_DENIED
+  USER_BATCH_CORRECTED
+  USER_DEACTIVATED
+  USER_REACTIVATED
+  LOGOUT
+  LOGOUT_ALL
+  REFRESH_TOKEN_REUSE_DETECTED
+}
+
+model User {
+  id           String     @id @default(uuid())
+  googleSub    String     @unique
+  email        String     @unique
+  name         String
+  avatarUrl    String?
+  role         UserRole
+  status       UserStatus @default(ACTIVE)
+  batchYear    Int?
+  tokenVersion Int        @default(0)
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  courseProjectCycles    CourseProjectCycle[]
+  refreshTokens          RefreshToken[]
+  facultyAccessRequest   FacultyAccessRequest?   @relation("RequestingUser")
+  decidedFacultyRequests FacultyAccessRequest[]  @relation("RequestDecider")
+  addedAllowlistEntries  FacultyAllowlistEntry[]
+  auditLogs              AuditLog[]
+
+  @@index([role])
+  @@index([batchYear])
+  @@index([status])
+}
+
+model FacultyAllowlistEntry {
+  id        String                 @id @default(uuid())
+  email     String                 @unique
+  name      String?
+  source    FacultyAllowlistSource
+  addedById String
+  addedBy   User                   @relation(fields: [addedById], references: [id], onDelete: Restrict)
+  createdAt DateTime               @default(now())
+}
+
+model FacultyAccessRequest {
+  id          String                     @id @default(uuid())
+  userId      String                     @unique
+  user        User                       @relation("RequestingUser", fields: [userId], references: [id], onDelete: Restrict)
+  email       String
+  status      FacultyAccessRequestStatus @default(PENDING)
+  decidedById String?
+  decidedBy   User?                      @relation("RequestDecider", fields: [decidedById], references: [id], onDelete: Restrict)
+  decidedAt   DateTime?
+  createdAt   DateTime                   @default(now())
+
+  @@index([status])
+}
+
+model RefreshToken {
+  id              String        @id @default(uuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  familyId        String
+  tokenHash       String        @unique
+  expiresAt       DateTime
+  familyExpiresAt DateTime
+  revokedAt       DateTime?
+  replacedById    String?       @unique
+  replacedBy      RefreshToken? @relation("TokenRotation", fields: [replacedById], references: [id], onDelete: Restrict)
+  replaces        RefreshToken? @relation("TokenRotation")
+  userAgent       String?
+  createdAt       DateTime      @default(now())
+
+  @@index([userId])
+  @@index([familyId])
+}
+
+// Append-only: the migration adds a trigger that rejects UPDATE and DELETE.
+model AuditLog {
+  id         String      @id @default(uuid())
+  actorId    String?
+  actor      User?       @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  action     AuditAction
+  entityType String
+  entityId   String
+  metadata   Json        @default("{}")
+  createdAt  DateTime    @default(now())
+
+  @@index([entityType, entityId, createdAt])
+}
+
+// Course and project cycles
 
 enum CycleStatus {
   DRAFT
   PUBLISHED
   CLOSED
-}
-
-model User {
-  id           String   @id @default(uuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         UserRole
-  batchYear    Int?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  courseProjectCycles CourseProjectCycle[]
-
-  @@index([role])
-  @@index([batchYear])
 }
 
 model CourseProjectCycle {

@@ -1,12 +1,17 @@
+import type { Role } from "../../auth/domain/role";
 import { CycleDomainError } from "./cycle.errors";
 import { Cycle } from "./cycle.types";
 
 export type CycleActor = {
   id: string;
-  role: "STUDENT" | "FACULTY";
+  role: Role;
   batchYear: number | null;
 };
 
+/**
+ * Resource-level rules that sit behind the role guard. A cycle the actor may
+ * not see is reported as not found, so its existence is never revealed.
+ */
 export class CycleAuthorizationPolicy {
   assertFaculty(actor: CycleActor): void {
     if (actor.role !== "FACULTY") {
@@ -20,39 +25,34 @@ export class CycleAuthorizationPolicy {
   assertOwner(actor: CycleActor, cycle: Cycle): void {
     this.assertFaculty(actor);
     if (cycle.createdByFacultyId !== actor.id) {
-      throw new CycleDomainError(
-        "NOT_CYCLE_OWNER",
-        "Only the faculty owner can manage this cycle",
-      );
+      throw this.notFound();
     }
   }
 
   canRead(actor: CycleActor, cycle: Cycle): boolean {
-    if (actor.role === "FACULTY") {
-      return cycle.createdByFacultyId === actor.id;
+    switch (actor.role) {
+      case "FACULTY":
+        return cycle.createdByFacultyId === actor.id;
+      case "STUDENT":
+        return (
+          cycle.status === "PUBLISHED" &&
+          actor.batchYear !== null &&
+          cycle.batchYear === actor.batchYear
+        );
+      case "ADMIN":
+        return cycle.status !== "DRAFT";
+      case "PENDING_STAFF":
+        return false;
     }
-    return (
-      cycle.status === "PUBLISHED" &&
-      actor.batchYear !== null &&
-      cycle.batchYear === actor.batchYear
-    );
   }
 
-  assertStudentBatchAccess(actor: CycleActor, cycle: Cycle): void {
-    if (actor.role !== "STUDENT") {
-      return;
+  assertCanRead(actor: CycleActor, cycle: Cycle): void {
+    if (!this.canRead(actor, cycle)) {
+      throw this.notFound();
     }
-    if (cycle.status !== "PUBLISHED") {
-      throw new CycleDomainError(
-        "CYCLE_NOT_FOUND",
-        "Published cycle not found",
-      );
-    }
-    if (actor.batchYear !== cycle.batchYear) {
-      throw new CycleDomainError(
-        "UNAUTHORIZED_BATCH_ACCESS",
-        "This cycle is not available for your batch",
-      );
-    }
+  }
+
+  private notFound(): CycleDomainError {
+    return new CycleDomainError("CYCLE_NOT_FOUND", "Course cycle not found");
   }
 }

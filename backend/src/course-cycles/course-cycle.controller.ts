@@ -8,94 +8,107 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
-  Req,
-  UseGuards,
 } from "@nestjs/common";
-import { UserRole } from "../generated/prisma/client";
-import { JwtPayload } from "../auth/auth.service";
 import {
-  JwtAuthGuard,
-  AuthenticatedRequest,
-} from "../auth/guards/jwt-auth.guard";
-import { Roles } from "../auth/guards/roles.decorator";
-import { RolesGuard } from "../auth/guards/roles.guard";
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from "@nestjs/swagger";
+import { AuthenticatedUser } from "../auth/application/authenticated-user";
+import { CurrentUser } from "../auth/presentation/decorators/current-user.decorator";
+import { Roles } from "../auth/presentation/decorators/roles.decorator";
 import { CourseCycleService } from "./course-cycle.service";
 import { CreateCycleDto } from "./dto/create-cycle.dto";
 import { CycleResponseDto } from "./dto/cycle-response.dto";
 import { UpdateCycleDto } from "./dto/update-cycle.dto";
 
-const currentUser = (request: AuthenticatedRequest): JwtPayload =>
-  request.user as JwtPayload;
-
+@ApiTags("course-cycles")
 @Controller("course-cycles")
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class CourseCycleController {
   constructor(private readonly cycles: CourseCycleService) {}
 
   @Post()
-  @Roles(UserRole.FACULTY)
+  @Roles("FACULTY")
+  @ApiOperation({ summary: "Create a draft cycle owned by the caller" })
+  @ApiCreatedResponse({ type: CycleResponseDto })
   create(
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateCycleDto,
   ): Promise<CycleResponseDto> {
-    return this.run(() => this.cycles.create(currentUser(request), dto));
+    return this.cycles.create(user, dto);
   }
 
   @Get()
-  @Roles(UserRole.STUDENT)
-  list(@Req() request: AuthenticatedRequest): Promise<CycleResponseDto[]> {
-    return this.run(() => this.cycles.listForStudent(currentUser(request)));
+  @Roles("STUDENT", "ADMIN")
+  @ApiOperation({
+    summary: "Cycles visible to the caller",
+    description:
+      "Students: published cycles of their own batch. Admins: every published or closed cycle, read-only.",
+  })
+  @ApiOkResponse({ type: CycleResponseDto, isArray: true })
+  list(@CurrentUser() user: AuthenticatedUser): Promise<CycleResponseDto[]> {
+    return this.cycles.listVisible(user);
   }
 
   @Get("my")
-  @Roles(UserRole.FACULTY)
-  listMine(@Req() request: AuthenticatedRequest): Promise<CycleResponseDto[]> {
-    return this.run(() => this.cycles.listMine(currentUser(request)));
+  @Roles("FACULTY")
+  @ApiOperation({ summary: "The caller's own cycles in every state" })
+  @ApiOkResponse({ type: CycleResponseDto, isArray: true })
+  listMine(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<CycleResponseDto[]> {
+    return this.cycles.listMine(user);
   }
 
   @Get(":id")
+  @Roles("STUDENT", "FACULTY", "ADMIN")
+  @ApiOperation({
+    summary: "Read one cycle",
+    description:
+      "404 CYCLE_NOT_FOUND when the caller may not see it: another faculty's cycle, another batch, or a draft.",
+  })
+  @ApiOkResponse({ type: CycleResponseDto })
   findById(
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() user: AuthenticatedUser,
     @Param("id", new ParseUUIDPipe()) id: string,
   ): Promise<CycleResponseDto> {
-    return this.run(() => this.cycles.findById(currentUser(request), id));
+    return this.cycles.findById(user, id);
   }
 
   @Patch(":id")
-  @Roles(UserRole.FACULTY)
+  @Roles("FACULTY")
+  @ApiOperation({ summary: "Edit the fields the cycle's state allows" })
+  @ApiOkResponse({ type: CycleResponseDto })
   update(
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() user: AuthenticatedUser,
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateCycleDto,
   ): Promise<CycleResponseDto> {
-    return this.run(() => this.cycles.update(currentUser(request), id, dto));
+    return this.cycles.update(user, id, dto);
   }
 
   @Post(":id/publish")
   @HttpCode(HttpStatus.OK)
-  @Roles(UserRole.FACULTY)
+  @Roles("FACULTY")
+  @ApiOperation({ summary: "Publish an owned draft" })
+  @ApiOkResponse({ type: CycleResponseDto })
   publish(
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() user: AuthenticatedUser,
     @Param("id", new ParseUUIDPipe()) id: string,
   ): Promise<CycleResponseDto> {
-    return this.run(() => this.cycles.publish(currentUser(request), id));
+    return this.cycles.publish(user, id);
   }
 
   @Post(":id/close")
   @HttpCode(HttpStatus.OK)
-  @Roles(UserRole.FACULTY)
+  @Roles("FACULTY")
+  @ApiOperation({ summary: "Close an owned published cycle" })
+  @ApiOkResponse({ type: CycleResponseDto })
   close(
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() user: AuthenticatedUser,
     @Param("id", new ParseUUIDPipe()) id: string,
   ): Promise<CycleResponseDto> {
-    return this.run(() => this.cycles.close(currentUser(request), id));
-  }
-
-  private async run<T>(operation: () => Promise<T>): Promise<T> {
-    try {
-      return await operation();
-    } catch (error) {
-      throw CourseCycleService.toHttpException(error);
-    }
+    return this.cycles.close(user, id);
   }
 }

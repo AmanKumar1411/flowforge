@@ -43,7 +43,7 @@ sequenceDiagram
   PostgreSQL-->>Controller: 200 response or 409 race
 ```
 
-There is no audit model in the existing foundation, so Phase 2 does not invent one. A future audit model should be written in the same transaction as the cycle change.
+Phase 3 added an append-only audit module (`AuditService.record(tx, event)`); cycle changes are not audited yet, and adding it means wrapping the transition in `TransactionRunner.run`.
 
 ## State machine
 
@@ -64,12 +64,16 @@ stateDiagram-v2
 
 ## Access matrix
 
+Since Phase 3 the global `RolesGuard` checks the role first; the policy then decides per cycle. A cycle the caller may not see is reported as `404 CYCLE_NOT_FOUND`, so its existence is not revealed.
+
 | Actor                 | List                                            | Read                       | Mutate                                |
 | --------------------- | ----------------------------------------------- | -------------------------- | ------------------------------------- |
 | Faculty owner         | `/my`, all statuses                             | Own cycles                 | Create, edit by state, publish, close |
-| Other faculty         | None for another owner                          | `NOT_CYCLE_OWNER`          | `NOT_CYCLE_OWNER`                     |
-| Student with batch    | Published cycles for persisted `User.batchYear` | Published same-batch cycle | None                                  |
-| Student without batch | Empty list                                      | No cycle                   | None                                  |
+| Other faculty         | None for another owner                          | `404 CYCLE_NOT_FOUND`      | `404 CYCLE_NOT_FOUND`                 |
+| Student with batch    | Published cycles for persisted `User.batchYear` | Published same-batch cycle (else 404) | `403 FORBIDDEN_ROLE`       |
+| Student without batch | Empty list                                      | No cycle                   | `403 FORBIDDEN_ROLE`                  |
+| Admin                 | Every published or closed cycle                 | Non-draft cycles (drafts 404) | `403 FORBIDDEN_ROLE`               |
+| Pending staff         | `403 FACULTY_APPROVAL_PENDING`                  | `403 FACULTY_APPROVAL_PENDING` | `403 FACULTY_APPROVAL_PENDING`    |
 
 Batch filtering occurs in `PrismaCycleRepository.listPublishedForBatch`; email parsing is not repeated.
 
@@ -77,13 +81,13 @@ Batch filtering occurs in `PrismaCycleRepository.listPublishedForBatch`; email p
 
 | Code                        | HTTP | Meaning                                |
 | --------------------------- | ---: | -------------------------------------- |
-| `CYCLE_NOT_FOUND`           |  404 | Unknown id or unpublished student read |
-| `NOT_CYCLE_OWNER`           |  403 | Faculty is not the owner               |
-| `UNAUTHORIZED_BATCH_ACCESS` |  403 | Student requests another batch         |
+| `CYCLE_NOT_FOUND`           |  404 | Unknown id, or a cycle the caller may not see (another owner, another batch, a draft) |
+| `NOT_CYCLE_OWNER`           |  403 | Defense in depth: a non-faculty actor reached a faculty-only operation |
 | `INVALID_STATUS_TRANSITION` |  409 | Illegal transition or CAS race         |
 | `CYCLE_ALREADY_CLOSED`      |  409 | Any closed-cycle mutation              |
 | `CYCLE_FIELD_LOCKED`        |  409 | Field is not editable in current state |
 | `INVALID_DEADLINE`          |  400 | Start is not before deadline           |
+| `INVALID_ACADEMIC_YEAR`     |  400 | Academic year is not consecutive `YYYY-YY` |
 
 ## Defaults applied
 
@@ -108,7 +112,7 @@ Batch filtering occurs in `PrismaCycleRepository.listPublishedForBatch`; email p
 | Why a modular monolith?                 | The current domain is small and transactional; modules preserve boundaries without distributed-system cost.               | `course-cycles.module.ts: CourseCyclesModule`                                                       |
 | Where are SRP, OCP, DIP, and State?     | Controller maps HTTP, service orchestrates, workflow owns state, and service depends on the repository abstraction.       | `course-cycle.controller.ts`, `course-cycle.service.ts`, `cycle-workflow.ts`, `cycle-repository.ts` |
 | Where are transactions used?            | No transaction wraps a single-row CAS update; PostgreSQL atomicity is sufficient. No audit transaction exists yet.        | `prisma-cycle.repository.ts: updateFields/transitionStatus`                                         |
-| What happens to another faculty member? | The role guard permits faculty, then the ownership policy returns `NOT_CYCLE_OWNER` with HTTP 403.                        | `course-cycle.controller.ts`, `cycle-authorization-policy.ts`                                       |
+| What happens to another faculty member? | The role guard permits faculty, then the ownership policy reports `CYCLE_NOT_FOUND` with HTTP 404, hiding the cycle.      | `course-cycle.controller.ts`, `cycle-authorization-policy.ts`                                       |
 | How would another state be added?       | Add one transition-table entry, editable-field list, and focused workflow tests; service and controller remain unchanged. | `cycle-workflow.ts: transitions/editableFields`                                                     |
 
 ## Extension check
@@ -119,4 +123,4 @@ Batch filtering occurs in `PrismaCycleRepository.listPublishedForBatch`; email p
 
 ## Limitations
 
-Swagger is not installed in the foundation, so endpoint, role, ownership, error, and request/response behavior is documented here instead of adding a new dependency. There is no audit infrastructure, so no audit rows are written in this phase. Frontend tests remain out of scope; frontend build and lint are the verification gates.
+Swagger is served at `/api/docs` outside production. Cycle changes are not yet audited. Frontend tests remain out of scope; frontend build and lint are the verification gates.

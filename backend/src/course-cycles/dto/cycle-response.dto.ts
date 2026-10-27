@@ -1,19 +1,34 @@
+import { ApiProperty } from "@nestjs/swagger";
 import { Cycle } from "../domain/cycle.types";
 
 export class CycleResponseDto {
+  @ApiProperty()
   id!: string;
+  @ApiProperty()
   courseName!: string;
+  @ApiProperty()
   title!: string;
+  @ApiProperty({ type: String, nullable: true })
   description!: string | null;
+  @ApiProperty()
   batchYear!: number;
+  @ApiProperty()
   semester!: number;
+  @ApiProperty()
   academicYear!: string;
+  @ApiProperty()
   submissionStartAt!: string;
+  @ApiProperty()
   submissionDeadline!: string;
+  @ApiProperty({ enum: ["DRAFT", "PUBLISHED", "CLOSED"] })
   status!: Cycle["status"];
+  @ApiProperty({ type: String, nullable: true })
   publishedAt!: string | null;
+  @ApiProperty({ type: String, nullable: true })
   closedAt!: string | null;
+  @ApiProperty()
   createdAt!: string;
+  @ApiProperty()
   updatedAt!: string;
 
   static fromCycle(cycle: Cycle): CycleResponseDto {
