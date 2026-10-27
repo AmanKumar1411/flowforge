@@ -1,8 +1,18 @@
-# Browser end-to-end check (auth UI)
+# Browser end-to-end checks
 
-`auth-ui.e2e.cjs` drives the real React app in headless Chrome against the real API. It runs 20
-checks: the Google redirect (state, nonce, PKCE), token storage, single-flight refresh, the
-student / pending staff / admin / faculty journeys, deactivation, and sign out on one or every device.
+Two scripts drive the real React app in headless Chrome against the real API:
+
+- `auth-ui.e2e.cjs` (Phase 3) runs 20 checks: the Google redirect (state, nonce, PKCE), token
+  storage, single-flight refresh, the student / pending staff / admin / faculty journeys,
+  deactivation, and sign out on one or every device.
+- `teams-ui.e2e.cjs` (Phase 4) runs 11 checks:
+  - team rules in the cycle editor, and extending the deadline of a published cycle;
+  - creating a team with the size counter, and the added member seeing it without acting;
+  - "already in a team" in another leader's search;
+  - swapping a member, the faculty's team table, disbanding;
+  - a team fixed after its deadline.
+  It sets up its faculty member and students through the API, so it can run after
+  `auth-ui.e2e.cjs` on the same database.
 
 It uses `playwright-core` with your installed Google Chrome, so nothing is downloaded and the app
 gets no new dependency.
@@ -29,7 +39,14 @@ cd e2e/browser
 npm install --no-save playwright-core@1.64.1
 node auth-ui.e2e.cjs "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   http://localhost:5173 http://localhost:3100/api ./out
+node teams-ui.e2e.cjs "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  http://localhost:5173 http://localhost:3100/api ./out
 ```
 
-Each check prints `PASS` or `FAIL`. Results are written to `out/browser-e2e.json`, with a
-screenshot of the page for every failure. The process exits with code 1 if any check fails.
+To keep a development frontend on 5173 running, start this one on another port (for example
+`npx vite --port 5174`), start the API with `FRONTEND_URL=http://localhost:5174`, and pass
+`http://localhost:5174` to the scripts.
+
+Each check prints `PASS` or `FAIL`. Results are written to `out/browser-e2e.json` and
+`out/teams-browser-e2e.json`, with a screenshot of the page for every failure. Each script exits
+with code 1 if any check fails.

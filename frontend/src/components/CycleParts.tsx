@@ -33,12 +33,15 @@ export function CycleListShell({
 export function CycleCard({
   cycle,
   faculty,
+  tag,
   onOpen,
   onEdit,
   onAction,
 }: {
   cycle: Cycle;
   faculty?: boolean;
+  /** A short note on the card, e.g. the student's team. */
+  tag?: string;
   onOpen: () => void;
   onEdit?: () => void;
   onAction?: (action: "publish" | "close") => void;
@@ -50,7 +53,10 @@ export function CycleCard({
           <span className={`status status-${cycle.status.toLowerCase()}`}>
             {cycle.status === "PUBLISHED" ? "Open" : cycle.status}
           </span>
-          <span>Batch {cycle.batchYear}</span>
+          <span>
+            {cycle.kind === "ELECTIVE" ? "Elective · " : ""}Batch{" "}
+            {cycle.batchYear}
+          </span>
         </div>
         <h2>{cycle.title}</h2>
         <p className="course-name">
@@ -59,6 +65,7 @@ export function CycleCard({
         <p className="card-description">
           {cycle.description || "No description added yet."}
         </p>
+        {tag && <p className="card-tag">{tag}</p>}
         <div className="card-footer">
           <span>{cycle.academicYear}</span>
           <span>Due {formatDate(cycle.submissionDeadline)}</span>

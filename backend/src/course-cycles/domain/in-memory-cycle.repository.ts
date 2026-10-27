@@ -1,9 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { Cycle, CycleCreateData, CyclePatch, CycleStatus } from "./cycle.types";
+import {
+  Cycle,
+  CycleCreateData,
+  CyclePatch,
+  CycleStatus,
+  Enrollment,
+} from "./cycle.types";
 import { CycleRepository } from "./cycle-repository";
 
 export class InMemoryCycleRepository extends CycleRepository {
   private readonly cycles = new Map<string, Cycle>();
+  private readonly enrollments = new Map<string, Map<string, Enrollment>>();
 
   async create(data: CycleCreateData): Promise<Cycle> {
     const now = new Date();
@@ -30,11 +37,17 @@ export class InMemoryCycleRepository extends CycleRepository {
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
-  async listPublishedForBatch(batchYear: number): Promise<Cycle[]> {
+  async listPublishedForStudent(
+    batchYear: number | null,
+    email: string,
+  ): Promise<Cycle[]> {
     return [...this.cycles.values()]
       .filter(
         (cycle) =>
-          cycle.status === "PUBLISHED" && cycle.batchYear === batchYear,
+          cycle.status === "PUBLISHED" &&
+          (cycle.kind === "ELECTIVE"
+            ? this.roster(cycle.id).has(email)
+            : cycle.batchYear === batchYear),
       )
       .sort(
         (a, b) =>
@@ -84,5 +97,39 @@ export class InMemoryCycleRepository extends CycleRepository {
     };
     this.cycles.set(id, updated);
     return updated;
+  }
+
+  async isEnrolled(cycleId: string, email: string): Promise<boolean> {
+    return this.roster(cycleId).has(email);
+  }
+
+  async listEnrollments(cycleId: string): Promise<Enrollment[]> {
+    return [...this.roster(cycleId).values()].sort((a, b) =>
+      a.email.localeCompare(b.email),
+    );
+  }
+
+  async addEnrollments(
+    cycleId: string,
+    emails: readonly string[],
+  ): Promise<void> {
+    const roster = this.roster(cycleId);
+    for (const email of emails) {
+      if (!roster.has(email))
+        roster.set(email, { email, createdAt: new Date() });
+    }
+  }
+
+  async removeEnrollment(cycleId: string, email: string): Promise<boolean> {
+    return this.roster(cycleId).delete(email);
+  }
+
+  private roster(cycleId: string): Map<string, Enrollment> {
+    let roster = this.enrollments.get(cycleId);
+    if (!roster) {
+      roster = new Map();
+      this.enrollments.set(cycleId, roster);
+    }
+    return roster;
   }
 }

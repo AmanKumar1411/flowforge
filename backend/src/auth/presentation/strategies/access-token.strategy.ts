@@ -45,6 +45,11 @@ export class AccessTokenStrategy {
         "This access token was revoked; refresh to continue",
       );
     }
-    return { id: state.id, role: state.role, batchYear: state.batchYear };
+    return {
+      id: state.id,
+      role: state.role,
+      batchYear: state.batchYear,
+      email: state.email,
+    };
   }
 }

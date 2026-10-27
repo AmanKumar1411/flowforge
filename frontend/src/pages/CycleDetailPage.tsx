@@ -2,8 +2,12 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { getCycle } from "../api/cycles";
 import { Info } from "../components/CycleParts";
+import { EnrollmentPanel } from "../components/EnrollmentPanel";
+import { FacultyTeamsSection } from "../components/FacultyTeamPanels";
+import { StudentTeamPanel } from "../components/TeamPanels";
 import { formatDate } from "../dates";
 import { readableError } from "../errors";
+import { describeTeamSize } from "../teams";
 import type { Cycle } from "../types";
 
 export function CycleDetailPage({ faculty }: { faculty: boolean }) {
@@ -39,6 +43,7 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
           </span>
           <p className="eyebrow">
             {cycle.courseName} / Batch {cycle.batchYear}
+            {cycle.kind === "ELECTIVE" && " / Elective"}
           </p>
           <h1>{cycle.title}</h1>
           <p>{cycle.description || "No description added."}</p>
@@ -56,11 +61,32 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
         <Info label="Semester" value={`Semester ${cycle.semester}`} />
         <Info label="Academic year" value={cycle.academicYear} />
         <Info
+          label="Course type"
+          value={cycle.kind === "ELECTIVE" ? "Elective" : "Core (whole batch)"}
+        />
+        <Info label="Team size" value={`${describeTeamSize(cycle)} members`} />
+        <Info
+          label="Students form teams until"
+          value={formatDate(cycle.teamFormationDeadline)}
+        />
+        <Info
+          label="Faculty complete teams by"
+          value={formatDate(cycle.teamCompletionDeadline)}
+        />
+        <Info
           label="Submissions open"
           value={formatDate(cycle.submissionStartAt)}
         />
         <Info label="Deadline" value={formatDate(cycle.submissionDeadline)} />
       </div>
+      {faculty ? (
+        <>
+          {cycle.kind === "ELECTIVE" && <EnrollmentPanel cycle={cycle} />}
+          {cycle.status !== "DRAFT" && <FacultyTeamsSection cycle={cycle} />}
+        </>
+      ) : (
+        <StudentTeamPanel cycle={cycle} />
+      )}
     </section>
   );
 }

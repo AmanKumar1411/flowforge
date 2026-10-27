@@ -20,6 +20,19 @@ export class CycleResponseDto {
   submissionStartAt!: string;
   @ApiProperty()
   submissionDeadline!: string;
+  @ApiProperty()
+  minTeamSize!: number;
+  @ApiProperty()
+  maxTeamSize!: number;
+  @ApiProperty({ description: "Students change their own teams until then" })
+  teamFormationDeadline!: string;
+  @ApiProperty({
+    description:
+      "The owning faculty complete teams until then; also the idea deadline",
+  })
+  teamCompletionDeadline!: string;
+  @ApiProperty({ enum: ["CORE", "ELECTIVE"] })
+  kind!: Cycle["kind"];
   @ApiProperty({ enum: ["DRAFT", "PUBLISHED", "CLOSED"] })
   status!: Cycle["status"];
   @ApiProperty({ type: String, nullable: true })
@@ -42,6 +55,12 @@ export class CycleResponseDto {
     response.academicYear = cycle.academicYear;
     response.submissionStartAt = cycle.submissionStartAt.toISOString();
     response.submissionDeadline = cycle.submissionDeadline.toISOString();
+    response.minTeamSize = cycle.minTeamSize;
+    response.maxTeamSize = cycle.maxTeamSize;
+    response.teamFormationDeadline = cycle.teamFormationDeadline.toISOString();
+    response.teamCompletionDeadline =
+      cycle.teamCompletionDeadline.toISOString();
+    response.kind = cycle.kind;
     response.status = cycle.status;
     response.publishedAt = cycle.publishedAt?.toISOString() ?? null;
     response.closedAt = cycle.closedAt?.toISOString() ?? null;

@@ -11,8 +11,12 @@ Implemented so far:
 - **Phase 3:** Google Sign-In restricted to `nst.rishihood.edu.in`, server-side roles (STUDENT,
   FACULTY, ADMIN, PENDING_STAFF), refresh-token sessions with reuse detection, an admin console and
   an append-only audit log
+- **Phase 4:** teams. Faculty set team sizes and a formation deadline per cycle. A student creates
+  a team, becomes its leader and adds batch-mates found by name or email; they are members at
+  once. Leaders can change members until the deadline, after which teams are fixed. The
+  database guarantees one team per student per cycle.
 
-Teams, ideas, submissions and evaluations come later.
+Project ideas (Phase 5, due at the same deadline), submissions and evaluations come later.
 
 ## Prerequisites
 
@@ -117,7 +121,7 @@ In `backend/`:
 | --- | --- |
 | `npm run build` / `npm run lint` / `npm run typecheck` | Compile, lint, type-check including `test/` |
 | `npm test` | Jest unit tests (domain rules, sessions, config, Google token verification) |
-| `npm run test:integration` | `node:test` against real PostgreSQL `flowforge_test`: Google flow (Google faked at its network boundary), faculty access, sessions, admin, RBAC matrix, boot checks, Phase 2 scenario |
+| `npm run test:integration` | `node:test` against real PostgreSQL `flowforge_test`: Google flow (Google faked at its network boundary), faculty access, sessions, admin, RBAC matrix, boot checks, Phase 2 scenario, teams (including races and database constraints) |
 
 Integration tests use `TEST_DATABASE_URL` if set; otherwise they take `DATABASE_URL` from
 `backend/.env` and switch the database to `flowforge_test`. They refuse to run against any other
@@ -126,8 +130,9 @@ Node 22, which is why integration tests use Node's built-in runner.
 
 In `frontend/`: `npm run build` and `npm run lint`.
 
-A browser end-to-end check of the sign-in flows lives in [e2e/browser](e2e/browser/README.md). The
-latest results are in the [Phase 3 test report](docs/testing/phase3-test-report.md).
+Browser end-to-end checks of the sign-in flows and the team screens live in
+[e2e/browser](e2e/browser/README.md). The latest results are in the
+[Phase 4 test report](docs/testing/phase4-test-report.md).
 
 ## API
 
@@ -156,6 +161,16 @@ All routes use the `/api` prefix and every error is `{ code, message }`. Interac
 | GET | `/course-cycles/:id` | STUDENT, FACULTY, ADMIN (404 when not visible) |
 | PATCH | `/course-cycles/:id` | FACULTY owner |
 | POST | `/course-cycles/:id/publish`, `/close` | FACULTY owner |
+| POST | `/course-cycles/:id/teams` | STUDENT of the batch, while formation is open; caller becomes leader |
+| GET | `/course-cycles/:id/teams` | STUDENT (own team), FACULTY owner, ADMIN (all teams) |
+| GET | `/course-cycles/:id/team-candidates?q=` | STUDENT, while formation is open |
+| GET | `/teams/mine` | STUDENT |
+| GET | `/teams/:id` | Members, FACULTY owner, ADMIN (404 otherwise) |
+| PATCH, DELETE | `/teams/:id` | Team leader, while formation is open |
+
+Cycles accept `minTeamSize`, `maxTeamSize` (defaults 1 and 4, at most 10) and
+`teamFormationDeadline` (defaults to `submissionStartAt`). The rules are in
+[teams.md](docs/architecture/teams.md).
 
 ## Future work: faculty CSV import
 
@@ -173,12 +188,18 @@ reads the allowlist through `FacultyDirectory`, so `SignInService` and `RoleReso
 
 - [Phase 3 baseline analysis](docs/analysis/phase3-auth-baseline.md) and
   [test report](docs/testing/phase3-test-report.md)
+- [Phase 4 baseline analysis](docs/analysis/phase4-teams-baseline.md) and
+  [test report](docs/testing/phase4-test-report.md)
 - [Architecture: foundation](docs/architecture/foundation.md),
   [course cycles](docs/architecture/course-cycles.md),
-  [authentication and RBAC](docs/architecture/auth-and-rbac.md)
+  [authentication and RBAC](docs/architecture/auth-and-rbac.md),
+  [teams](docs/architecture/teams.md)
 - Decisions: [001 Google Sign-In](docs/decisions/001-google-sign-in-domain-restricted.md),
   [002 server-side roles](docs/decisions/002-roles-resolved-server-side.md),
   [003 Google sub](docs/decisions/003-identify-users-by-google-sub.md),
   [004 refresh rotation](docs/decisions/004-refresh-token-rotation-and-reuse-detection.md),
   [005 per-request version check](docs/decisions/005-per-request-token-version-check.md),
-  [006 dev identity provider](docs/decisions/006-dev-identity-provider.md)
+  [006 dev identity provider](docs/decisions/006-dev-identity-provider.md),
+  [007 leader forms the team](docs/decisions/007-leader-forms-team-without-invitations.md),
+  [008 one team per student in the database](docs/decisions/008-one-team-per-student-enforced-by-database.md),
+  [009 team rules and formation deadline](docs/decisions/009-team-rules-and-formation-deadline.md)

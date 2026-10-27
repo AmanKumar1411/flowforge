@@ -54,6 +54,12 @@ enum AuditAction {
   LOGOUT
   LOGOUT_ALL
   REFRESH_TOKEN_REUSE_DETECTED
+  TEAM_CREATED
+  TEAM_UPDATED
+  TEAM_DISBANDED
+  ENROLLMENT_ADDED
+  ENROLLMENT_REMOVED
+  AUTO_GROUP_APPLIED
 }
 
 model User {
@@ -76,6 +82,11 @@ model User {
   decidedFacultyRequests FacultyAccessRequest[]  @relation("RequestDecider")
   addedAllowlistEntries  FacultyAllowlistEntry[]
   auditLogs              AuditLog[]
+  ledTeams               Team[]                  @relation("TeamLeader")
+  teamMemberships        TeamMember[]            @relation("TeamMemberUser")
+  addedTeamMembers       TeamMember[]            @relation("TeamMemberAdder")
+  addedEnrollments       CycleEnrollment[]
+  teamSeeking            TeamSeeker[]
 
   @@index([role])
   @@index([batchYear])
@@ -147,24 +158,113 @@ enum CycleStatus {
   CLOSED
 }
 
+// CORE: the whole batch takes part. ELECTIVE: only the students the faculty enrolled.
+enum CourseKind {
+  CORE
+  ELECTIVE
+}
+
 model CourseProjectCycle {
-  id                 String      @id @default(uuid())
-  courseName         String
-  title              String
-  description        String?
-  batchYear          Int
-  semester           Int
-  academicYear       String
-  submissionStartAt  DateTime
-  submissionDeadline DateTime
-  status             CycleStatus @default(DRAFT)
-  createdByFacultyId String
-  createdByFaculty   User        @relation(fields: [createdByFacultyId], references: [id], onDelete: Restrict)
-  publishedAt        DateTime?
-  closedAt           DateTime?
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
+  id                     String            @id @default(uuid())
+  courseName             String
+  title                  String
+  description            String?
+  batchYear              Int
+  semester               Int
+  academicYear           String
+  submissionStartAt      DateTime
+  submissionDeadline     DateTime
+  // Team rules. The migration adds a CHECK: 1 <= min <= max <= 10.
+  minTeamSize            Int               @default(1)
+  maxTeamSize            Int               @default(4)
+  // Students change their own teams until teamFormationDeadline. The owning faculty then
+  // complete teams until teamCompletionDeadline, which is also the idea deadline.
+  // The migration adds a CHECK: formation <= completion.
+  teamFormationDeadline  DateTime
+  teamCompletionDeadline DateTime
+  kind                   CourseKind        @default(CORE)
+  status                 CycleStatus       @default(DRAFT)
+  createdByFacultyId     String
+  createdByFaculty       User              @relation(fields: [createdByFacultyId], references: [id], onDelete: Restrict)
+  publishedAt            DateTime?
+  closedAt               DateTime?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  teams                  Team[]
+  enrollments            CycleEnrollment[]
+  teamSeekers            TeamSeeker[]
 
   @@index([createdByFacultyId, createdAt])
   @@index([batchYear, status, publishedAt])
+}
+
+// The roster of an elective. Keyed by email so faculty can enroll students who have not
+// signed in yet; it is matched to User.email (normalized) when they do.
+model CycleEnrollment {
+  cycleId   String
+  cycle     CourseProjectCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict)
+  email     String
+  addedById String
+  addedBy   User               @relation(fields: [addedById], references: [id], onDelete: Restrict)
+  createdAt DateTime           @default(now())
+
+  @@id([cycleId, email])
+  @@index([email])
+}
+
+// Teams
+
+enum TeamOrigin {
+  STUDENT
+  FACULTY
+  AUTO_GROUP
+}
+
+model Team {
+  id        String             @id @default(uuid())
+  cycleId   String
+  cycle     CourseProjectCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict)
+  name      String
+  // The student who created the team, or the one the faculty chose. Never transferred.
+  leaderId  String
+  leader    User               @relation("TeamLeader", fields: [leaderId], references: [id], onDelete: Restrict)
+  origin    TeamOrigin         @default(STUDENT)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  members   TeamMember[]
+
+  // Target of TeamMember's composite foreign key, which keeps every member row in its team's cycle.
+  @@unique([id, cycleId])
+  @@unique([cycleId, leaderId])
+  @@index([cycleId, createdAt])
+}
+
+// The leader has a row too, so the unique key below covers leaders and members alike.
+model TeamMember {
+  teamId    String
+  // Copied from the team so the database can enforce one team per student per cycle.
+  cycleId   String
+  team      Team     @relation(fields: [teamId, cycleId], references: [id, cycleId], onDelete: Cascade)
+  userId    String
+  user      User     @relation("TeamMemberUser", fields: [userId], references: [id], onDelete: Restrict)
+  // The leader, or the faculty member who placed the student.
+  addedById String
+  addedBy   User     @relation("TeamMemberAdder", fields: [addedById], references: [id], onDelete: Restrict)
+  addedAt   DateTime @default(now())
+
+  @@id([teamId, userId])
+  @@unique([cycleId, userId])
+  @@index([userId])
+}
+
+// A student without a team who wants to be found. Removed when they join a team.
+model TeamSeeker {
+  cycleId   String
+  cycle     CourseProjectCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict)
+  userId    String
+  user      User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  note      String?
+  createdAt DateTime           @default(now())
+
+  @@id([cycleId, userId])
 }

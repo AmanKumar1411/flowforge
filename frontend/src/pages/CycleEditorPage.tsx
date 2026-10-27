@@ -5,10 +5,50 @@ import { isoDate, localDateInput } from "../dates";
 import { readableError } from "../errors";
 import type { Cycle, CycleInput } from "../types";
 
+const NUMBER_FIELDS: (keyof CycleInput)[] = [
+  "batchYear",
+  "semester",
+  "minTeamSize",
+  "maxTeamSize",
+];
+const DATE_FIELDS: (keyof CycleInput)[] = [
+  "submissionStartAt",
+  "submissionDeadline",
+  "teamFormationDeadline",
+  "teamCompletionDeadline",
+];
+
+/** Form values (local date inputs) to API values (ISO timestamps). */
+function toPayload<T extends Partial<CycleInput>>(fields: T): T {
+  const payload: Partial<CycleInput> = { ...fields };
+  for (const field of DATE_FIELDS) {
+    const value = payload[field];
+    if (typeof value === "string") {
+      Object.assign(payload, { [field]: isoDate(value) });
+    }
+  }
+  return payload as T;
+}
+
+/**
+ * Only what the faculty member changed. A published cycle rejects any locked
+ * field in the request, even with its current value.
+ */
+function changedFields(before: CycleInput, after: CycleInput) {
+  return Object.fromEntries(
+    Object.entries(after).filter(
+      ([field, value]) => before[field as keyof CycleInput] !== value,
+    ),
+  ) as Partial<CycleInput>;
+}
+
 export function CycleEditorPage() {
   const { cycleId } = useParams();
   const navigate = useNavigate();
   const [cycle, setCycle] = useState<Cycle | null>(null);
+  const [loadedForm, setLoadedForm] = useState<CycleInput | null>(null);
+  // The API refuses to move a team deadline that has passed: that stage is over.
+  const [ended, setEnded] = useState({ formation: false, completion: false });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const year = new Date().getFullYear();
@@ -21,13 +61,17 @@ export function CycleEditorPage() {
     academicYear: `${year}-${String((year + 1) % 100).padStart(2, "0")}`,
     submissionStartAt: localDateInput(),
     submissionDeadline: localDateInput(),
+    minTeamSize: 1,
+    maxTeamSize: 4,
+    teamFormationDeadline: localDateInput(),
+    teamCompletionDeadline: localDateInput(),
+    kind: "CORE",
   });
   useEffect(() => {
     if (cycleId)
       getCycle(cycleId)
         .then((loaded) => {
-          setCycle(loaded);
-          setForm({
+          const loadedValues: CycleInput = {
             courseName: loaded.courseName,
             title: loaded.title,
             description: loaded.description || "",
@@ -36,29 +80,44 @@ export function CycleEditorPage() {
             academicYear: loaded.academicYear,
             submissionStartAt: localDateInput(loaded.submissionStartAt),
             submissionDeadline: localDateInput(loaded.submissionDeadline),
+            minTeamSize: loaded.minTeamSize,
+            maxTeamSize: loaded.maxTeamSize,
+            teamFormationDeadline: localDateInput(loaded.teamFormationDeadline),
+            teamCompletionDeadline: localDateInput(
+              loaded.teamCompletionDeadline,
+            ),
+            kind: loaded.kind,
+          };
+          setCycle(loaded);
+          setLoadedForm(loadedValues);
+          const now = Date.now();
+          const passed = (deadline: string) =>
+            loaded.status !== "DRAFT" && Date.parse(deadline) <= now;
+          setEnded({
+            formation: passed(loaded.teamFormationDeadline),
+            completion: passed(loaded.teamCompletionDeadline),
           });
+          setForm(loadedValues);
         })
         .catch((caught) => setError(readableError(caught)));
   }, [cycleId]);
   const setField = (field: keyof CycleInput, value: string) =>
     setForm((current) => ({
       ...current,
-      [field]:
-        field === "batchYear" || field === "semester" ? Number(value) : value,
+      [field]: NUMBER_FIELDS.includes(field) ? Number(value) : value,
     }));
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
     setError("");
-    const payload = {
-      ...form,
-      submissionStartAt: isoDate(form.submissionStartAt),
-      submissionDeadline: isoDate(form.submissionDeadline),
-    };
     try {
-      const saved = cycle
-        ? await updateCycle(cycle.id, payload)
-        : await createCycle(payload);
+      const saved =
+        cycle && loadedForm
+          ? await updateCycle(
+              cycle.id,
+              toPayload(changedFields(loadedForm, form)),
+            )
+          : await createCycle(toPayload(form));
       navigate(`/faculty/cycles/${saved.id}`);
     } catch (caught) {
       setError(readableError(caught));
@@ -113,6 +172,17 @@ export function CycleEditorPage() {
               maxLength={2000}
               rows={4}
             />
+          </label>
+          <label>
+            Course type
+            <select
+              value={form.kind}
+              onChange={(event) => setField("kind", event.target.value)}
+              disabled={published}
+            >
+              <option value="CORE">Core course: the whole batch</option>
+              <option value="ELECTIVE">Elective: enrolled students only</option>
+            </select>
           </label>
           <label>
             Batch year
@@ -172,6 +242,67 @@ export function CycleEditorPage() {
             />
           </label>
         </div>
+        <fieldset className="form-section">
+          <legend>Teams</legend>
+          <p className="field-hint">
+            Students form teams of this size, leader included, until the
+            formation deadline. Between that and the completion deadline you
+            place anyone still without a team, by hand or by auto-grouping;
+            project ideas are due at the completion deadline. Use the same
+            date for both to skip that step. Sizes cannot change once the cycle
+            is published.
+          </p>
+          <div className="form-grid">
+            <label>
+              Minimum team size
+              <input
+                type="number"
+                value={form.minTeamSize}
+                onChange={(event) => setField("minTeamSize", event.target.value)}
+                disabled={published}
+                min={1}
+                max={10}
+                required
+              />
+            </label>
+            <label>
+              Maximum team size
+              <input
+                type="number"
+                value={form.maxTeamSize}
+                onChange={(event) => setField("maxTeamSize", event.target.value)}
+                disabled={published}
+                min={1}
+                max={10}
+                required
+              />
+            </label>
+            <label>
+              Team formation deadline (students)
+              <input
+                type="datetime-local"
+                value={form.teamFormationDeadline}
+                onChange={(event) =>
+                  setField("teamFormationDeadline", event.target.value)
+                }
+                disabled={ended.formation}
+                required
+              />
+            </label>
+            <label>
+              Team completion deadline (faculty)
+              <input
+                type="datetime-local"
+                value={form.teamCompletionDeadline}
+                onChange={(event) =>
+                  setField("teamCompletionDeadline", event.target.value)
+                }
+                disabled={ended.completion}
+                required
+              />
+            </label>
+          </div>
+        </fieldset>
         {error && <p className="form-error">{error}</p>}
         <div className="form-actions">
           <button

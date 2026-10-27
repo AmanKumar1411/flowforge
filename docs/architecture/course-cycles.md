@@ -56,9 +56,13 @@ stateDiagram-v2
 
 | State       | Editable fields                     | Actions             |
 | ----------- | ----------------------------------- | ------------------- |
-| `DRAFT`     | All request fields                  | Edit, publish       |
-| `PUBLISHED` | `description`, `submissionDeadline` | Limited edit, close |
+| `DRAFT`     | All request fields, including team sizes and the formation deadline | Edit, publish       |
+| `PUBLISHED` | `description`, `submissionDeadline`, `teamFormationDeadline` (only while formation is open, only to a future time) | Limited edit, close |
 | `CLOSED`    | None                                | None                |
+
+Phase 4 added the team rules `minTeamSize`, `maxTeamSize` and `teamFormationDeadline` (defaults 1,
+4 and `submissionStartAt`). `CycleWorkflow.assertValidSchedule` checks them on every save. See
+[teams.md](teams.md) and [ADR 009](../decisions/009-team-rules-and-formation-deadline.md).
 
 `CycleWorkflow` owns a declarative transition table and the publish rule list. `status` is never accepted by a DTO and is only changed through `transitionStatus` with an observed status in the database `WHERE` clause.
 
@@ -85,9 +89,11 @@ Batch filtering occurs in `PrismaCycleRepository.listPublishedForBatch`; email p
 | `NOT_CYCLE_OWNER`           |  403 | Defense in depth: a non-faculty actor reached a faculty-only operation |
 | `INVALID_STATUS_TRANSITION` |  409 | Illegal transition or CAS race         |
 | `CYCLE_ALREADY_CLOSED`      |  409 | Any closed-cycle mutation              |
-| `CYCLE_FIELD_LOCKED`        |  409 | Field is not editable in current state |
+| `CYCLE_FIELD_LOCKED`        |  409 | Field is not editable in current state, or the formation deadline has already passed |
 | `INVALID_DEADLINE`          |  400 | Start is not before deadline           |
 | `INVALID_ACADEMIC_YEAR`     |  400 | Academic year is not consecutive `YYYY-YY` |
+| `INVALID_TEAM_SIZE`         |  400 | Team sizes are not `1 <= min <= max <= 10` |
+| `INVALID_TEAM_FORMATION_DEADLINE` | 400 | Formation does not end before the submission deadline, or is moved into the past |
 
 ## Defaults applied
 

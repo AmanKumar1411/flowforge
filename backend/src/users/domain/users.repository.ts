@@ -1,6 +1,8 @@
 import { Transaction } from "../../common/transaction";
 import {
   NewUser,
+  StudentScope,
+  StudentSearch,
   User,
   UserAccessChange,
   UserAccessState,
@@ -30,4 +32,10 @@ export abstract class UsersRepository {
     tx: Transaction,
   ): Promise<User>;
   abstract list(query: UserListQuery): Promise<UserPage>;
+  abstract findByIds(ids: readonly string[], tx?: Transaction): Promise<User[]>;
+  abstract findByEmails(emails: readonly string[]): Promise<User[]>;
+  /** Active students in the scope, ordered by name. */
+  abstract listActiveStudents(scope: StudentScope): Promise<User[]>;
+  /** Active students in the scope matching the query, ordered by name. */
+  abstract searchActiveStudents(search: StudentSearch): Promise<User[]>;
 }

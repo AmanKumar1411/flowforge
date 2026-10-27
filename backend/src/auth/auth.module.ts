@@ -101,6 +101,11 @@ const ONE_MINUTE_MS = 60_000;
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
-  exports: [FacultyAccessService, SessionService, BatchYearPolicy],
+  exports: [
+    FacultyAccessService,
+    SessionService,
+    BatchYearPolicy,
+    UniversityIdentityParser,
+  ],
 })
 export class AuthModule {}

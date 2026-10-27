@@ -3,6 +3,8 @@ import type { Role, UserStatus } from "../auth/domain/role";
 import { Transaction } from "../common/transaction";
 import {
   NewUser,
+  StudentScope,
+  StudentSearch,
   User,
   UserAccessState,
   UserListQuery,
@@ -66,5 +68,23 @@ export class UsersService {
 
   list(query: UserListQuery): Promise<UserPage> {
     return this.users.list(query);
+  }
+
+  findByIds(ids: readonly string[], tx?: Transaction): Promise<User[]> {
+    return this.users.findByIds(ids, tx);
+  }
+
+  findByEmails(emails: readonly string[]): Promise<User[]> {
+    return emails.length > 0
+      ? this.users.findByEmails(emails)
+      : Promise.resolve([]);
+  }
+
+  listActiveStudents(scope: StudentScope): Promise<User[]> {
+    return this.users.listActiveStudents(scope);
+  }
+
+  searchActiveStudents(search: StudentSearch): Promise<User[]> {
+    return this.users.searchActiveStudents(search);
   }
 }

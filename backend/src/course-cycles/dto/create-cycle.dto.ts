@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
+  IsIn,
   IsInt,
   IsISO8601,
   IsNotEmpty,
@@ -10,6 +11,13 @@ import {
   MaxLength,
   Min,
 } from "class-validator";
+import {
+  CourseKind,
+  DEFAULT_TEAM_SIZE,
+  TEAM_SIZE_LIMIT,
+} from "../domain/cycle.types";
+
+const COURSE_KINDS: CourseKind[] = ["CORE", "ELECTIVE"];
 
 export class CreateCycleDto {
   @ApiProperty({ example: "Software Design & System Development" })
@@ -54,4 +62,56 @@ export class CreateCycleDto {
   @ApiProperty({ example: "2026-12-01T17:00:00.000Z" })
   @IsISO8601()
   submissionDeadline!: string;
+
+  @ApiPropertyOptional({
+    example: 2,
+    minimum: 1,
+    maximum: TEAM_SIZE_LIMIT,
+    default: DEFAULT_TEAM_SIZE.min,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(TEAM_SIZE_LIMIT)
+  minTeamSize?: number;
+
+  @ApiPropertyOptional({
+    example: 4,
+    minimum: 1,
+    maximum: TEAM_SIZE_LIMIT,
+    default: DEFAULT_TEAM_SIZE.max,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(TEAM_SIZE_LIMIT)
+  maxTeamSize?: number;
+
+  @ApiPropertyOptional({
+    example: "2026-10-20T17:00:00.000Z",
+    description:
+      "When team membership becomes fixed; also the idea submission deadline. Defaults to submissionStartAt.",
+  })
+  @IsOptional()
+  @IsISO8601()
+  teamFormationDeadline?: string;
+
+  @ApiPropertyOptional({
+    enum: COURSE_KINDS,
+    default: "CORE",
+    description:
+      "CORE: the whole batch. ELECTIVE: only students on the enrollment list. Fixed once published.",
+  })
+  @IsOptional()
+  @IsIn(COURSE_KINDS)
+  kind?: CourseKind;
+
+  @ApiPropertyOptional({
+    example: "2026-10-25T17:00:00.000Z",
+    description:
+      "The owning faculty complete teams until then; also the idea deadline. Defaults to teamFormationDeadline (no completion window).",
+  })
+  @IsOptional()
+  @IsISO8601()
+  teamCompletionDeadline?: string;
 }

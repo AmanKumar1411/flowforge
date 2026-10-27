@@ -2,10 +2,15 @@ import { HttpStatus } from "@nestjs/common";
 import type { AdminErrorCode } from "../../admin/admin.errors";
 import type { AuthErrorCode } from "../../auth/domain/auth.errors";
 import type { CycleErrorCode } from "../../course-cycles/domain/cycle.errors";
+import type { TeamErrorCode } from "../../teams/domain/team.errors";
 import type { CommonErrorCode } from "./domain-error";
 
 type DomainErrorCode =
-  CommonErrorCode | AuthErrorCode | CycleErrorCode | AdminErrorCode;
+  | CommonErrorCode
+  | AuthErrorCode
+  | CycleErrorCode
+  | AdminErrorCode
+  | TeamErrorCode;
 
 // `satisfies` makes the build fail when a new error code has no HTTP status.
 const statusByCode = {
@@ -47,6 +52,21 @@ const statusByCode = {
   CYCLE_FIELD_LOCKED: HttpStatus.CONFLICT,
   INVALID_DEADLINE: HttpStatus.BAD_REQUEST,
   INVALID_ACADEMIC_YEAR: HttpStatus.BAD_REQUEST,
+  INVALID_TEAM_SIZE: HttpStatus.BAD_REQUEST,
+  INVALID_TEAM_FORMATION_DEADLINE: HttpStatus.BAD_REQUEST,
+  INVALID_TEAM_COMPLETION_DEADLINE: HttpStatus.BAD_REQUEST,
+  CYCLE_NOT_ELECTIVE: HttpStatus.CONFLICT,
+  ENROLLMENT_NOT_FOUND: HttpStatus.NOT_FOUND,
+
+  TEAM_NOT_FOUND: HttpStatus.NOT_FOUND,
+  NOT_TEAM_LEADER: HttpStatus.FORBIDDEN,
+  TEAM_FORMATION_CLOSED: HttpStatus.CONFLICT,
+  TEAM_SIZE_OUT_OF_RANGE: HttpStatus.BAD_REQUEST,
+  INELIGIBLE_TEAM_MEMBER: HttpStatus.BAD_REQUEST,
+  STUDENT_ALREADY_IN_TEAM: HttpStatus.CONFLICT,
+  TEAM_COMPLETION_CLOSED: HttpStatus.CONFLICT,
+  DUPLICATE_TEAM_MEMBER: HttpStatus.BAD_REQUEST,
+  ENROLLED_STUDENT_IN_TEAM: HttpStatus.CONFLICT,
 } satisfies Record<DomainErrorCode, HttpStatus>;
 
 export const statusForCode = (code: string): HttpStatus =>
