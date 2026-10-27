@@ -14,7 +14,8 @@ jest.mock("@nestjs/common", () => ({
   Injectable: () => (target: unknown) => target,
 }));
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 const tx = {} as Transaction;
 
 describe("SessionService", () => {
@@ -24,12 +25,8 @@ describe("SessionService", () => {
   let user: Pick<User, "id" | "status">;
   let sessions: SessionService;
 
-  beforeEach(() => {
-    clock = new FixedClock("2026-10-23T09:00:00.000Z");
-    tokens = new InMemoryRefreshTokenRepository();
-    audited = [];
-    user = { id: "user-1", status: "ACTIVE" };
-    sessions = new SessionService(
+  const createSessions = (lifetimes: Record<string, string> = {}) =>
+    new SessionService(
       tokens,
       { findById: async () => user } as unknown as UsersService,
       {
@@ -39,11 +36,16 @@ describe("SessionService", () => {
       } as unknown as AuditService,
       new ImmediateTransactionRunner(),
       clock,
-      createTestAppConfig({
-        REFRESH_TOKEN_TTL_DAYS: "7",
-        REFRESH_FAMILY_MAX_DAYS: "30",
-      }),
+      createTestAppConfig(lifetimes),
     );
+
+  beforeEach(() => {
+    clock = new FixedClock("2026-10-23T09:00:00.000Z");
+    tokens = new InMemoryRefreshTokenRepository();
+    audited = [];
+    user = { id: "user-1", status: "ACTIVE" };
+    // The documented configuration: a session lasts one day.
+    sessions = createSessions();
   });
 
   const start = () => sessions.startFamily(user.id, "jest", tx);
@@ -60,9 +62,7 @@ describe("SessionService", () => {
     expect(
       [...tokens.records.values()].some((r) => r.tokenHash === issued.value),
     ).toBe(false);
-    expect(issued.expiresAt).toEqual(
-      new Date(clock.now().getTime() + 7 * DAY_MS),
-    );
+    expect(issued.expiresAt).toEqual(new Date(clock.now().getTime() + DAY_MS));
   });
 
   it("rotates: issues a new token in the same family and revokes the old one", async () => {
@@ -108,27 +108,45 @@ describe("SessionService", () => {
 
   it("rejects an expired token", async () => {
     const first = await start();
-    clock.advance(7 * DAY_MS);
+    clock.advance(DAY_MS);
 
     await expect(sessions.rotate(first.value, "jest")).rejects.toMatchObject({
       code: "INVALID_REFRESH_TOKEN",
     });
   });
 
-  it("enforces the 30-day absolute family lifetime", async () => {
+  it("ends the session one day after sign-in, however often it is refreshed", async () => {
+    const signedInAt = clock.now().getTime();
     let current = (await start()).value;
-    for (let day = 6; day < 30; day += 6) {
-      clock.advance(6 * DAY_MS);
+    for (let hour = 6; hour < 24; hour += 6) {
+      clock.advance(6 * HOUR_MS);
       current = (await sessions.rotate(current, "jest")).refreshToken.value;
     }
-    expect(record(current)?.expiresAt).toEqual(
-      record(current)?.familyExpiresAt,
+    // A successor never outlives its family.
+    expect(record(current)?.expiresAt).toEqual(new Date(signedInAt + DAY_MS));
+    expect(record(current)?.familyExpiresAt).toEqual(
+      new Date(signedInAt + DAY_MS),
     );
 
-    clock.advance(6 * DAY_MS);
+    clock.advance(6 * HOUR_MS);
     await expect(sessions.rotate(current, "jest")).rejects.toMatchObject({
       code: "INVALID_REFRESH_TOKEN",
     });
+  });
+
+  it("uses the configured lifetimes", async () => {
+    sessions = createSessions({
+      REFRESH_TOKEN_TTL_DAYS: "7",
+      REFRESH_FAMILY_MAX_DAYS: "30",
+    });
+    const issued = await start();
+
+    expect(issued.expiresAt).toEqual(
+      new Date(clock.now().getTime() + 7 * DAY_MS),
+    );
+    expect(record(issued.value)?.familyExpiresAt).toEqual(
+      new Date(clock.now().getTime() + 30 * DAY_MS),
+    );
   });
 
   it("rejects an unknown token", async () => {

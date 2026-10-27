@@ -1,15 +1,16 @@
 import { after, before, describe, it } from "node:test";
 import { strict as assert } from "node:assert";
 import { spawnSync } from "node:child_process";
+import { AddressInfo, createServer } from "node:net";
 import { join } from "node:path";
 import { DOMAIN, startTestApp, TestApp } from "./support/test-app";
 
 const BACKEND = join(__dirname, "..");
 
-/** Boots the real app in a fresh process, so ConfigModule validates this exact environment. */
+/** Boots the real app in a fresh process (config validation, then module init incl. the database check). */
 function boot(overrides: Record<string, string>) {
   const script =
-    "require('./src/main').createApp()" +
+    "require('./src/main').createApp().then((app) => app.init())" +
     ".then(() => process.exit(0), (error) => { console.error(error.message); process.exit(1); })";
   const result = spawnSync(
     process.execPath,
@@ -27,6 +28,29 @@ function boot(overrides: Record<string, string>) {
 describe("Boot-time configuration", () => {
   it("boots with the test configuration (control case)", () => {
     assert.equal(boot({}).exitCode, 0);
+  });
+
+  it("fails fast with a clear message when the database does not answer", async () => {
+    // Accepts TCP connections but never replies, like a paused Docker container.
+    const silent = createServer(() => undefined);
+    await new Promise<void>((resolve) =>
+      silent.listen(0, "127.0.0.1", resolve),
+    );
+    const { port } = silent.address() as AddressInfo;
+    const started = Date.now();
+    const result = boot({
+      DATABASE_URL: `postgresql://flowforge:secret-password@127.0.0.1:${port}/flowforge_test`,
+    });
+    const seconds = (Date.now() - started) / 1000;
+    silent.close();
+
+    assert.equal(result.exitCode, 1);
+    assert.match(
+      result.stderr,
+      /Cannot reach PostgreSQL at 127\.0\.0\.1:\d+\/flowforge_test within 5s/,
+    );
+    assert.doesNotMatch(result.stderr, /secret-password/);
+    assert.ok(seconds < 20, `gave up after ${seconds}s`);
   });
 
   it("refuses to start with dev login enabled in production", () => {

@@ -110,7 +110,7 @@ stateDiagram-v2
   T2 --> T3: refresh
   T3 --> Revoked: T1 or T2 presented again → whole family revoked + audit
   T3 --> Revoked: logout / logout-all / deactivation
-  T3 --> Expired: 7 days idle or 30 days after login
+  T3 --> Expired: 1 day after login (configurable)
 ```
 
 ## Roles and permissions

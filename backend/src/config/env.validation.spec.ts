@@ -15,8 +15,8 @@ describe("parseEnvironment", () => {
     expect(config.frontendUrl).toBe("http://localhost:5173");
     expect(config.jwt.accessTokenTtlSeconds).toBe(900);
     expect(config.sessions).toEqual({
-      refreshTokenTtlDays: 7,
-      refreshFamilyMaxDays: 30,
+      refreshTokenTtlDays: 1,
+      refreshFamilyMaxDays: 1,
     });
     expect(
       config.identity.studentEmailPattern.exec(
@@ -115,7 +115,14 @@ describe("parseEnvironment", () => {
     ],
     [{ ACCESS_TOKEN_TTL: "15" }, "ACCESS_TOKEN_TTL must be a duration"],
     [{ ACCESS_TOKEN_TTL: "2h" }, "ACCESS_TOKEN_TTL must be a duration"],
-    [{ REFRESH_FAMILY_MAX_DAYS: "3" }, "at least REFRESH_TOKEN_TTL_DAYS"],
+    [
+      { REFRESH_TOKEN_TTL_DAYS: "7", REFRESH_FAMILY_MAX_DAYS: "3" },
+      "at least REFRESH_TOKEN_TTL_DAYS",
+    ],
+    [
+      { REFRESH_FAMILY_MAX_DAYS: "0" },
+      "REFRESH_FAMILY_MAX_DAYS must be an integer",
+    ],
     [{ AUTH_DEV_LOGIN_ENABLED: "yes" }, '"true" or "false"'],
     [{ NODE_ENV: "staging" }, "NODE_ENV must be"],
     [{ ALLOWED_HOSTED_DOMAIN: "localhost" }, "ALLOWED_HOSTED_DOMAIN must be"],

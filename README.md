@@ -63,6 +63,16 @@ If the consent screen cannot be Internal (the project is outside the university 
 External in Testing mode and add test users. The API still rejects anyone whose ID token `hd` claim
 is not `nst.rishihood.edu.in`.
 
+| Symptom | Cause and fix |
+| --- | --- |
+| Google shows `Error 400: redirect_uri_mismatch` | `GOOGLE_REDIRECT_URI` must match an authorized redirect URI **exactly**: scheme, host, port, `/api` and no trailing slash |
+| Google shows `Error 403: org_internal` | The consent screen is Internal and you signed in with an account outside the university |
+| Google shows "Access blocked: app is in testing" | External consent screen in Testing mode: add your account under Test users |
+| Back on `/login?error=WRONG_HOSTED_DOMAIN` | You chose a personal Google account; pick your `@nst.rishihood.edu.in` account |
+| Back on `/login?error=INVALID_ID_TOKEN` | Wrong client ID or secret in `backend/.env`, or the server clock is far off |
+| Back on `/login?error=INVALID_OAUTH_STATE` | The sign-in started on another host name (`127.0.0.1` versus `localhost`) or took more than 10 minutes |
+| `EADDRINUSE` on port 3000 | Something else uses the port: stop it, or set `PORT`, `GOOGLE_REDIRECT_URI` and the frontend's `VITE_API_BASE_URL` to another port, and add that redirect URI in Google Cloud |
+
 ### Who gets which role
 
 | Email | Role on login |
@@ -91,7 +101,7 @@ A student email can never become FACULTY or ADMIN. See [ADR 002](docs/decisions/
 | `BATCH_BASE_YEAR`, `BATCH_MIN_YEAR` | Batch = base + YY; accepted from the minimum to next year |
 | `ADMIN_BOOTSTRAP_EMAILS` | Comma-separated staff emails that become ADMIN |
 | `JWT_ACCESS_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`, `ACCESS_TOKEN_TTL` | Access token (HS256, `15m`) |
-| `REFRESH_TOKEN_TTL_DAYS`, `REFRESH_FAMILY_MAX_DAYS` | Refresh token (7 days) and absolute session (30 days) |
+| `REFRESH_TOKEN_TTL_DAYS`, `REFRESH_FAMILY_MAX_DAYS` | Refresh-token and absolute session lifetime, both `1`: a sign-in lasts one day |
 | `COOKIE_SECRET` | Signs the OAuth state cookie; must differ from the JWT secret |
 | `AUTH_DEV_LOGIN_ENABLED` | Enables `POST /api/auth/dev-login`; refused at boot in production |
 | `AUTH_LOGIN_RATE_LIMIT_PER_MINUTE`, `AUTH_REFRESH_RATE_LIMIT_PER_MINUTE` | Optional limits per route, per IP, per minute (10 for each login route, 30 for refresh and logout) |

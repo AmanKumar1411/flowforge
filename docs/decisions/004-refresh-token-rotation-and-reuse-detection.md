@@ -14,7 +14,8 @@ readable by page scripts, must be revocable, and must reveal theft.
   frontend, never in `localStorage`.
 - **Refresh token:** 256 random bits in an `httpOnly`, `SameSite=Strict`, `Path=/api/auth` cookie
   (`Secure` in production). Only its SHA-256 hash is stored, in `RefreshToken`, with `familyId`,
-  `expiresAt` (7 days), `familyExpiresAt` (30 days from login), `revokedAt` and `replacedById`.
+  `expiresAt`, `familyExpiresAt`, `revokedAt` and `replacedById`. Both lifetimes are 1 day (see the
+  amendment below).
 - **Rotation:** `POST /api/auth/refresh` revokes the presented token with a compare-and-set
   (`UPDATE … WHERE id = ? AND revokedAt IS NULL`), issues its successor in the same family and
   links the two with `replacedById`. A successor never outlives `familyExpiresAt`.
@@ -49,6 +50,15 @@ readable by page scripts, must be revocable, and must reveal theft.
   two unrelated domains.
 - Use one host name consistently in development: open `http://localhost:5173`, not
   `http://127.0.0.1:5173`, or the Origin check fails.
-- A family lasts at most 30 days, after which the user signs in with Google again.
+- A session lasts at most 1 day, after which the user signs in with Google again.
 - An attacker who uses a stolen token *first* gets one rotation, but the victim's next refresh
   ends the family for both, and the event is audited.
+
+## Amendment (2026-10-27): one-day sessions
+
+The plan started with 7-day refresh tokens inside a 30-day family. The team decided a sign-in
+should last **one day**: `REFRESH_TOKEN_TTL_DAYS=1` and `REFRESH_FAMILY_MAX_DAYS=1`. Every login
+starts a family that ends 24 hours later however active the user is. Access tokens still last
+15 minutes and rotate the refresh token, and reuse detection is unchanged. The trade-off is one
+Google sign-in per day in exchange for a much shorter window for a stolen refresh token. Both values
+remain configuration, so this can change without code changes.

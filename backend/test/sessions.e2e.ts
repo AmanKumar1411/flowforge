@@ -44,6 +44,34 @@ describe("Sessions", () => {
     );
   });
 
+  it("keeps a sign-in for one day: cookie, token and family all expire 24 hours after login", async () => {
+    const before = Date.now();
+    const response = await fetch(`${app.apiUrl}/auth/dev-login`, {
+      method: "POST",
+      headers: { Origin: FRONTEND_ORIGIN, "Content-Type": "application/json" },
+      body: JSON.stringify({ email: STUDENT, name: "Aman" }),
+    });
+    const cookie = response.headers
+      .getSetCookie()
+      .find((header) => header.startsWith("flowforge_refresh="));
+    const expires = new Date(/Expires=([^;]+)/.exec(cookie ?? "")?.[1] ?? "");
+    const stored = await app.prisma.refreshToken.findFirstOrThrow();
+
+    const oneDay = 24 * 60 * 60 * 1000;
+    for (const [label, date] of [
+      ["cookie Expires", expires],
+      ["token expiresAt", stored.expiresAt],
+      ["family expiresAt", stored.familyExpiresAt],
+    ] as const) {
+      const offset = date.getTime() - before;
+      // Cookie dates have one-second precision.
+      assert.ok(
+        offset > oneDay - 2_000 && offset < oneDay + 60_000,
+        `${label} is ${offset} ms after login`,
+      );
+    }
+  });
+
   it("revokes the whole family when an old refresh token is replayed", async () => {
     const browser = await app.browser().signIn(STUDENT);
     const stolen = browser.cookie("flowforge_refresh");
