@@ -25,7 +25,12 @@ export type AuditAction =
   | "IDEA_SUBMITTED"
   | "IDEA_UPDATED"
   | "IDEA_APPROVED"
-  | "IDEA_REJECTED";
+  | "IDEA_REJECTED"
+  | "CATALOG_IDEA_ADDED"
+  | "CATALOG_IDEA_UPDATED"
+  | "CATALOG_IDEA_REMOVED"
+  | "IDEA_PICKED"
+  | "SUBMISSION_CREATED";
 
 export type AuditEntityType =
   | "User"
@@ -35,7 +40,9 @@ export type AuditEntityType =
   | "RefreshTokenFamily"
   | "Team"
   | "CourseProjectCycle"
-  | "ProjectIdea";
+  | "ProjectIdea"
+  | "CatalogIdea"
+  | "Submission";
 
 export type AuditMetadata = Record<
   string,

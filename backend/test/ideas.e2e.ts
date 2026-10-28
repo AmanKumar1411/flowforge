@@ -27,7 +27,11 @@ const EMAILS: Record<Student, string> = {
 interface IdeaBody {
   id: string;
   title: string;
+  problem: string;
+  solution: string | null;
   link: string | null;
+  source: string;
+  catalogIdeaId: string | null;
   status: string;
   version: number;
   submittedBy: { id: string };
@@ -127,6 +131,35 @@ describe("Ideas", () => {
     body: { version: number; decision: string; feedback?: string },
     reviewer = owner,
   ) => reviewer.post<IdeaBody>(`/teams/${teamId}/idea/review`, { body });
+
+  const pick = (leader: Student, teamId: string, catalogIdeaId: string) =>
+    students[leader].post<IdeaBody>(`/teams/${teamId}/idea/pick`, {
+      body: { catalogIdeaId },
+    });
+
+  interface CatalogBody {
+    id: string;
+    title: string;
+    description: string;
+    link: string | null;
+    pickCount: number;
+    code?: string;
+  }
+
+  const offer = async (cycleId: string, title = "Library seat finder") => {
+    const added = await owner.post<CatalogBody>(
+      `/course-cycles/${cycleId}/idea-catalog`,
+      {
+        body: {
+          title,
+          description: "Show which library seats are free right now",
+          link: "https://example.edu/briefs/seats",
+        },
+      },
+    );
+    assert.equal(added.status, 201, JSON.stringify(added.body));
+    return added.body;
+  };
 
   describe("the idea deadline", () => {
     it("defaults to the completion deadline and must fall before submissions open", async () => {
@@ -359,7 +392,7 @@ describe("Ideas", () => {
       assert.equal(again.body.code, "IDEA_NOT_AWAITING_REVIEW");
     });
 
-    it("lets a rejected team resubmit after the idea deadline, until submissions open; approval is final", async () => {
+    it("lets a rejected team resubmit after the idea deadline; approval is final", async () => {
       const cycleId = await openCycle();
       const teamId = await team(cycleId, "aman", ["neha"]);
       const first = await submit("aman", teamId);
@@ -412,7 +445,7 @@ describe("Ideas", () => {
       assert.equal(members.body.members.length, 2);
     });
 
-    it("keeps a rejection final once submissions are open", async () => {
+    it("keeps the feedback rounds going after submissions open and close (ADR 014)", async () => {
       const cycleId = await openCycle();
       const teamId = await team(cycleId, "aman", []);
       await submit("aman", teamId);
@@ -422,9 +455,22 @@ describe("Ideas", () => {
         feedback: "Too broad",
       });
       clock.advance(DAY_MS);
-      const late = await submit("aman", teamId);
-      assert.equal(late.status, 409);
-      assert.equal(late.body.code, "IDEA_RESUBMISSION_CLOSED");
+      const second = await submit("aman", teamId);
+      assert.equal(second.status, 200, JSON.stringify(second.body));
+      assert.equal(second.body.version, 2);
+      await review(teamId, {
+        version: 2,
+        decision: "REJECTED",
+        feedback: "Still too broad",
+      });
+      clock.advance(30 * DAY_MS);
+      const third = await submit("aman", teamId);
+      assert.equal(third.status, 200, JSON.stringify(third.body));
+      assert.equal(
+        (await review(teamId, { version: 3, decision: "APPROVED" })).body
+          .status,
+        "APPROVED",
+      );
     });
 
     it("stops when the cycle closes", async () => {
@@ -439,6 +485,169 @@ describe("Ideas", () => {
         (await submit("aman", teamId)).body.code,
         "IDEA_SUBMISSION_CLOSED",
       );
+    });
+  });
+
+  describe("the faculty's catalog", () => {
+    it("is read by the cycle's students, faculty and admins, and changed only by its owner", async () => {
+      const cycleId = await openCycle();
+      const offered = await offer(cycleId);
+      assert.equal(offered.pickCount, 0);
+      for (const reader of [students.aman, owner, admin]) {
+        const list = await reader.get<CatalogBody[]>(
+          `/course-cycles/${cycleId}/idea-catalog`,
+        );
+        assert.deepEqual(
+          list.body.map((entry) => entry.title),
+          ["Library seat finder"],
+        );
+      }
+      const otherAdd = await otherFaculty.post<CatalogBody>(
+        `/course-cycles/${cycleId}/idea-catalog`,
+        { body: { title: "Mine", description: "D" } },
+      );
+      assert.equal(otherAdd.status, 404);
+      const blank = await owner.post(`/course-cycles/${cycleId}/idea-catalog`, {
+        body: { title: " ", description: "D" },
+      });
+      assert.equal(blank.status, 400);
+
+      const edited = await owner.put<CatalogBody>(
+        `/course-cycles/${cycleId}/idea-catalog/${offered.id}`,
+        {
+          body: { title: "Seat finder", description: "Free seats", link: null },
+        },
+      );
+      assert.equal(edited.status, 200, JSON.stringify(edited.body));
+      assert.equal(edited.body.link, null);
+      const removed = await owner.delete(
+        `/course-cycles/${cycleId}/idea-catalog/${offered.id}`,
+      );
+      assert.equal(removed.status, 204);
+      assert.deepEqual(
+        (await auditActions(app.prisma, { entityId: offered.id })).map(
+          (entry) => entry.action,
+        ),
+        ["CATALOG_IDEA_ADDED", "CATALOG_IDEA_UPDATED", "CATALOG_IDEA_REMOVED"],
+      );
+    });
+
+    it("lets any number of teams pick an idea, approved at once, and keeps a picked idea", async () => {
+      const cycleId = await openCycle();
+      const offered = await offer(cycleId);
+      const falcon = await team(cycleId, "aman", ["neha"]);
+      const kestrel = await team(cycleId, "ravi", []);
+
+      const byMember = await pick("neha", falcon, offered.id);
+      assert.equal(byMember.status, 403);
+      assert.equal(byMember.body.code, "NOT_TEAM_LEADER");
+      const picked = await pick("aman", falcon, offered.id);
+      assert.equal(picked.status, 200, JSON.stringify(picked.body));
+      assert.equal(picked.body.status, "APPROVED");
+      assert.equal(picked.body.source, "CATALOG");
+      assert.equal(
+        picked.body.problem,
+        "Show which library seats are free right now",
+      );
+      assert.equal(picked.body.solution, null);
+      assert.equal((await pick("ravi", kestrel, offered.id)).status, 200);
+
+      const listed = await students.aman.get<CatalogBody[]>(
+        `/course-cycles/${cycleId}/idea-catalog`,
+      );
+      assert.equal(listed.body[0].pickCount, 2);
+      const removal = await owner.delete(
+        `/course-cycles/${cycleId}/idea-catalog/${offered.id}`,
+      );
+      assert.equal(removal.status, 409);
+      assert.equal(
+        (removal.body as { code: string }).code,
+        "CATALOG_IDEA_PICKED",
+      );
+      // Editing the catalog changes later picks only; the team keeps its copy.
+      await owner.put(`/course-cycles/${cycleId}/idea-catalog/${offered.id}`, {
+        body: { title: "Renamed", description: "Changed" },
+      });
+      const kept = await students.neha.get<{ idea: IdeaBody }>(
+        `/teams/${falcon}/idea`,
+      );
+      assert.equal(kept.body.idea.title, "Library seat finder");
+      // A picked idea is final, and faculty have nothing to review.
+      assert.equal(
+        (await submit("aman", falcon)).body.code,
+        "IDEA_ALREADY_APPROVED",
+      );
+      assert.equal(
+        (
+          await review(falcon, {
+            version: 1,
+            decision: "REJECTED",
+            feedback: "No",
+          })
+        ).body.code,
+        "IDEA_NOT_AWAITING_REVIEW",
+      );
+      assert.deepEqual(
+        (await auditActions(app.prisma, { entityId: picked.body.id })).map(
+          (entry) => [entry.action, entry.metadata.catalogIdeaId],
+        ),
+        [["IDEA_PICKED", offered.id]],
+      );
+    });
+
+    it("replaces a waiting proposal before the deadline, or a rejected one after it, but is no late first idea", async () => {
+      const cycleId = await openCycle();
+      const offered = await offer(cycleId);
+      const falcon = await team(cycleId, "aman", []);
+      const kestrel = await team(cycleId, "ravi", []);
+      const latecomer = await team(cycleId, "priya", []);
+      await submit("aman", falcon);
+      const instead = await pick("aman", falcon, offered.id);
+      assert.equal(instead.body.version, 2);
+      assert.equal(instead.body.source, "CATALOG");
+
+      await submit("ravi", kestrel);
+      clock.advance(3 * HOUR_MS + MINUTE_MS);
+      await review(kestrel, {
+        version: 1,
+        decision: "REJECTED",
+        feedback: "Take one of ours",
+      });
+      const afterRejection = await pick("ravi", kestrel, offered.id);
+      assert.equal(
+        afterRejection.status,
+        200,
+        JSON.stringify(afterRejection.body),
+      );
+      assert.equal(afterRejection.body.status, "APPROVED");
+
+      const tooLate = await pick("priya", latecomer, offered.id);
+      assert.equal(tooLate.status, 409);
+      assert.equal(tooLate.body.code, "IDEA_SUBMISSION_CLOSED");
+    });
+
+    it("only offers a cycle's own ideas, and freezes the list when the cycle closes", async () => {
+      const cycleId = await openCycle();
+      const otherCycle = await openCycle({ title: "Other cycle" });
+      const foreign = await offer(otherCycle, "Somewhere else");
+      const falcon = await team(cycleId, "aman", []);
+      const wrong = await pick("aman", falcon, foreign.id);
+      assert.equal(wrong.status, 404);
+      assert.equal(wrong.body.code, "CATALOG_IDEA_NOT_FOUND");
+      // The database agrees: a pick must come from the team's own cycle.
+      await assert.rejects(
+        app.prisma.$executeRaw`
+          INSERT INTO "ProjectIdea" ("id", "teamId", "cycleId", "title", "problem", "status", "source", "catalogIdeaId", "submittedById", "submittedAt", "updatedAt")
+          VALUES (gen_random_uuid(), ${falcon}, ${cycleId}, 'T', 'P', 'APPROVED', 'CATALOG', ${foreign.id}, ${ids.aman}, now(), now())`,
+        /ProjectIdea_catalogIdeaId_cycleId_fkey/,
+      );
+      await owner.post(`/course-cycles/${cycleId}/close`);
+      const closed = await owner.post<CatalogBody>(
+        `/course-cycles/${cycleId}/idea-catalog`,
+        { body: { title: "Late", description: "D" } },
+      );
+      assert.equal(closed.status, 409);
+      assert.equal(closed.body.code, "CATALOG_CLOSED");
     });
   });
 
@@ -464,6 +673,15 @@ describe("Ideas", () => {
           UPDATE "CourseProjectCycle" SET "ideaDeadline" = "submissionStartAt" + interval '1 minute' WHERE "id" = ${cycleId}`,
         /CourseProjectCycle_idea_deadline_check/,
       );
+      // A proposal needs a solution; a pick must be approved and name its catalog idea.
+      for (const change of [
+        app.prisma
+          .$executeRaw`UPDATE "ProjectIdea" SET "solution" = NULL WHERE "id" = ${idea.body.id}`,
+        app.prisma
+          .$executeRaw`UPDATE "ProjectIdea" SET "source" = 'CATALOG' WHERE "id" = ${idea.body.id}`,
+      ]) {
+        await assert.rejects(change, /ProjectIdea_source_check/);
+      }
     });
   });
 });

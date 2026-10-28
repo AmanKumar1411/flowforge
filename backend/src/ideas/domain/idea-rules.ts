@@ -1,23 +1,28 @@
 import type { Role } from "../../auth/domain/role";
 import { IdeaDomainError } from "./idea.errors";
 import {
+  CatalogIdea,
+  CatalogIdeaContent,
   Idea,
   IdeaContent,
   IdeaCycle,
   IdeaDecision,
   IdeaTeam,
+  IdeaVersionContent,
   SubmissionAction,
 } from "./idea";
 
 export type IdeaActor = { id: string; role: Role };
 
 /**
- * The idea rules of a cycle, free of I/O (ADR 013). The leader submits the
- * first idea before the idea deadline and may change it until then while it
- * waits for review. A rejected idea can be revised and resubmitted until
- * submissions open. The owning faculty review any submitted version while the
- * cycle is published. An approved idea is final. The team never changes
- * because of its idea.
+ * The idea rules of a cycle, free of I/O (ADRs 013 and 014). The leader
+ * either proposes the team's own idea or picks one from the faculty's
+ * catalog; the first idea is due by the idea deadline, and a waiting proposal
+ * can change until then. After a rejection, the team revises (or picks
+ * instead) for as many rounds as it takes, while the cycle is published. The
+ * owning faculty review any submitted version while the cycle is published.
+ * An approved or picked idea is final. The team never changes because of its
+ * idea.
  */
 export class IdeaRules {
   /** Whether the leader can submit a first idea now. */
@@ -25,9 +30,9 @@ export class IdeaRules {
     return cycle.status === "PUBLISHED" && now < cycle.ideaDeadline;
   }
 
-  /** Whether a rejected idea can still be resubmitted now. */
-  isResubmissionOpen(cycle: IdeaCycle, now: Date): boolean {
-    return cycle.status === "PUBLISHED" && now < cycle.submissionStartAt;
+  /** Whether a rejected idea can be revised now: in every round, while the cycle is published. */
+  isResubmissionOpen(cycle: IdeaCycle): boolean {
+    return cycle.status === "PUBLISHED";
   }
 
   assertLeader(actor: IdeaActor, team: IdeaTeam): void {
@@ -39,7 +44,7 @@ export class IdeaRules {
     }
   }
 
-  /** What saving the leader's content does to the current idea, or why it cannot be saved. */
+  /** What saving the leader's proposal or pick does to the current idea, or why it cannot be saved. */
   submissionAction(
     current: Pick<Idea, "status"> | null,
     cycle: IdeaCycle,
@@ -52,10 +57,10 @@ export class IdeaRules {
       );
     }
     if (current?.status === "REJECTED") {
-      if (this.isResubmissionOpen(cycle, now)) return "RESUBMIT";
+      if (this.isResubmissionOpen(cycle)) return "RESUBMIT";
       throw new IdeaDomainError(
         "IDEA_RESUBMISSION_CLOSED",
-        "A rejected idea can be resubmitted only until submissions open",
+        "The cycle is closed; the idea can no longer change",
       );
     }
     if (this.isSubmissionOpen(cycle, now)) {
@@ -115,12 +120,58 @@ export class IdeaRules {
     return feedback;
   }
 
-  /** Trimmed content; an empty link means none. */
-  clean(content: IdeaContent): IdeaContent {
+  /** Trimmed proposal content; an empty link means none. */
+  clean(content: IdeaContent): IdeaVersionContent {
     return {
       title: content.title.trim(),
       problem: content.problem.trim(),
       solution: content.solution.trim(),
+      link: content.link?.trim() || null,
+      source: "PROPOSAL",
+      catalogIdeaId: null,
+    };
+  }
+
+  /** A pick copies the catalog idea, so later edits to the catalog never change the team's idea. */
+  pickContent(catalogIdea: CatalogIdea): IdeaVersionContent {
+    return {
+      title: catalogIdea.title,
+      problem: catalogIdea.description,
+      solution: null,
+      link: catalogIdea.link,
+      source: "CATALOG",
+      catalogIdeaId: catalogIdea.id,
+    };
+  }
+
+  /** Only the owning faculty change the catalog, until the cycle closes. */
+  assertCatalogEditor(actor: IdeaActor, cycle: IdeaCycle): void {
+    if (actor.role !== "FACULTY" || cycle.createdByFacultyId !== actor.id) {
+      throw new IdeaDomainError("CATALOG_IDEA_NOT_FOUND", "Idea not found");
+    }
+    if (cycle.status === "CLOSED") {
+      throw new IdeaDomainError(
+        "CATALOG_CLOSED",
+        "The cycle is closed; its idea list can no longer change",
+      );
+    }
+  }
+
+  /** Teams keep what they picked, so a picked idea stays in the list. */
+  assertCanRemove(catalogIdea: CatalogIdea): void {
+    if (catalogIdea.pickCount > 0) {
+      throw new IdeaDomainError(
+        "CATALOG_IDEA_PICKED",
+        `${catalogIdea.pickCount === 1 ? "A team has" : `${catalogIdea.pickCount} teams have`} picked this idea, so it cannot be removed`,
+      );
+    }
+  }
+
+  /** Trimmed catalog content; an empty link means none. */
+  cleanCatalog(content: CatalogIdeaContent): CatalogIdeaContent {
+    return {
+      title: content.title.trim(),
+      description: content.description.trim(),
       link: content.link?.trim() || null,
     };
   }

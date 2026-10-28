@@ -10,6 +10,9 @@ export type IdeaErrorCode =
   | "IDEA_NOT_AWAITING_REVIEW"
   | "IDEA_CHANGED"
   | "IDEA_REVIEW_CLOSED"
-  | "IDEA_FEEDBACK_REQUIRED";
+  | "IDEA_FEEDBACK_REQUIRED"
+  | "CATALOG_IDEA_NOT_FOUND"
+  | "CATALOG_IDEA_PICKED"
+  | "CATALOG_CLOSED";
 
 export class IdeaDomainError extends DomainError<IdeaErrorCode> {}

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   getTeamIdea,
+  listCatalog,
   listCycleIdeas,
+  pickIdea,
   reviewIdea,
   submitIdea,
 } from "../api/ideas";
@@ -16,6 +18,7 @@ import {
   type IdeaAction,
 } from "../ideas";
 import type {
+  CatalogIdea,
   Cycle,
   CycleIdea,
   Idea,
@@ -32,18 +35,26 @@ const SAVE_LABELS: Record<IdeaAction, string> = {
   RESUBMIT: "Resubmit idea",
 };
 
-/** A team's project idea: the leader submits and revises it; every member reads it with the faculty's feedback. */
+/**
+ * A team's project idea: the leader proposes and revises it, or picks one
+ * from the faculty's list; every member reads it with the faculty's feedback.
+ */
 export function TeamIdeaPanel({
   cycle,
   team,
   myId,
+  onIdeaChange,
 }: {
   cycle: Cycle;
   team: Team;
   myId: string;
+  /** Told about the idea once loaded and after every change. */
+  onIdeaChange?: (idea: Idea | null) => void;
 }) {
   const [idea, setIdea] = useState<Idea | null | undefined>(undefined);
+  const [catalog, setCatalog] = useState<CatalogIdea[]>([]);
   const [editing, setEditing] = useState(false);
+  const [picking, setPicking] = useState(false);
   const [error, setError] = useState("");
   const [now] = useState(() => Date.now());
   const isLeader = team.leaderId === myId;
@@ -52,13 +63,30 @@ export function TeamIdeaPanel({
     getTeamIdea(team.id)
       .then(setIdea)
       .catch((caught) => setError(readableError(caught)));
-  }, [team.id]);
+    listCatalog(cycle.id)
+      .then(setCatalog)
+      .catch((caught) => setError(readableError(caught)));
+  }, [team.id, cycle.id]);
+  useEffect(() => {
+    if (idea !== undefined) onIdeaChange?.(idea);
+  }, [idea, onIdeaChange]);
 
   const action = idea === undefined ? null : ideaAction(idea, cycle, now);
   const save = async (content: IdeaContent) => {
     setIdea(await submitIdea(team.id, content));
     setEditing(false);
   };
+  const pick = async (catalogIdea: CatalogIdea) => {
+    setIdea(await pickIdea(team.id, catalogIdea.id));
+    setPicking(false);
+    setCatalog(await listCatalog(cycle.id));
+  };
+  // The list shows while the team still needs an idea; with a waiting proposal, on request.
+  const showCatalog =
+    catalog.length > 0 &&
+    idea !== undefined &&
+    !editing &&
+    (idea === null || idea.status === "REJECTED" || picking);
 
   return (
     <section className="team-panel" aria-labelledby="idea-heading">
@@ -71,31 +99,56 @@ export function TeamIdeaPanel({
         </div>
         {idea && <IdeaStatusBadge idea={idea} />}
         {isLeader && action && !editing && (
-          <button
-            className="dark-button compact"
-            onClick={() => setEditing(true)}
-          >
-            {action === "SUBMIT"
-              ? "Write the idea"
-              : action === "EDIT"
-                ? "Edit idea"
-                : "Revise and resubmit"}
-          </button>
+          <div className="row-actions">
+            {action === "EDIT" && catalog.length > 0 && (
+              <button
+                className="text-button"
+                onClick={() => setPicking(!picking)}
+              >
+                {picking ? "Keep our proposal" : "Pick from the list instead"}
+              </button>
+            )}
+            <button
+              className="dark-button compact"
+              onClick={() => {
+                setEditing(true);
+                setPicking(false);
+              }}
+            >
+              {action === "SUBMIT"
+                ? "Write our own idea"
+                : action === "EDIT"
+                  ? "Edit idea"
+                  : "Revise and resubmit"}
+            </button>
+          </div>
         )}
       </div>
       {idea !== undefined && (
-        <p className="field-hint">{ideaNote(idea, cycle, now, isLeader)}</p>
+        <p className="field-hint">
+          {ideaNote(idea, cycle, now, isLeader, catalog.length > 0)}
+        </p>
       )}
       {error && <p className="form-error">{error}</p>}
       {editing && action ? (
         <IdeaForm
-          initial={idea ?? null}
+          initial={
+            idea?.source === "PROPOSAL"
+              ? { ...idea, solution: idea.solution ?? "" }
+              : null
+          }
           saveLabel={SAVE_LABELS[action]}
           onSave={save}
           onCancel={() => setEditing(false)}
         />
       ) : (
         idea && <IdeaDetails idea={idea} />
+      )}
+      {showCatalog && (
+        <CatalogList
+          ideas={catalog}
+          onPick={isLeader && action ? pick : undefined}
+        />
       )}
     </section>
   );
@@ -106,16 +159,19 @@ function ideaNote(
   cycle: Cycle,
   now: number,
   isLeader: boolean,
+  hasCatalog: boolean,
 ): string {
   const ideasDue = formatDate(cycle.ideaDeadline);
-  const submissionsOpen = formatDate(cycle.submissionStartAt);
   if (!idea) {
     if (!isIdeaSubmissionOpen(cycle, now)) {
       return `The idea deadline (${ideasDue}) has passed without an idea from your team. Contact your faculty.`;
     }
-    return isLeader
-      ? `As the leader, submit your team's idea by ${ideasDue}.`
-      : `Your team leader submits the team's idea by ${ideasDue}.`;
+    if (!isLeader) {
+      return `Your team leader ${hasCatalog ? "writes the team's own idea or picks one of your faculty's ideas" : "submits the team's idea"} by ${ideasDue}.`;
+    }
+    return hasCatalog
+      ? `As the leader, write your team's own idea or pick one from your faculty's list below by ${ideasDue}. A pick is approved at once and final.`
+      : `As the leader, submit your team's idea by ${ideasDue}.`;
   }
   switch (idea.status) {
     case "SUBMITTED":
@@ -123,19 +179,102 @@ function ideaNote(
         ? `Waiting for your faculty's review. ${isLeader ? "You" : "Your leader"} can still change it until ${ideasDue}.`
         : "Waiting for your faculty's review.";
     case "REJECTED":
-      return isIdeaResubmissionOpen(cycle, now)
-        ? `Your faculty asked for a different idea. ${isLeader ? "Revise it and resubmit" : "Your leader can revise and resubmit it"} until submissions open on ${submissionsOpen}.`
-        : "Your faculty rejected this idea, and submissions have opened, so it can no longer be resubmitted. Contact your faculty.";
+      if (!isIdeaResubmissionOpen(cycle)) {
+        return "Your faculty rejected this idea, and the cycle is closed, so it can no longer change.";
+      }
+      return `Your faculty asked for a different idea. ${
+        isLeader
+          ? `Revise and resubmit it${hasCatalog ? ", or pick one from the list below" : ""}`
+          : "Your leader can revise and resubmit it"
+      }; there is no deadline for these rounds.`;
     case "APPROVED":
-      return "Approved. This is your team's project for the cycle.";
+      return idea.source === "CATALOG"
+        ? "Picked from your faculty's list. This is your team's project for the cycle."
+        : "Approved. This is your team's project for the cycle.";
   }
 }
 
-function IdeaStatusBadge({ idea }: { idea: Pick<Idea, "status"> }) {
+function IdeaStatusBadge({ idea }: { idea: Pick<Idea, "status" | "source"> }) {
   return (
     <span className={`idea-status idea-${idea.status.toLowerCase()}`}>
-      {ideaStatusLabel(idea.status)}
+      {ideaStatusLabel(idea.status, idea.source)}
     </span>
+  );
+}
+
+function pickCountLabel(count: number) {
+  if (count === 0) return "No team has picked it yet";
+  return `Picked by ${count} ${count === 1 ? "team" : "teams"}`;
+}
+
+/** The faculty's ideas; with `onPick`, the leader can make one the team's project after confirming. */
+function CatalogList({
+  ideas,
+  onPick,
+}: {
+  ideas: CatalogIdea[];
+  onPick?: (idea: CatalogIdea) => Promise<void>;
+}) {
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const confirm = async (idea: CatalogIdea) => {
+    setBusy(true);
+    setError("");
+    try {
+      await onPick?.(idea);
+    } catch (caught) {
+      setError(readableError(caught));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="catalog-list">
+      <h3>Ideas from your faculty</h3>
+      {error && <p className="form-error">{error}</p>}
+      <ul aria-label="Ideas from your faculty">
+        {ideas.map((idea) => (
+          <li key={idea.id}>
+            <strong>{idea.title}</strong>
+            <p>{idea.description}</p>
+            {idea.link && (
+              <a href={idea.link} target="_blank" rel="noopener noreferrer">
+                {idea.link}
+              </a>
+            )}
+            <p className="field-hint">{pickCountLabel(idea.pickCount)}</p>
+            {onPick &&
+              (confirming === idea.id ? (
+                <div className="form-actions">
+                  <button
+                    className="text-button"
+                    onClick={() => setConfirming(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="primary-button"
+                    disabled={busy}
+                    onClick={() => confirm(idea)}
+                  >
+                    {busy ? "Picking…" : "Confirm: make it our project"}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="dark-button compact"
+                  aria-label={`Pick ${idea.title}`}
+                  onClick={() => setConfirming(idea.id)}
+                >
+                  Pick this idea
+                </button>
+              ))}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -232,13 +371,18 @@ function IdeaForm({
 }
 
 function IdeaDetails({ idea }: { idea: Idea }) {
+  const picked = idea.source === "CATALOG";
   return (
     <div className="idea-details">
       <dl>
-        <dt>Problem</dt>
+        <dt>{picked ? "Description" : "Problem"}</dt>
         <dd>{idea.problem}</dd>
-        <dt>Proposed solution</dt>
-        <dd>{idea.solution}</dd>
+        {idea.solution !== null && (
+          <>
+            <dt>Proposed solution</dt>
+            <dd>{idea.solution}</dd>
+          </>
+        )}
         {idea.link && (
           <>
             <dt>Link</dt>
@@ -251,8 +395,8 @@ function IdeaDetails({ idea }: { idea: Idea }) {
         )}
       </dl>
       <p className="field-hint">
-        Version {idea.version}, submitted by {idea.submittedBy.name} on{" "}
-        {formatDate(idea.submittedAt)}.
+        Version {idea.version}, {picked ? "picked from the faculty's list" : "submitted"}{" "}
+        by {idea.submittedBy.name} on {formatDate(idea.submittedAt)}.
       </p>
       {idea.reviews.length > 0 && (
         <ol className="review-history" aria-label="Reviews">
@@ -321,9 +465,9 @@ export function FacultyIdeasSection({
         </div>
       </div>
       <p className="field-hint">
-        Ideas are due {formatDate(cycle.ideaDeadline)}. A rejected idea can be
-        resubmitted until submissions open on{" "}
-        {formatDate(cycle.submissionStartAt)}.
+        Ideas are due {formatDate(cycle.ideaDeadline)}. After a rejection the
+        team revises and resubmits, or picks from your list, for as many rounds
+        as it takes while the cycle is open.
         {rows &&
           ` ${count("APPROVED")} approved · ${count("REJECTED")} rejected · ${count(null)} without an idea.`}
       </p>
@@ -353,7 +497,11 @@ export function FacultyIdeasSection({
                 <td>{team.name}</td>
                 <td>{team.leader.name}</td>
                 <td>{idea?.title ?? <span className="muted">—</span>}</td>
-                <td>{idea ? ideaStatusLabel(idea.status) : "No idea yet"}</td>
+                <td>
+                  {idea
+                    ? ideaStatusLabel(idea.status, idea.source)
+                    : "No idea yet"}
+                </td>
                 <td className="row-actions">
                   {idea && (
                     <button

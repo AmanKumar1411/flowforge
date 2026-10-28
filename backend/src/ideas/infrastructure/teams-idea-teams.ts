@@ -35,6 +35,10 @@ export class TeamsIdeaTeams extends IdeaTeams {
     };
   }
 
+  getVisibleCycle(actor: TeamActor, cycleId: string): Promise<IdeaCycle> {
+    return this.cycles.getVisibleCycle(actor, cycleId);
+  }
+
   async listForCycle(
     actor: TeamActor,
     cycleId: string,

@@ -1,6 +1,8 @@
 # ADR 013: One idea per team, reviewed by version, with its own deadline
 
 **Status:** Accepted (Phase 6). Supersedes the idea deadline in [ADR 009](009-team-rules-and-formation-deadline.md).
+Amended by [ADR 014](014-idea-catalog-and-open-ended-rounds.md): teams can also pick from the
+faculty's idea list, and rounds after a rejection no longer stop when submissions open.
 
 ## Context
 

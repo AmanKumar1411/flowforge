@@ -25,8 +25,9 @@ import {
   isCompletionOpen,
   isFormationOpen,
 } from "../teams";
-import type { Cycle, Person, Team, TeamCandidate } from "../types";
+import type { Cycle, Idea, Person, Team, TeamCandidate } from "../types";
 import { TeamIdeaPanel } from "./IdeaPanels";
+import { TeamSubmissionPanel } from "./SubmissionPanels";
 
 export function FormationNote({ cycle, now }: { cycle: Cycle; now: number }) {
   const deadline = formatDate(cycle.teamFormationDeadline);
@@ -178,13 +179,37 @@ export function StudentTeamPanel({ cycle }: { cycle: Cycle }) {
         )}
       </section>
       {team && !editing && (
-        <TeamIdeaPanel cycle={cycle} team={team} myId={myId} />
+        <TeamProject cycle={cycle} team={team} myId={myId} />
       )}
     </>
   );
 }
 
 /** "Looking for a team": lets leaders find the student. */
+/** The team's idea and its submitted work; the idea decides whether work can be submitted. */
+function TeamProject({
+  cycle,
+  team,
+  myId,
+}: {
+  cycle: Cycle;
+  team: Team;
+  myId: string;
+}) {
+  const [idea, setIdea] = useState<Idea | null | undefined>(undefined);
+  return (
+    <>
+      <TeamIdeaPanel
+        cycle={cycle}
+        team={team}
+        myId={myId}
+        onIdeaChange={setIdea}
+      />
+      <TeamSubmissionPanel cycle={cycle} team={team} idea={idea} />
+    </>
+  );
+}
+
 function LookingSwitch({ cycleId, myId }: { cycleId: string; myId: string }) {
   const [mine, setMine] = useState<TeamCandidate | null | undefined>(
     undefined,

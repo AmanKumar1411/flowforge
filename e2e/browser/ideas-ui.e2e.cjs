@@ -95,7 +95,7 @@ const REGISTERED = [`yash.b27csai${DOMAIN}`, `ira.d27csai${DOMAIN}`];
     await run.check("The leader writes and submits the team's idea", async () => {
       const panel = leader.locator(".team-panel", { has: leader.getByRole("heading", { name: "No idea yet" }) });
       await panel.getByText("As the leader, submit your team's idea by").waitFor();
-      await panel.getByRole("button", { name: "Write the idea" }).click();
+      await panel.getByRole("button", { name: "Write our own idea" }).click();
       await leader.getByLabel("Idea title").fill("Room finder");
       await leader.getByLabel("Problem").fill("Free rooms are hard to find between classes.");
       await leader.getByLabel("Proposed solution").fill("A live map of free rooms from the timetable.");

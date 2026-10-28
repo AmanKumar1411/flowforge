@@ -43,7 +43,6 @@ export class InMemoryIdeaRepository extends IdeaRepository {
     const created: Idea = {
       ...content,
       id: `idea-${this.sequence}`,
-      status: "SUBMITTED",
       version: 1,
       submittedBy: this.people(submittedById),
       reviews: [],
@@ -70,6 +69,13 @@ export class InMemoryIdeaRepository extends IdeaRepository {
     });
     idea.status = review.decision;
     return Promise.resolve(this.copy(idea)!);
+  }
+
+  /** How many teams' ideas are picks of this catalog idea. */
+  pickCount(catalogIdeaId: string): number {
+    return [...this.ideas.values()].filter(
+      (idea) => idea.catalogIdeaId === catalogIdeaId,
+    ).length;
   }
 
   listByCycle(cycleId: string): Promise<Idea[]> {
