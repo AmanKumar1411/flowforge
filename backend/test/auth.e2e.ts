@@ -223,6 +223,68 @@ describe("Google Sign-In", () => {
     );
     assert.equal(await app.prisma.user.count(), 1);
   });
+
+  describe("a pre-registered student (ADR 012)", () => {
+    const email = `zara.q24csai${DOMAIN}`;
+    const preRegister = (status: "ACTIVE" | "DEACTIVATED" = "ACTIVE") =>
+      app.prisma.user.create({
+        data: {
+          googleSub: null,
+          email,
+          name: "Zara Q",
+          role: "STUDENT",
+          status,
+          batchYear: 2024,
+        },
+      });
+
+    it("is claimed by the first Google sign-in with its email, keeping its id; a second Google account is still a conflict", async () => {
+      const registered = await preRegister();
+      const browser = app.browser();
+      const { callback } = await signInWithGoogle(browser, email, {
+        name: "Zara Qureshi",
+      });
+      assert.equal(callback.location, `${FRONTEND_ORIGIN}/auth/callback`);
+      await browser.refresh();
+      const me = await browser.get("/auth/me");
+      assert.deepEqual(
+        [me.body.id, me.body.name, me.body.batchYear],
+        [registered.id, "Zara Qureshi", 2024],
+      );
+      const claimed = await app.prisma.user.findUniqueOrThrow({
+        where: { id: registered.id },
+      });
+      assert.equal(claimed.googleSub, `google-${email}`);
+      assert.deepEqual(
+        (await auditActions(app.prisma, { entityId: registered.id })).map(
+          (a) => a.action,
+        ),
+        ["USER_CLAIMED", "LOGIN_SUCCEEDED"],
+      );
+
+      const other = await signInWithGoogle(app.browser(), email, {
+        sub: "someone-else",
+      });
+      assert.equal(
+        other.callback.location,
+        `${FRONTEND_ORIGIN}/login?error=IDENTITY_CONFLICT`,
+      );
+      assert.equal(await app.prisma.user.count(), 1);
+    });
+
+    it("stays unclaimed while deactivated", async () => {
+      const registered = await preRegister("DEACTIVATED");
+      const { callback } = await signInWithGoogle(app.browser(), email);
+      assert.equal(
+        callback.location,
+        `${FRONTEND_ORIGIN}/login?error=ACCOUNT_DEACTIVATED`,
+      );
+      const after = await app.prisma.user.findUniqueOrThrow({
+        where: { id: registered.id },
+      });
+      assert.equal(after.googleSub, null);
+    });
+  });
 });
 
 describe("Login eligibility (through dev login, same code path)", () => {

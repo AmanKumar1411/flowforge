@@ -1,5 +1,7 @@
 import { AuditService } from "../../audit/audit.service";
 import { AuditEvent } from "../../audit/domain/audit-event";
+import { StudentPreRegistration } from "../../auth/application/student-pre-registration";
+import { BatchYearPolicy } from "../../auth/domain/batch-year.policy";
 import { createDocumentedIdentityParser } from "../../auth/testing/documented-identity-parser";
 import { FixedClock } from "../../common/testing/fixed-clock";
 import { ImmediateTransactionRunner } from "../../common/testing/immediate-transaction.runner";
@@ -11,6 +13,7 @@ import { CycleAuthorizationPolicy } from "../../course-cycles/domain/cycle-autho
 import { CycleWorkflow } from "../../course-cycles/domain/cycle-workflow";
 import { InMemoryCycleRepository } from "../../course-cycles/domain/in-memory-cycle.repository";
 import { EnrollmentRemovalChecks } from "../../course-cycles/enrollment-removal-checks";
+import { NewUser } from "../../users/domain/user";
 import { UsersService } from "../../users/users.service";
 import { TeamCompletionService } from "../application/team-completion.service";
 import { TeamEnrollmentGuard } from "../application/team-enrollment-guard";
@@ -38,6 +41,7 @@ export const student = (
   role: "STUDENT",
   status: "ACTIVE",
   batchYear: 2026,
+  lastLoginAt: new Date("2026-10-20T09:00:00.000Z"),
   ...overrides,
 });
 
@@ -81,6 +85,7 @@ export function createTeamKit(seed = 1) {
     role: "FACULTY",
     status: "ACTIVE",
     batchYear: null,
+    lastLoginAt: new Date("2026-10-20T09:00:00.000Z"),
   });
   const removalChecks = new EnrollmentRemovalChecks();
   const cycles = new CourseCycleService(
@@ -89,14 +94,36 @@ export function createTeamKit(seed = 1) {
     new CycleAuthorizationPolicy(),
     clock,
   );
+  // The two calls the enrollment service makes: reading students, and pre-registering new ones.
+  let registered = 0;
+  const users = {
+    findByEmails: async (emails: readonly string[]) =>
+      directory.findByEmails(emails),
+    register: async (user: NewUser) => {
+      registered += 1;
+      const created: DirectoryUser = {
+        id: `registered-${registered}`,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: "ACTIVE",
+        batchYear: user.batchYear,
+        lastLoginAt: user.lastLoginAt,
+      };
+      directory.add(created);
+      return created;
+    },
+  } as unknown as UsersService;
   const enrollments = new CycleEnrollmentService(
     cycleRepository,
     new CycleAuthorizationPolicy(),
-    createDocumentedIdentityParser(),
-    {
-      findByEmails: async (emails: readonly string[]) =>
-        directory.findByEmails(emails),
-    } as unknown as UsersService,
+    new StudentPreRegistration(
+      createDocumentedIdentityParser(),
+      new BatchYearPolicy(2018, clock),
+      users,
+      audit,
+    ),
+    users,
     removalChecks,
     audit,
     transactions,

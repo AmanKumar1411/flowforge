@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { getCycle } from "../api/cycles";
+import { BatchPanel } from "../components/BatchPanel";
 import { Info } from "../components/CycleParts";
 import { EnrollmentPanel } from "../components/EnrollmentPanel";
 import { FacultyTeamsSection } from "../components/FacultyTeamPanels";
+import { FacultyIdeasSection } from "../components/IdeaPanels";
 import { StudentTeamPanel } from "../components/TeamPanels";
 import { formatDate } from "../dates";
 import { readableError } from "../errors";
@@ -58,8 +60,10 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
         )}
       </div>
       <div className="detail-grid">
-        <Info label="Semester" value={`Semester ${cycle.semester}`} />
-        <Info label="Academic year" value={cycle.academicYear} />
+        <Info
+          label="Semester"
+          value={`Semester ${cycle.semester}, ${cycle.academicYear}`}
+        />
         <Info
           label="Course type"
           value={cycle.kind === "ELECTIVE" ? "Elective" : "Core (whole batch)"}
@@ -73,6 +77,7 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
           label="Faculty complete teams by"
           value={formatDate(cycle.teamCompletionDeadline)}
         />
+        <Info label="Ideas due" value={formatDate(cycle.ideaDeadline)} />
         <Info
           label="Submissions open"
           value={formatDate(cycle.submissionStartAt)}
@@ -81,8 +86,17 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
       </div>
       {faculty ? (
         <>
-          {cycle.kind === "ELECTIVE" && <EnrollmentPanel cycle={cycle} />}
-          {cycle.status !== "DRAFT" && <FacultyTeamsSection cycle={cycle} />}
+          {cycle.kind === "ELECTIVE" ? (
+            <EnrollmentPanel cycle={cycle} />
+          ) : (
+            <BatchPanel cycle={cycle} />
+          )}
+          {cycle.status !== "DRAFT" && (
+            <>
+              <FacultyTeamsSection cycle={cycle} />
+              <FacultyIdeasSection cycle={cycle} canReview />
+            </>
+          )}
         </>
       ) : (
         <StudentTeamPanel cycle={cycle} />

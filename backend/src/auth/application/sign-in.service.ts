@@ -38,9 +38,10 @@ interface DenialContext {
 
 /**
  * Turns a verified external identity into a FlowForge session in one
- * transaction: find the user by provider sub, resolve the role, create or
- * update the user, record a pending faculty request, start a refresh-token
- * family and write the audit trail. Denials are audited too.
+ * transaction: find the user by provider sub (or claim the pre-registered
+ * account with this email), resolve the role, create or update the user,
+ * record a pending faculty request, start a refresh-token family and write
+ * the audit trail. Denials are audited too.
  */
 @Injectable()
 export class SignInService {
@@ -97,7 +98,12 @@ export class SignInService {
     }
 
     const university = this.identityParser.parse(email);
-    const existing = await this.users.findByGoogleSub(identity.sub, tx);
+    const known = await this.users.findByGoogleSub(identity.sub, tx);
+    // ADR 012: an account pre-registered by a faculty import has no sub yet; its email's first sign-in claims it.
+    const preRegistered = known
+      ? null
+      : await this.findPreRegistered(email, tx);
+    const existing = known ?? preRegistered;
     const resolution = this.roleResolver.resolve({
       identity: university,
       existingUser: existing,
@@ -114,8 +120,14 @@ export class SignInService {
       );
     }
 
-    const result = existing
-      ? await this.updateUser(existing, identity, resolution.role, tx)
+    const subject = preRegistered
+      ? await this.claim(preRegistered, identity, provider, tx)
+      : existing;
+    if (subject instanceof AuthDomainError) {
+      return this.deny(subject.code, { ...context, userId: existing?.id }, tx);
+    }
+    const result = subject
+      ? await this.updateUser(subject, identity, resolution.role, tx)
       : await this.createUser(identity, university, resolution.role, tx);
     if (result instanceof AuthDomainError) {
       return this.deny(result.code, { ...context, userId: existing?.id }, tx);
@@ -151,6 +163,36 @@ export class SignInService {
       kind: "SIGNED_IN",
       signedIn: { userId: user.id, role: user.role, refreshToken },
     };
+  }
+
+  private async findPreRegistered(
+    email: string,
+    tx: Transaction,
+  ): Promise<User | null> {
+    const user = await this.users.findByEmail(email, tx);
+    return user?.googleSub === null ? user : null;
+  }
+
+  /** A double sign-in may race for the claim; the loser finds the account under its own sub. */
+  private async claim(
+    preRegistered: User,
+    identity: ExternalIdentity,
+    provider: SignInProvider,
+    tx: Transaction,
+  ): Promise<User | AuthDomainError> {
+    const claimed = await this.users.claim(preRegistered.id, identity.sub, tx);
+    if (!claimed) {
+      const mine = await this.users.findByGoogleSub(identity.sub, tx);
+      return mine ?? this.identityConflict();
+    }
+    await this.audit.record(tx, {
+      action: "USER_CLAIMED",
+      actorId: claimed.id,
+      entityType: "User",
+      entityId: claimed.id,
+      metadata: { provider },
+    });
+    return claimed;
   }
 
   private async createUser(

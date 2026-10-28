@@ -169,6 +169,67 @@ describe("CourseCycleService", () => {
       minTeamSize: 1,
       maxTeamSize: 4,
       teamFormationDeadline: "2026-10-01T09:00:00.000Z",
+      // No faculty window and no separate idea deadline unless the faculty set them.
+      teamCompletionDeadline: "2026-10-01T09:00:00.000Z",
+      ideaDeadline: "2026-10-01T09:00:00.000Z",
+    });
+  });
+
+  it("dates ideas between team completion and the opening of submissions", async () => {
+    const dto = {
+      ...createDto(),
+      submissionStartAt: "2026-11-10T09:00:00.000Z",
+      teamFormationDeadline: "2026-11-01T09:00:00.000Z",
+      teamCompletionDeadline: "2026-11-05T09:00:00.000Z",
+    };
+    expect(await service.create(owner, dto)).toMatchObject({
+      ideaDeadline: "2026-11-05T09:00:00.000Z",
+    });
+    expect(
+      await service.create(owner, {
+        ...dto,
+        ideaDeadline: "2026-11-08T09:00:00.000Z",
+      }),
+    ).toMatchObject({ ideaDeadline: "2026-11-08T09:00:00.000Z" });
+    for (const ideaDeadline of [
+      "2026-11-04T09:00:00.000Z",
+      "2026-11-11T09:00:00.000Z",
+    ]) {
+      await expect(
+        service.create(owner, { ...dto, ideaDeadline }),
+      ).rejects.toMatchObject({ code: "INVALID_IDEA_DEADLINE" });
+    }
+  });
+
+  it("moves later stages that ended together with a moved one, and leaves separate ones", async () => {
+    const together = await service.create(owner, {
+      ...createDto(),
+      submissionStartAt: "2026-11-10T09:00:00.000Z",
+      teamFormationDeadline: "2026-11-01T09:00:00.000Z",
+    });
+    expect(
+      await service.update(owner, together.id, {
+        teamFormationDeadline: "2026-11-03T09:00:00.000Z",
+      }),
+    ).toMatchObject({
+      teamCompletionDeadline: "2026-11-03T09:00:00.000Z",
+      ideaDeadline: "2026-11-03T09:00:00.000Z",
+    });
+
+    const separate = await service.create(owner, {
+      ...createDto(),
+      submissionStartAt: "2026-11-10T09:00:00.000Z",
+      teamFormationDeadline: "2026-11-01T09:00:00.000Z",
+      teamCompletionDeadline: "2026-11-05T09:00:00.000Z",
+      ideaDeadline: "2026-11-08T09:00:00.000Z",
+    });
+    expect(
+      await service.update(owner, separate.id, {
+        teamCompletionDeadline: "2026-11-06T09:00:00.000Z",
+      }),
+    ).toMatchObject({
+      teamFormationDeadline: "2026-11-01T09:00:00.000Z",
+      ideaDeadline: "2026-11-08T09:00:00.000Z",
     });
   });
 
@@ -200,9 +261,10 @@ describe("CourseCycleService", () => {
   });
 
   it("fixes team sizes at publish but lets an open formation deadline move forward", async () => {
-    // The clock reads 2026-10-23T09:00Z.
+    // The clock reads 2026-10-23T09:00Z; teams must be formed by the time submissions open.
     const created = await service.create(owner, {
       ...createDto(),
+      submissionStartAt: "2026-11-01T09:00:00.000Z",
       teamFormationDeadline: "2026-10-25T12:00:00.000Z",
     });
     await service.publish(owner, created.id);

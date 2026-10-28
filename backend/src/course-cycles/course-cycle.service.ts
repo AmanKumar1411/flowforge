@@ -11,13 +11,8 @@ import {
   CycleCreateData,
   CyclePatch,
   DEFAULT_TEAM_SIZE,
-  TeamDeadline,
+  STAGE_DEADLINES,
 } from "./domain/cycle.types";
-
-const TEAM_DEADLINES: TeamDeadline[] = [
-  "teamFormationDeadline",
-  "teamCompletionDeadline",
-];
 import { CycleWorkflow } from "./domain/cycle-workflow";
 import { CreateCycleDto } from "./dto/create-cycle.dto";
 import { CycleResponseDto } from "./dto/cycle-response.dto";
@@ -45,6 +40,10 @@ export class CourseCycleService {
     const formationDeadline = dto.teamFormationDeadline
       ? new Date(dto.teamFormationDeadline)
       : dates.start;
+    // By default there is no faculty completion window, and ideas are due when it ends.
+    const completionDeadline = dto.teamCompletionDeadline
+      ? new Date(dto.teamCompletionDeadline)
+      : formationDeadline;
     const data: CycleCreateData = {
       courseName: dto.courseName.trim(),
       title: dto.title.trim(),
@@ -57,10 +56,10 @@ export class CourseCycleService {
       minTeamSize: dto.minTeamSize ?? DEFAULT_TEAM_SIZE.min,
       maxTeamSize: dto.maxTeamSize ?? DEFAULT_TEAM_SIZE.max,
       teamFormationDeadline: formationDeadline,
-      // By default there is no faculty completion window.
-      teamCompletionDeadline: dto.teamCompletionDeadline
-        ? new Date(dto.teamCompletionDeadline)
-        : formationDeadline,
+      teamCompletionDeadline: completionDeadline,
+      ideaDeadline: dto.ideaDeadline
+        ? new Date(dto.ideaDeadline)
+        : completionDeadline,
       kind: dto.kind ?? "CORE",
       createdByFacultyId: actor.id,
     };
@@ -121,10 +120,10 @@ export class CourseCycleService {
       Object.keys(patch) as (keyof CyclePatch)[],
     );
     if (cycle.status === "PUBLISHED") {
-      for (const deadline of TEAM_DEADLINES) {
+      for (const deadline of STAGE_DEADLINES) {
         const next = patch[deadline];
         if (next !== undefined) {
-          this.workflow.assertTeamDeadlineChange(
+          this.workflow.assertStageDeadlineChange(
             deadline,
             cycle[deadline],
             next,
@@ -133,15 +132,7 @@ export class CourseCycleService {
         }
       }
     }
-    // A cycle without a completion window keeps none when its formation deadline moves.
-    if (
-      patch.teamFormationDeadline !== undefined &&
-      patch.teamCompletionDeadline === undefined &&
-      cycle.teamCompletionDeadline.getTime() ===
-        cycle.teamFormationDeadline.getTime()
-    ) {
-      patch.teamCompletionDeadline = patch.teamFormationDeadline;
-    }
+    this.followMovedStages(cycle, patch);
     const merged = {
       ...cycle,
       ...patch,
@@ -248,8 +239,31 @@ export class CourseCycleService {
     if (dto.teamCompletionDeadline !== undefined) {
       patch.teamCompletionDeadline = new Date(dto.teamCompletionDeadline);
     }
+    if (dto.ideaDeadline !== undefined) {
+      patch.ideaDeadline = new Date(dto.ideaDeadline);
+    }
     if (dto.kind !== undefined) patch.kind = dto.kind;
     return patch;
+  }
+
+  /**
+   * A stage that ends together with the one before it keeps doing so when that
+   * earlier deadline moves on its own: a cycle without a faculty window, or
+   * without a separate idea deadline, does not gain one by accident.
+   */
+  private followMovedStages(cycle: Cycle, patch: CyclePatch): void {
+    for (let index = 1; index < STAGE_DEADLINES.length; index += 1) {
+      const earlier = STAGE_DEADLINES[index - 1];
+      const later = STAGE_DEADLINES[index];
+      const moved = patch[earlier];
+      if (
+        moved !== undefined &&
+        patch[later] === undefined &&
+        cycle[later].getTime() === cycle[earlier].getTime()
+      ) {
+        patch[later] = moved;
+      }
+    }
   }
 
   private assertAcademicYear(value: string): void {

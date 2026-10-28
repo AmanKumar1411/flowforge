@@ -8,13 +8,18 @@ import { CycleWorkflow } from "./domain/cycle-workflow";
 import { PrismaCycleRepository } from "./infrastructure/prisma-cycle.repository";
 import { CourseCycleService } from "./course-cycle.service";
 import { CourseCycleController } from "./course-cycle.controller";
+import { CycleBatchController } from "./cycle-batch.controller";
 import { CycleEnrollmentController } from "./cycle-enrollment.controller";
 import { CycleEnrollmentService } from "./cycle-enrollment.service";
 import { EnrollmentRemovalChecks } from "./enrollment-removal-checks";
 
 @Module({
   imports: [AuthModule, UsersModule, AuditModule],
-  controllers: [CourseCycleController, CycleEnrollmentController],
+  controllers: [
+    CourseCycleController,
+    CycleEnrollmentController,
+    CycleBatchController,
+  ],
   providers: [
     CourseCycleService,
     CycleEnrollmentService,

@@ -64,6 +64,17 @@ export class CycleAuthorizationPolicy {
     }
   }
 
+  /** A core course's batch list is imported by its faculty, before the cycle closes. */
+  assertCanManageBatch(actor: CycleActor, cycle: Cycle): void {
+    this.assertOwner(actor, cycle);
+    if (cycle.kind !== "CORE") {
+      throw new CycleDomainError(
+        "CYCLE_NOT_CORE",
+        "An elective has an enrollment list instead of a batch list",
+      );
+    }
+  }
+
   private notFound(): CycleDomainError {
     return new CycleDomainError("CYCLE_NOT_FOUND", "Course cycle not found");
   }

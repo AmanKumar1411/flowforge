@@ -151,7 +151,7 @@ describe("Team completion and electives", () => {
       assert.equal(hidden.body.code, "CYCLE_NOT_FOUND");
     });
 
-    it("import student emails and report the rows they refuse", async () => {
+    it("import student emails and report each row they refuse once", async () => {
       const elective = await openCycle({ kind: "ELECTIVE" });
       const result = await owner.post(
         `/course-cycles/${elective}/enrollments`,
@@ -162,6 +162,7 @@ describe("Team completion and electives", () => {
               EMAILS.neha,
               `prakriti.p${DOMAIN}`,
               "someone@gmail.com",
+              `PRAKRITI.P${DOMAIN}`,
             ],
           },
         },
@@ -191,33 +192,63 @@ describe("Team completion and electives", () => {
             entityId: elective,
           })
         ).map((row) => row.metadata),
-        [{ emails: [EMAILS.neha] }],
+        [{ emails: [EMAILS.neha], registered: [] }],
       );
     });
 
-    it("show who has not signed in yet, and link them when they do", async () => {
+    it("register who has not signed in yet; the first sign-in claims that account", async () => {
       const elective = await openCycle({ kind: "ELECTIVE" });
       // Batch 2025, so she never joins the batch-2026 core cycles of later tests.
       const newcomer = `zara.q25csai${DOMAIN}`;
       await owner.post(`/course-cycles/${elective}/enrollments`, {
         body: { emails: [EMAILS.neha, newcomer] },
       });
-      const before = await owner.get<{ email: string; name: string | null }[]>(
+      type Row = {
+        email: string;
+        userId: string;
+        name: string;
+        signedIn: boolean;
+      };
+      const before = await owner.get<Row[]>(
         `/course-cycles/${elective}/enrollments`,
       );
       assert.deepEqual(
-        before.body.map((row) => [row.email, row.name]),
+        before.body.map((row) => [row.email, row.name, row.signedIn]),
         [
-          [EMAILS.neha, "Neha"],
-          [newcomer, null],
+          [EMAILS.neha, "Neha", true],
+          [newcomer, "Zara Q", false],
         ],
       );
+      const registered = await app.prisma.user.findUniqueOrThrow({
+        where: { email: newcomer },
+      });
+      assert.equal(registered.googleSub, null);
+      assert.equal(registered.batchYear, 2025);
+
       const zara = await app.browser().signIn(newcomer, "Zara");
       assert.equal((await zara.get(`/course-cycles/${elective}`)).status, 200);
-      const afterSignIn = await owner.get<
-        { email: string; name: string | null }[]
-      >(`/course-cycles/${elective}/enrollments`);
-      assert.equal(afterSignIn.body[1].name, "Zara");
+      const me = await zara.get("/auth/me");
+      assert.equal(me.body.id, before.body[1].userId);
+      const afterSignIn = await owner.get<Row[]>(
+        `/course-cycles/${elective}/enrollments`,
+      );
+      assert.deepEqual(
+        [afterSignIn.body[1].name, afterSignIn.body[1].signedIn],
+        ["Zara", true],
+      );
+      assert.equal(
+        await app.prisma.user.count({ where: { email: newcomer } }),
+        1,
+      );
+      assert.deepEqual(
+        (
+          await auditActions(app.prisma, {
+            action: "USER_CLAIMED",
+            entityId: registered.id,
+          })
+        ).map((row) => row.metadata),
+        [{ provider: "dev" }],
+      );
     });
 
     it("form teams and search only within the roster", async () => {
@@ -558,6 +589,95 @@ describe("Team completion and electives", () => {
       assert.equal(
         await app.prisma.team.count({ where: { cycleId } }),
         preview.teams.length,
+      );
+    });
+  });
+
+  // Batch 2027 belongs to these tests alone, so the batch-2026 counts above never change.
+  describe("core batch lists", () => {
+    const newcomer = `uma.v27csai${DOMAIN}`;
+
+    it("register the cycle's batch; other batches, staff and unknown rows are refused", async () => {
+      const core = await openCycle({ batchYear: 2027 });
+      await app.browser().signIn(`lead.l27csai${DOMAIN}`, "Lead");
+      const result = await owner.post(`/course-cycles/${core}/batch-students`, {
+        body: {
+          emails: [
+            newcomer,
+            `lead.l27csai${DOMAIN}`,
+            EMAILS.aman,
+            `prakriti.p${DOMAIN}`,
+            "someone@gmail.com",
+          ],
+        },
+      });
+      assert.equal(result.status, 201, JSON.stringify(result.body));
+      assert.deepEqual(result.body, {
+        registered: [newcomer],
+        alreadyRegistered: [`lead.l27csai${DOMAIN}`],
+        rejected: [
+          {
+            email: EMAILS.aman,
+            reason: "A student of batch 2026, not batch 2027",
+          },
+          {
+            email: `prakriti.p${DOMAIN}`,
+            reason: "A staff email, not a student",
+          },
+          {
+            email: "someone@gmail.com",
+            reason: "Not a student email of this university",
+          },
+        ],
+      });
+      const list = await owner.get<
+        { email: string; name: string; signedIn: boolean }[]
+      >(`/course-cycles/${core}/batch-students`);
+      assert.deepEqual(
+        list.body.map((row) => [row.email, row.name, row.signedIn]),
+        [
+          [`lead.l27csai${DOMAIN}`, "Lead", true],
+          [newcomer, "Uma V", false],
+        ],
+      );
+
+      const elective = await openCycle({ kind: "ELECTIVE" });
+      const wrongKind = await owner.post(
+        `/course-cycles/${elective}/batch-students`,
+        { body: { emails: [newcomer] } },
+      );
+      assert.equal(wrongKind.status, 409);
+      assert.equal(wrongKind.body.code, "CYCLE_NOT_CORE");
+      assert.equal(
+        (await otherFaculty.get(`/course-cycles/${core}/batch-students`))
+          .status,
+        404,
+      );
+    });
+
+    it("let leaders find and add a registered student, who then finds the team at first sign-in", async () => {
+      const core = await openCycle({ batchYear: 2027 });
+      const lead = await app.browser().signIn(`lead.l27csai${DOMAIN}`, "Lead");
+      const search = await lead.get<
+        { id: string; name: string; signedIn: boolean }[]
+      >(`/course-cycles/${core}/team-candidates?q=uma`);
+      assert.deepEqual(
+        search.body.map((row) => [row.name, row.signedIn]),
+        [["Uma V", false]],
+      );
+      const created = await lead.post<TeamBody>(
+        `/course-cycles/${core}/teams`,
+        {
+          body: { name: "Early birds", memberIds: [search.body[0].id] },
+        },
+      );
+      assert.equal(created.status, 201, JSON.stringify(created.body));
+
+      const uma = await app.browser().signIn(newcomer, "Uma Verma");
+      const mine = await uma.get<{ id: string }[]>("/teams/mine");
+      assert.deepEqual(
+        mine.body.map((entry) => entry.id),
+        [created.body.id],
       );
     });
   });

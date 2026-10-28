@@ -24,7 +24,7 @@ export interface CompletionOverview {
   /** True between the formation and completion deadlines of a published cycle. */
   open: boolean;
   unassigned: UnassignedStudent[];
-  /** Enrolled emails with no account yet: they cannot be placed until they sign in. */
+  /** Enrolled emails with no account (enrolled before pre-registration): enrolling them again registers them. */
   notSignedIn: string[];
 }
 
@@ -289,6 +289,7 @@ export class TeamCompletionService {
         email: user.email,
         lookingForTeam: seeking.has(user.id),
         note: seeking.get(user.id)?.note ?? null,
+        signedIn: user.lastLoginAt !== null,
       }));
   }
 

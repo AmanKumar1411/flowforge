@@ -56,13 +56,16 @@ stateDiagram-v2
 
 | State       | Editable fields                     | Actions             |
 | ----------- | ----------------------------------- | ------------------- |
-| `DRAFT`     | All request fields, including team sizes and the formation deadline | Edit, publish       |
-| `PUBLISHED` | `description`, `submissionDeadline`, `teamFormationDeadline` (only while formation is open, only to a future time) | Limited edit, close |
+| `DRAFT`     | All request fields, including team sizes, `kind` and the three stage deadlines | Edit, publish       |
+| `PUBLISHED` | `description`, `submissionDeadline`, and each stage deadline (`teamFormationDeadline`, `teamCompletionDeadline`, `ideaDeadline`) only while its stage is open, only to a future time | Limited edit, close |
 | `CLOSED`    | None                                | None                |
 
 Phase 4 added the team rules `minTeamSize`, `maxTeamSize` and `teamFormationDeadline` (defaults 1,
-4 and `submissionStartAt`). `CycleWorkflow.assertValidSchedule` checks them on every save. See
-[teams.md](teams.md) and [ADR 009](../decisions/009-team-rules-and-formation-deadline.md).
+4 and `submissionStartAt`); Phase 5 the faculty's `teamCompletionDeadline` and the course `kind`;
+Phase 6 the `ideaDeadline`. `CycleWorkflow.assertValidSchedule` checks on every save that
+formation ≤ completion ≤ idea deadline ≤ `submissionStartAt`. See [teams.md](teams.md),
+[ideas.md](ideas.md), [ADR 009](../decisions/009-team-rules-and-formation-deadline.md) and
+[ADR 013](../decisions/013-project-ideas.md).
 
 `CycleWorkflow` owns a declarative transition table and the publish rule list. `status` is never accepted by a DTO and is only changed through `transitionStatus` with an observed status in the database `WHERE` clause.
 

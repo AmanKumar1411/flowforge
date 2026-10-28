@@ -1,6 +1,8 @@
 # ADR 009: Team rules live on the cycle; the formation deadline fixes teams
 
-**Status:** Accepted (Phase 4)
+**Status:** Accepted (Phase 4). Superseded in part by [ADR 013](013-project-ideas.md): ideas have their own
+deadline, and formation must now end by the time submissions open. The faculty completion window
+is [ADR 011](011-faculty-team-completion-and-auto-group.md).
 
 ## Context
 

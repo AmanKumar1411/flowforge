@@ -1,5 +1,6 @@
 import "./test-env";
 import { AddressInfo } from "node:net";
+import type { Abstract, Type } from "@nestjs/common";
 import { NestExpressApplication } from "@nestjs/platform-express";
 import { Test } from "@nestjs/testing";
 import { AppModule } from "../../src/app.module";
@@ -20,6 +21,8 @@ export interface TestApp {
   apiUrl: string;
   prisma: PrismaService;
   google: FakeGoogle;
+  /** A provider of the running app, for work that has no HTTP route. */
+  get<T>(token: Type<T> | Abstract<T>): T;
   browser(): TestBrowser;
   reset(): Promise<void>;
   close(): Promise<void>;
@@ -63,6 +66,7 @@ export async function startTestApp(
     apiUrl,
     prisma,
     google,
+    get: (token) => app.get(token),
     browser: () => new TestBrowser(apiUrl),
     reset: () => resetDatabase(prisma),
     close: () => app.close(),
@@ -72,7 +76,7 @@ export async function startTestApp(
 // TRUNCATE bypasses the audit table's append-only row trigger, which only blocks UPDATE and DELETE.
 async function resetDatabase(prisma: PrismaService): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "AuditLog", "RefreshToken", "FacultyAccessRequest", "FacultyAllowlistEntry", "TeamSeeker", "TeamMember", "Team", "CycleEnrollment", "CourseProjectCycle", "User" CASCADE',
+    'TRUNCATE "AuditLog", "RefreshToken", "FacultyAccessRequest", "FacultyAllowlistEntry", "IdeaReview", "ProjectIdea", "TeamSeeker", "TeamMember", "Team", "CycleEnrollment", "CourseProjectCycle", "User" CASCADE',
   );
 }
 

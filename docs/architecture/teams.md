@@ -187,9 +187,9 @@ Team responses list members leader first, with `isLeader`, `name`, `email` and `
 
 ## Extension check
 
-- **Phase 5, ideas:** a `ProjectIdea` belongs to a `Team` (one current idea per team) and reuses
-  `teamFormationDeadline` as its deadline. `TeamAccessPolicy.assertLeader` already answers "who may
-  submit". A rejected idea changes only the idea; the team stays fixed.
+- **Ideas (built in Phase 6):** a `ProjectIdea` belongs to a `Team` (one current idea per team)
+  with its own deadline; see [ideas.md](ideas.md). The leader submits, and a rejected idea changes
+  only the idea; the team stays fixed.
 - **Faculty fix-ups** (move or remove a student after the deadline): one new command in
   `TeamFormationService` with `assertOwner`-style checks, using the same lock and audit. No schema
   change.

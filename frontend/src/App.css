@@ -553,6 +553,55 @@ h2 {
   width: 100%;
 }
 
+.demo-accounts {
+  margin-bottom: 18px;
+}
+
+.demo-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: .84rem;
+}
+
+.demo-group {
+  margin: 14px 0 8px;
+  color: var(--muted);
+  font-size: .76rem;
+  font-weight: 800;
+}
+
+.demo-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(125px, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.demo-account {
+  width: 100%;
+  border: 1px solid var(--line);
+  padding: 7px 9px;
+  background: white;
+  color: var(--ink);
+  font: inherit;
+  font-size: .84rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.demo-account:hover:not(:disabled),
+.demo-account:focus-visible {
+  border-color: var(--coral);
+}
+
+.demo-account:disabled {
+  cursor: wait;
+  opacity: .6;
+}
+
 .login-card .text-button {
   display: block;
   margin-top: 14px;
@@ -890,6 +939,17 @@ h2 {
   vertical-align: middle;
 }
 
+.pending-tag {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px dashed var(--muted);
+  color: var(--muted);
+  font-size: .68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
 .completion-list .select-student {
   display: flex;
   align-items: center;
@@ -961,4 +1021,107 @@ h2 {
 
 .file-button:focus-within {
   outline: 3px solid rgba(235, 119, 94, .4);
+}
+
+.idea-status {
+  padding: 4px 10px;
+  border: 1px solid var(--navy);
+  color: var(--navy);
+  font-size: .72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.idea-status.idea-approved {
+  border-color: transparent;
+  background: var(--lime);
+  color: var(--ink);
+}
+
+.idea-status.idea-rejected {
+  border-color: var(--coral);
+  color: var(--coral);
+}
+
+.idea-details dl {
+  display: grid;
+  grid-template-columns: minmax(120px, max-content) 1fr;
+  gap: 8px 18px;
+  margin: 0 0 12px;
+}
+
+.idea-details dt {
+  color: var(--muted);
+  font-size: .8rem;
+  font-weight: 800;
+}
+
+.idea-details dd {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.review-history {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.review-history li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: .86rem;
+}
+
+.review-history li p {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+}
+
+.idea-review {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--line);
+}
+
+.idea-review h3 {
+  margin: 0;
+}
+
+.decision-options {
+  display: flex;
+  gap: 18px;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+}
+
+.decision-options legend {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: .84rem;
+  font-weight: 800;
+}
+
+.decision-options label {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.batch-list summary {
+  margin: 12px 0;
+  color: var(--navy);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .idea-details dl {
+    grid-template-columns: 1fr;
+  }
 }

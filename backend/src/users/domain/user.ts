@@ -2,7 +2,8 @@ import type { Role, UserStatus } from "../../auth/domain/role";
 
 export interface User {
   id: string;
-  googleSub: string;
+  /** Null until a pre-registered student signs in for the first time. */
+  googleSub: string | null;
   email: string;
   name: string;
   avatarUrl: string | null;
@@ -22,13 +23,15 @@ export type UserAccessState = Pick<
 >;
 
 export interface NewUser {
-  googleSub: string;
+  /** Null for a student pre-registered from a faculty import. */
+  googleSub: string | null;
   email: string;
   name: string;
   avatarUrl: string | null;
   role: Role;
   batchYear: number | null;
-  lastLoginAt: Date;
+  /** Null for an account created ahead of its first sign-in, such as a demo account. */
+  lastLoginAt: Date | null;
 }
 
 /** Refreshed from the identity provider on every login. Never includes batchYear. */

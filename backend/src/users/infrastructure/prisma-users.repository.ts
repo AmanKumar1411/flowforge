@@ -104,8 +104,23 @@ export class PrismaUsersRepository extends UsersRepository {
     });
   }
 
-  findByEmails(emails: readonly string[]): Promise<User[]> {
-    return this.prisma.user.findMany({ where: { email: { in: [...emails] } } });
+  findByEmails(emails: readonly string[], tx?: Transaction): Promise<User[]> {
+    return this.prisma
+      .client(tx)
+      .user.findMany({ where: { email: { in: [...emails] } } });
+  }
+
+  async claim(
+    id: string,
+    googleSub: string,
+    tx: Transaction,
+  ): Promise<User | null> {
+    const client = this.prisma.client(tx);
+    const { count } = await client.user.updateMany({
+      where: { id, googleSub: null },
+      data: { googleSub },
+    });
+    return count === 1 ? client.user.findUnique({ where: { id } }) : null;
   }
 
   listActiveStudents(scope: StudentScope): Promise<User[]> {

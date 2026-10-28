@@ -27,10 +27,14 @@ export class CycleResponseDto {
   @ApiProperty({ description: "Students change their own teams until then" })
   teamFormationDeadline!: string;
   @ApiProperty({
-    description:
-      "The owning faculty complete teams until then; also the idea deadline",
+    description: "The owning faculty complete teams until then",
   })
   teamCompletionDeadline!: string;
+  @ApiProperty({
+    description:
+      "Teams submit their first idea until then; a rejected idea can be resubmitted until submissionStartAt",
+  })
+  ideaDeadline!: string;
   @ApiProperty({ enum: ["CORE", "ELECTIVE"] })
   kind!: Cycle["kind"];
   @ApiProperty({ enum: ["DRAFT", "PUBLISHED", "CLOSED"] })
@@ -60,6 +64,7 @@ export class CycleResponseDto {
     response.teamFormationDeadline = cycle.teamFormationDeadline.toISOString();
     response.teamCompletionDeadline =
       cycle.teamCompletionDeadline.toISOString();
+    response.ideaDeadline = cycle.ideaDeadline.toISOString();
     response.kind = cycle.kind;
     response.status = cycle.status;
     response.publishedAt = cycle.publishedAt?.toISOString() ?? null;

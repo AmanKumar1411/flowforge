@@ -96,6 +96,7 @@ export class TeamQueryService {
         lookingForTeam: teamId === undefined && seeking.has(user.id),
         note:
           teamId === undefined ? (seeking.get(user.id)?.note ?? null) : null,
+        signedIn: user.lastLoginAt !== null,
       };
     });
   }
@@ -129,6 +130,7 @@ export class TeamQueryService {
         availability: "AVAILABLE",
         lookingForTeam: true,
         note: seeking.get(user.id)?.note ?? null,
+        signedIn: user.lastLoginAt !== null,
       }));
   }
 

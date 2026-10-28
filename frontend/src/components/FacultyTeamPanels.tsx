@@ -22,7 +22,7 @@ import type {
   Team,
   UnassignedStudent,
 } from "../types";
-import { FormationNote } from "./TeamPanels";
+import { FormationNote, NotSignedInTag } from "./TeamPanels";
 
 /** The owning faculty's view of a cycle's teams, and their tools for students left without one. */
 export function FacultyTeamsSection({ cycle }: { cycle: Cycle }) {
@@ -54,7 +54,7 @@ export function FacultyTeamsSection({ cycle }: { cycle: Cycle }) {
             </h2>
           </div>
         </div>
-        <FormationNote cycle={cycle} open={isFormationOpen(cycle, now)} />
+        <FormationNote cycle={cycle} now={now} />
         {error && <p className="form-error">{error}</p>}
         {teams && teams.length === 0 && (
           <p className="muted">No team has been formed yet.</p>
@@ -141,7 +141,7 @@ function CompletionPanel({
   now: number;
   onChanged: () => void;
 }) {
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selection, setSelection] = useState<string[]>([]);
   const [name, setName] = useState("");
   const [leaderChoice, setLeaderChoice] = useState("");
   const [targets, setTargets] = useState<Record<string, string>>({});
@@ -150,6 +150,10 @@ function CompletionPanel({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const { open, unassigned, notSignedIn } = overview;
+  // Students placed some other way since they were ticked (Add, auto-group) drop out of the selection.
+  const selected = selection.filter((id) =>
+    unassigned.some((student) => student.id === id),
+  );
   const withRoom = teams.filter(
     (team) => team.members.length < cycle.maxTeamSize,
   );
@@ -177,7 +181,7 @@ function CompletionPanel({
   };
 
   const toggle = (id: string) =>
-    setSelected((current) =>
+    setSelection((current) =>
       current.includes(id)
         ? current.filter((other) => other !== id)
         : [...current, id],
@@ -191,7 +195,7 @@ function CompletionPanel({
         leaderId,
         memberIds: selected.filter((id) => id !== leaderId),
       });
-      setSelected([]);
+      setSelection([]);
       setName("");
       return `Created ${team.name}.`;
     });
@@ -332,6 +336,7 @@ function CompletionPanel({
                     {student.lookingForTeam && (
                       <span className="looking-tag">Looking</span>
                     )}
+                    {!student.signedIn && <NotSignedInTag />}
                   </strong>
                   <small>{student.note ?? student.email}</small>
                 </span>
@@ -403,7 +408,7 @@ function CompletionPanel({
             <button
               type="button"
               className="text-button"
-              onClick={() => setSelected([])}
+              onClick={() => setSelection([])}
             >
               Clear selection
             </button>
@@ -419,7 +424,8 @@ function CompletionPanel({
 
       {notSignedIn.length > 0 && (
         <p className="field-hint">
-          Enrolled but not signed in yet, so they cannot be placed:{" "}
+          Enrolled before student accounts were registered, so they cannot be
+          placed yet (enroll them again to register them):{" "}
           {notSignedIn.join(", ")}.
         </p>
       )}

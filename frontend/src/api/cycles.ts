@@ -1,4 +1,6 @@
 import type {
+  BatchImportResult,
+  BatchStudent,
   Cycle,
   CycleInput,
   EnrolledStudent,
@@ -55,5 +57,16 @@ export function removeEnrollment(cycleId: string, email: string) {
   return apiRequest<void>(
     `/course-cycles/${cycleId}/enrollments/${encodeURIComponent(email)}`,
     { method: "DELETE" },
+  );
+}
+
+export function listBatchStudents(cycleId: string) {
+  return apiRequest<BatchStudent[]>(`/course-cycles/${cycleId}/batch-students`);
+}
+
+export function importBatchStudents(cycleId: string, emails: string[]) {
+  return apiRequest<BatchImportResult>(
+    `/course-cycles/${cycleId}/batch-students`,
+    { method: "POST", body: JSON.stringify({ emails }) },
   );
 }

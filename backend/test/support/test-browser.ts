@@ -46,6 +46,10 @@ export class TestBrowser {
     return this.request<T>("PATCH", path, options);
   }
 
+  put<T = Record<string, unknown>>(path: string, options?: RequestOptions) {
+    return this.request<T>("PUT", path, options);
+  }
+
   delete<T = Record<string, unknown>>(path: string, options?: RequestOptions) {
     return this.request<T>("DELETE", path, options);
   }

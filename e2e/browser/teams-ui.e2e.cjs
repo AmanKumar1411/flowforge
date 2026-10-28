@@ -200,10 +200,11 @@ const teamPanel = (page) => page.locator(".team-panel");
 
     await check("Faculty sees every team of the cycle with its leader and members", async () => {
       await faculty.reload();
-      const row = faculty.locator(".team-panel tbody tr", { hasText: "Falcon" });
+      // The faculty's table of teams; the ideas table below it lists the same team names.
+      const row = faculty.locator('section[aria-labelledby="teams-heading"] tbody tr', { hasText: "Falcon" });
       await row.waitFor();
       const cells = await row.locator("td").allInnerTexts();
-      assert(JSON.stringify(cells) === JSON.stringify(["Falcon", "Isha", "Zoya", "2"]), `row ${JSON.stringify(cells)}`);
+      assert(JSON.stringify(cells) === JSON.stringify(["Falcon", "Isha", "Zoya", "2", "Students"]), `row ${JSON.stringify(cells)}`);
       return cells.join(" | ");
     }, faculty);
 

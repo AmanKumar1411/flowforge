@@ -39,5 +39,6 @@ import { TeamsController } from "./presentation/teams.controller";
     { provide: TeamCycles, useClass: CourseCycleTeamCycles },
     { provide: StudentDirectory, useClass: UsersStudentDirectory },
   ],
+  exports: [TeamQueryService],
 })
 export class TeamsModule {}

@@ -74,10 +74,14 @@ export class UsersService {
     return this.users.findByIds(ids, tx);
   }
 
-  findByEmails(emails: readonly string[]): Promise<User[]> {
+  findByEmails(emails: readonly string[], tx?: Transaction): Promise<User[]> {
     return emails.length > 0
-      ? this.users.findByEmails(emails)
+      ? this.users.findByEmails(emails, tx)
       : Promise.resolve([]);
+  }
+
+  claim(id: string, googleSub: string, tx: Transaction): Promise<User | null> {
+    return this.users.claim(id, googleSub, tx);
   }
 
   listActiveStudents(scope: StudentScope): Promise<User[]> {

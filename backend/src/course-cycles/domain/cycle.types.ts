@@ -24,8 +24,10 @@ export interface Cycle {
   maxTeamSize: number;
   /** Students change their own teams until this moment. */
   teamFormationDeadline: Date;
-  /** The owning faculty complete teams until this moment; it is also the idea deadline. */
+  /** The owning faculty complete teams until this moment. */
   teamCompletionDeadline: Date;
+  /** Teams submit their first idea until this moment; a rejected idea can be resubmitted until submissionStartAt. */
+  ideaDeadline: Date;
   kind: CourseKind;
   status: CycleStatus;
   createdByFacultyId: string;
@@ -48,6 +50,7 @@ export interface CycleCreateData {
   maxTeamSize: number;
   teamFormationDeadline: Date;
   teamCompletionDeadline: Date;
+  ideaDeadline: Date;
   kind: CourseKind;
   createdByFacultyId: string;
 }
@@ -61,10 +64,18 @@ export type CycleSchedule = Pick<
   | "maxTeamSize"
   | "teamFormationDeadline"
   | "teamCompletionDeadline"
+  | "ideaDeadline"
 >;
 
-/** The two deadlines that end a stage of team building. */
-export type TeamDeadline = "teamFormationDeadline" | "teamCompletionDeadline";
+/** The deadlines that each end a stage before submissions open, in order. */
+export type StageDeadline =
+  "teamFormationDeadline" | "teamCompletionDeadline" | "ideaDeadline";
+
+export const STAGE_DEADLINES: readonly StageDeadline[] = [
+  "teamFormationDeadline",
+  "teamCompletionDeadline",
+  "ideaDeadline",
+];
 
 export interface Enrollment {
   /** Normalized; the student may not have signed in yet. */
@@ -85,5 +96,6 @@ export interface CyclePatch {
   maxTeamSize?: number;
   teamFormationDeadline?: Date;
   teamCompletionDeadline?: Date;
+  ideaDeadline?: Date;
   kind?: CourseKind;
 }

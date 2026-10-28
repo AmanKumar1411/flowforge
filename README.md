@@ -15,8 +15,15 @@ Implemented so far:
   a team, becomes its leader and adds batch-mates found by name or email; they are members at
   once. Leaders can change members until the deadline, after which teams are fixed. The
   database guarantees one team per student per cycle.
+- **Phase 5:** team completion and electives. After the students' deadline the owning faculty
+  place everyone still without a team, by hand or by random auto-group with a preview. Students
+  can mark themselves "looking for a team". Electives have an enrollment list the faculty import.
+- **Phase 6:** project ideas. Each team's leader submits one idea by the idea deadline; the
+  owning faculty approve it or reject it with feedback, and a rejected idea can be resubmitted
+  until submissions open. Faculty can also register a core batch's students before they sign
+  in, so nobody is left out of teams.
 
-Project ideas (Phase 5, due at the same deadline), submissions and evaluations come later.
+Submissions and evaluations come later.
 
 ## Prerequisites
 
@@ -39,6 +46,7 @@ Project ideas (Phase 5, due at the same deadline), submissions and evaluations c
    - Put your staff email in `ADMIN_BOOTSTRAP_EMAILS` so the first login is an admin.
    - Fill in the Google variables (next section), or use dev login.
    - Run `npm ci`, `npm run prisma:generate` and `npm run prisma:migrate:deploy`.
+   - Optionally run `npm run seed:demo` to create the [demo accounts](#demo-accounts).
    - Start the API with `npm run start:dev`. It listens on `http://localhost:3000/api`; Swagger is
      at `http://localhost:3000/api/docs`.
 3. **Frontend** (`frontend/`)
@@ -89,6 +97,28 @@ is not `nst.rishihood.edu.in`.
 
 A student email can never become FACULTY or ADMIN. See [ADR 002](docs/decisions/002-roles-resolved-server-side.md).
 
+### Demo accounts
+
+For trying the app locally, `npm run seed:demo` (in `backend/`) creates these accounts in the
+database from `DATABASE_URL`. With `VITE_DEV_LOGIN=true`, the login page lists them and one click
+signs in; no Google account is needed. All emails end in `@nst.rishihood.edu.in`.
+
+| Account | Email | Role |
+| --- | --- | --- |
+| Demo Admin | `admin.demo@` | `ADMIN` |
+| Coordinator X, Coordinator Y | `coordinator.x@`, `coordinator.y@` | `ADMIN` (coordinators are admins; there is no separate role) |
+| Anita Sharma, Rohit Verma | `anita.sharma@`, `rohit.verma@` | `FACULTY`, added to the faculty allowlist |
+| Aarav Shah, Diya Kapoor | `aarav.s23csai@`, `diya.k23csai@` | `STUDENT`, batch 2023 |
+| Ishaan Mehta, Kavya Reddy | `ishaan.m24csai@`, `kavya.r24csai@` | `STUDENT`, batch 2024 |
+| Arjun Patel, Sana Qureshi | `arjun.p25csai@`, `sana.q25csai@` | `STUDENT`, batch 2025 |
+| Vivaan Gupta, Zoya Ahmed | `vivaan.g26csai@`, `zoya.a26csai@` | `STUDENT`, batch 2026 |
+
+Students exist before they first sign in, so they already appear in team search. Running the
+command again changes nothing, except that a demo admin or faculty member who lost that role gets
+it back. It skips deactivated accounts and says so. Like dev login, it refuses to run in production
+or with `AUTH_DEV_LOGIN_ENABLED=false`. The list is in
+[demo-accounts.ts](backend/src/auth/application/demo-accounts.ts).
+
 ## Environment variables
 
 `backend/.env` (all documented in `backend/.env.example`):
@@ -120,6 +150,7 @@ In `backend/`:
 | Command | What it does |
 | --- | --- |
 | `npm run build` / `npm run lint` / `npm run typecheck` | Compile, lint, type-check including `test/` |
+| `npm run seed:demo` | Create the [demo accounts](#demo-accounts); safe to run again |
 | `npm test` | Jest unit tests (domain rules, sessions, config, Google token verification) |
 | `npm run test:integration` | `node:test` against real PostgreSQL `flowforge_test`: Google flow (Google faked at its network boundary), faculty access, sessions, admin, RBAC matrix, boot checks, Phase 2 scenario, teams (including races and database constraints) |
 
@@ -130,9 +161,9 @@ Node 22, which is why integration tests use Node's built-in runner.
 
 In `frontend/`: `npm run build` and `npm run lint`.
 
-Browser end-to-end checks of the sign-in flows and the team screens live in
+Browser end-to-end checks of the sign-in flows, the team screens, team completion and ideas live in
 [e2e/browser](e2e/browser/README.md). The latest results are in the
-[Phase 4 test report](docs/testing/phase4-test-report.md).
+[Phase 6 test report](docs/testing/phase6-test-report.md).
 
 ## API
 
@@ -144,6 +175,7 @@ All routes use the `/api` prefix and every error is `{ code, message }`. Interac
 | GET | `/auth/google` | public, redirects to Google |
 | GET | `/auth/google/callback` | public, Google redirects here |
 | POST | `/auth/dev-login` | public, development only, Origin checked |
+| GET | `/auth/dev-login/accounts` | public, development only: the demo accounts |
 | POST | `/auth/refresh` | refresh cookie and Origin; returns `{ accessToken }` |
 | POST | `/auth/logout` | refresh cookie and Origin |
 | POST | `/auth/logout-all` | any signed-in user |
@@ -167,9 +199,25 @@ All routes use the `/api` prefix and every error is `{ code, message }`. Interac
 | GET | `/teams/mine` | STUDENT |
 | GET | `/teams/:id` | Members, FACULTY owner, ADMIN (404 otherwise) |
 | PATCH, DELETE | `/teams/:id` | Team leader, while formation is open |
+| GET, PUT, DELETE | `/course-cycles/:id/looking-for-team` | STUDENT of the cycle, while formation is open: GET lists who is looking; PUT and DELETE set your own flag |
+| GET, POST | `/course-cycles/:id/enrollments` | FACULTY owner of an elective (POST takes `{ emails }`) |
+| DELETE | `/course-cycles/:id/enrollments/:email` | FACULTY owner of an elective, unless the student is in a team |
+| GET | `/course-cycles/:id/team-completion` | FACULTY owner, ADMIN (read-only): students without a team |
+| POST | `/course-cycles/:id/team-completion/teams` | FACULTY owner, between the two team deadlines |
+| POST | `/course-cycles/:id/team-completion/auto-group/preview`, `/auto-group` | FACULTY owner, between the two team deadlines |
+| POST | `/teams/:id/members` | FACULTY owner, between the two team deadlines |
+| GET, POST | `/course-cycles/:id/batch-students` | FACULTY owner of a core cycle: the batch list; POST `{ emails }` registers students who have not signed in |
+| GET | `/teams/:id/idea` | Team members, FACULTY owner, ADMIN |
+| PUT | `/teams/:id/idea` | Team leader: submit or edit before the idea deadline; resubmit a rejected idea before submissions open |
+| POST | `/teams/:id/idea/review` | FACULTY owner: `{ version, decision, feedback }` (feedback required to reject) |
+| GET | `/course-cycles/:id/ideas` | FACULTY owner, ADMIN: every team with its idea |
 
-Cycles accept `minTeamSize`, `maxTeamSize` (defaults 1 and 4, at most 10) and
-`teamFormationDeadline` (defaults to `submissionStartAt`). The rules are in
+Cycles accept `minTeamSize`, `maxTeamSize` (defaults 1 and 4, at most 10),
+`teamFormationDeadline` (students; defaults to `submissionStartAt`), `teamCompletionDeadline`
+(faculty; defaults to the formation deadline, which means no faculty window), `ideaDeadline`
+(defaults to the completion deadline) and `kind` (`CORE` for the whole batch, `ELECTIVE` for
+enrolled students only). The three deadlines come in that order, no later than
+`submissionStartAt`. The rules are in
 [teams.md](docs/architecture/teams.md).
 
 ## Future work: faculty CSV import
@@ -190,10 +238,14 @@ reads the allowlist through `FacultyDirectory`, so `SignInService` and `RoleReso
   [test report](docs/testing/phase3-test-report.md)
 - [Phase 4 baseline analysis](docs/analysis/phase4-teams-baseline.md) and
   [test report](docs/testing/phase4-test-report.md)
+- [Phase 5 test report](docs/testing/phase5-test-report.md) (team completion, electives, demo
+  accounts)
+- [Phase 6 test report](docs/testing/phase6-test-report.md) (ideas, pre-registered students)
 - [Architecture: foundation](docs/architecture/foundation.md),
   [course cycles](docs/architecture/course-cycles.md),
   [authentication and RBAC](docs/architecture/auth-and-rbac.md),
-  [teams](docs/architecture/teams.md)
+  [teams](docs/architecture/teams.md),
+  [ideas and pre-registered students](docs/architecture/ideas.md)
 - Decisions: [001 Google Sign-In](docs/decisions/001-google-sign-in-domain-restricted.md),
   [002 server-side roles](docs/decisions/002-roles-resolved-server-side.md),
   [003 Google sub](docs/decisions/003-identify-users-by-google-sub.md),
@@ -202,4 +254,8 @@ reads the allowlist through `FacultyDirectory`, so `SignInService` and `RoleReso
   [006 dev identity provider](docs/decisions/006-dev-identity-provider.md),
   [007 leader forms the team](docs/decisions/007-leader-forms-team-without-invitations.md),
   [008 one team per student in the database](docs/decisions/008-one-team-per-student-enforced-by-database.md),
-  [009 team rules and formation deadline](docs/decisions/009-team-rules-and-formation-deadline.md)
+  [009 team rules and formation deadline](docs/decisions/009-team-rules-and-formation-deadline.md),
+  [010 elective rosters](docs/decisions/010-elective-rosters-and-removal-checks.md),
+  [011 faculty team completion and auto-group](docs/decisions/011-faculty-team-completion-and-auto-group.md),
+  [012 pre-registered students](docs/decisions/012-pre-registered-students.md),
+  [013 project ideas](docs/decisions/013-project-ideas.md)
