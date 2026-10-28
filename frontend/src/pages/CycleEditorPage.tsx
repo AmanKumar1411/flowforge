@@ -160,13 +160,18 @@ export function CycleEditorPage() {
     setBusy(true);
     setError("");
     try {
+      // Without a placing window the API is told so with null, not with a repeated date.
+      const withWindow = <T extends Partial<CycleInput>>(fields: T) =>
+        placing || fields.teamCompletionDeadline === undefined
+          ? toPayload(fields)
+          : { ...toPayload(fields), teamCompletionDeadline: null };
       const saved =
         cycle && loadedForm
           ? await updateCycle(
               cycle.id,
-              toPayload(changedFields(loadedForm, form)),
+              withWindow(changedFields(loadedForm, form)),
             )
-          : await createCycle(toPayload(form));
+          : await createCycle(withWindow(form));
       navigate(`/faculty/cycles/${saved.id}`);
     } catch (caught) {
       setError(readableError(caught));

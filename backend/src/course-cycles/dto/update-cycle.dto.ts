@@ -98,17 +98,19 @@ export class UpdateCycleDto {
 
   @ApiPropertyOptional({
     example: "2026-10-25T17:00:00.000Z",
+    type: String,
+    nullable: true,
     description:
-      "The owning faculty complete teams until then. Defaults to teamFormationDeadline (no completion window). Must be by submissionStartAt.",
+      "The owning faculty place students without a team until then; it must come after teamFormationDeadline. Null switches the faculty window off. On a published cycle, editable only while the window is open, and only to a future time.",
   })
   @IsOptional()
   @IsISO8601()
-  teamCompletionDeadline?: string;
+  teamCompletionDeadline?: string | null;
 
   @ApiPropertyOptional({
     example: "2026-10-28T17:00:00.000Z",
     description:
-      "Teams submit their first idea until then; a rejected idea can be resubmitted until submissionStartAt. Defaults to teamCompletionDeadline. Must be between it and submissionStartAt.",
+      "Teams pick or propose their first idea until then; after a rejection they revise until the cycle closes. Defaults to teamCompletionDeadline. Must be between it and submissionStartAt.",
   })
   @IsOptional()
   @IsISO8601()

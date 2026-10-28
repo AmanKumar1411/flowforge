@@ -67,6 +67,11 @@ export interface CycleInput {
   kind: CourseKind;
 }
 
+/** What the API takes: a null placing deadline means no faculty window. */
+export type CyclePayload = Omit<CycleInput, "teamCompletionDeadline"> & {
+  teamCompletionDeadline: string | null;
+};
+
 export interface TeamMember {
   userId: string;
   name: string;

@@ -2,7 +2,7 @@ import type {
   BatchImportResult,
   BatchStudent,
   Cycle,
-  CycleInput,
+  CyclePayload,
   EnrolledStudent,
   EnrollmentResult,
 } from "../types";
@@ -20,14 +20,14 @@ export function getCycle(id: string) {
   return apiRequest<Cycle>(`/course-cycles/${id}`);
 }
 
-export function createCycle(input: CycleInput) {
+export function createCycle(input: CyclePayload) {
   return apiRequest<Cycle>("/course-cycles", {
     method: "POST",
     body: JSON.stringify(input),
   });
 }
 
-export function updateCycle(id: string, input: Partial<CycleInput>) {
+export function updateCycle(id: string, input: Partial<CyclePayload>) {
   return apiRequest<Cycle>(`/course-cycles/${id}`, {
     method: "PATCH",
     body: JSON.stringify(input),

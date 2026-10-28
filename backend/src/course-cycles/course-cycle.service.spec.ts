@@ -233,6 +233,52 @@ describe("CourseCycleService", () => {
     });
   });
 
+  it("gives a faculty window length, or none at all", async () => {
+    const base = {
+      ...createDto(),
+      submissionStartAt: "2026-11-10T09:00:00.000Z",
+      teamFormationDeadline: "2026-11-01T09:00:00.000Z",
+    };
+    const codeOf = (work: Promise<unknown>) =>
+      work.then(
+        () => undefined,
+        (error: CycleDomainError) => error.code,
+      );
+    // A window named in the request must end after the students' deadline.
+    expect(
+      await codeOf(
+        service.create(owner, {
+          ...base,
+          teamCompletionDeadline: base.teamFormationDeadline,
+        }),
+      ),
+    ).toBe("INVALID_TEAM_COMPLETION_DEADLINE");
+    // Null, like leaving it out, means no window: stored equal to the students' deadline.
+    const none = await service.create(owner, {
+      ...base,
+      teamCompletionDeadline: null,
+    });
+    expect(none.teamCompletionDeadline).toBe(base.teamFormationDeadline);
+
+    const withWindow = await service.update(owner, none.id, {
+      teamCompletionDeadline: "2026-11-03T09:00:00.000Z",
+    });
+    expect(withWindow.teamCompletionDeadline).toBe("2026-11-03T09:00:00.000Z");
+    // Moving the students' deadline onto the window's end would leave it empty.
+    expect(
+      await codeOf(
+        service.update(owner, none.id, {
+          teamFormationDeadline: "2026-11-03T09:00:00.000Z",
+        }),
+      ),
+    ).toBe("INVALID_TEAM_COMPLETION_DEADLINE");
+    // Null switches the window off again.
+    const off = await service.update(owner, none.id, {
+      teamCompletionDeadline: null,
+    });
+    expect(off.teamCompletionDeadline).toBe(base.teamFormationDeadline);
+  });
+
   it("validates team rules on create and on every edit", async () => {
     await expect(
       service.create(owner, { ...createDto(), minTeamSize: 5 }),

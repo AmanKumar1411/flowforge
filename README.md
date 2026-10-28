@@ -226,7 +226,8 @@ All routes use the `/api` prefix and every error is `{ code, message }`. Interac
 
 Cycles accept `minTeamSize`, `maxTeamSize` (defaults 1 and 4, at most 10),
 `teamFormationDeadline` (students; defaults to `submissionStartAt`), `teamCompletionDeadline`
-(faculty; defaults to the formation deadline, which means no faculty window), `ideaDeadline`
+(faculty; when given it must come after the formation deadline, and `null` or leaving it out
+means no faculty window), `ideaDeadline`
 (defaults to the completion deadline) and `kind` (`CORE` for the whole batch, `ELECTIVE` for
 enrolled students only). The three deadlines come in that order, no later than
 `submissionStartAt`. The rules are in
