@@ -21,7 +21,7 @@ Five scripts drive the real React app in headless Chrome against the real API:
   - auto-group preview, re-roll and confirmation, and the auto-grouped student seeing their team.
   It waits 45 seconds for a formation deadline to pass.
 - `ideas-ui.e2e.cjs` (Phase 6) runs 9 checks:
-  - the idea deadline in the cycle editor, with later dates following an earlier one;
+  - the step-by-step schedule in the cycle editor, which flags a date out of order before saving;
   - registering a core batch's students who have not signed in, and a leader adding one
     (tagged "Not signed in yet") who then finds the team at their first sign-in;
   - the leader submitting and editing the idea, the faculty rejecting it with feedback, the

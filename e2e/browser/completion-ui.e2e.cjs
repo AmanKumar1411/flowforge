@@ -62,14 +62,17 @@ const teamsTable = (page) => page.locator('section[aria-labelledby="teams-headin
       await faculty.getByLabel("Course type").selectOption("ELECTIVE");
       await faculty.getByLabel("Batch year").fill("2024");
       await faculty.getByLabel("Academic year").fill("2026-27");
-      await faculty.getByLabel("Submission opens").fill(localInput(minuteFromNow(3 * 24 * 60)));
-      await faculty.getByLabel("Submission deadline").fill(localInput(minuteFromNow(30 * 24 * 60)));
       await faculty.getByLabel("Minimum team size").fill("2");
       await faculty.getByLabel("Maximum team size").fill("3");
       const formation = minuteFromNow(24 * 60);
       const completion = minuteFromNow(2 * 24 * 60);
-      await faculty.getByLabel("Team formation deadline").fill(localInput(formation));
-      await faculty.getByLabel("Team completion deadline").fill(localInput(completion));
+      await faculty.getByLabel("Students form teams until").fill(localInput(formation));
+      // The faculty's own window appears only when they ask for it.
+      await faculty.getByLabel("Give me time after that").check();
+      await faculty.getByLabel("You place students without a team until").fill(localInput(completion));
+      await faculty.getByLabel("Ideas due by").fill(localInput(completion));
+      await faculty.getByLabel("Submissions open").fill(localInput(minuteFromNow(3 * 24 * 60)));
+      await faculty.getByLabel("Final submission deadline").fill(localInput(minuteFromNow(30 * 24 * 60)));
       await faculty.getByRole("button", { name: "Create draft" }).click();
       await faculty.waitForURL(/\/faculty\/cycles\/[0-9a-f-]{36}$/);
       electiveId = faculty.url().split("/").pop();

@@ -35,25 +35,26 @@ const REGISTERED = [`yash.b27csai${DOMAIN}`, `ira.d27csai${DOMAIN}`];
     const title = `Ideas ${Date.now()}`;
     let cycleId = "";
 
-    await run.check("Faculty sets an idea deadline in the editor; later stages follow an earlier one", async () => {
+    await run.check("Faculty set the schedule step by step; a date out of order is explained before saving", async () => {
       await faculty.getByRole("button", { name: "+ New cycle" }).click();
       await faculty.getByLabel("Course name").fill("Product Studio");
       await faculty.getByLabel("Cycle title").fill(title);
       await faculty.getByLabel("Batch year").fill("2027");
       await faculty.getByLabel("Academic year").fill("2026-27");
-      await faculty.getByLabel("Submission opens").fill(localInput(minuteFromNow(3 * 24 * 60)));
-      await faculty.getByLabel("Submission deadline").fill(localInput(minuteFromNow(30 * 24 * 60)));
       await faculty.getByLabel("Minimum team size").fill("1");
       await faculty.getByLabel("Maximum team size").fill("3");
       const formation = minuteFromNow(24 * 60);
       const ideas = minuteFromNow(2 * 24 * 60);
-      // Only the formation and idea deadlines are set: completion follows formation (no faculty window).
-      await faculty.getByLabel("Team formation deadline").fill(localInput(formation));
-      assert(
-        (await faculty.getByLabel("Idea deadline").inputValue()) === localInput(formation),
-        "the idea deadline did not follow the formation deadline",
-      );
-      await faculty.getByLabel("Idea deadline").fill(localInput(ideas));
+      // No faculty window: the completion deadline stays with the formation deadline.
+      await faculty.getByLabel("Students form teams until").fill(localInput(formation));
+      // Submissions opening before the default idea deadline (two weeks out) is flagged at once.
+      await faculty.getByLabel("Submissions open").fill(localInput(minuteFromNow(3 * 24 * 60)));
+      await faculty.getByText(/Must be on or after the idea deadline/).waitFor();
+      assert(await faculty.getByRole("button", { name: "Create draft" }).isDisabled(), "create is enabled with a date out of order");
+      await faculty.getByLabel("Ideas due by").fill(localInput(ideas));
+      assert(await faculty.getByText(/Must be on or after/).count() === 0, "the problem did not clear");
+      await faculty.getByLabel("Final submission deadline").fill(localInput(minuteFromNow(30 * 24 * 60)));
+      await faculty.getByText(/Students form teams until .*, and teams get \d+ days to submit their work/).waitFor();
       await faculty.getByRole("button", { name: "Create draft" }).click();
       await faculty.waitForURL(/\/faculty\/cycles\/[0-9a-f-]{36}$/);
       cycleId = faculty.url().split("/").pop();

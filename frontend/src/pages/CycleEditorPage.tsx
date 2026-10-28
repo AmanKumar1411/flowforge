@@ -3,6 +3,13 @@ import { useNavigate, useParams } from "react-router";
 import { createCycle, getCycle, updateCycle } from "../api/cycles";
 import { isoDate, localDateInput } from "../dates";
 import { readableError } from "../errors";
+import {
+  defaultSchedule,
+  scheduleProblems,
+  scheduleSummary,
+  twoDaysAfter,
+  type ScheduleField,
+} from "../schedule";
 import type { Cycle, CycleInput } from "../types";
 
 const NUMBER_FIELDS: (keyof CycleInput)[] = [
@@ -63,23 +70,21 @@ export function CycleEditorPage() {
   });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Whether the faculty keep time after the students' deadline to place students without a team.
+  const [placing, setPlacing] = useState(false);
   const year = new Date().getFullYear();
-  const [form, setForm] = useState<CycleInput>({
+  const [form, setForm] = useState<CycleInput>(() => ({
     courseName: "",
     title: "",
     description: "",
     batchYear: year,
     semester: 1,
     academicYear: `${year}-${String((year + 1) % 100).padStart(2, "0")}`,
-    submissionStartAt: localDateInput(),
-    submissionDeadline: localDateInput(),
     minTeamSize: 1,
     maxTeamSize: 4,
-    teamFormationDeadline: localDateInput(),
-    teamCompletionDeadline: localDateInput(),
-    ideaDeadline: localDateInput(),
     kind: "CORE",
-  });
+    ...defaultSchedule(),
+  }));
   useEffect(() => {
     if (cycleId)
       getCycle(cycleId)
@@ -112,6 +117,9 @@ export function CycleEditorPage() {
             completion: passed(loaded.teamCompletionDeadline),
             idea: passed(loaded.ideaDeadline),
           });
+          setPlacing(
+            loaded.teamCompletionDeadline !== loaded.teamFormationDeadline,
+          );
           setForm(loadedValues);
         })
         .catch((caught) => setError(readableError(caught)));
@@ -135,6 +143,18 @@ export function CycleEditorPage() {
       }
       return next;
     });
+  // Switching the placing window off makes it end with the students' deadline again.
+  const togglePlacing = (on: boolean) => {
+    setPlacing(on);
+    setForm((current) => ({
+      ...current,
+      teamCompletionDeadline: on
+        ? twoDaysAfter(current.teamFormationDeadline)
+        : current.teamFormationDeadline,
+    }));
+  };
+  const problems = scheduleProblems(form, placing);
+  const scheduleOk = Object.keys(problems).length === 0;
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
@@ -247,104 +267,137 @@ export function CycleEditorPage() {
               required
             />
           </label>
-          <label>
-            Submission opens
-            <input
-              type="datetime-local"
-              value={form.submissionStartAt}
-              onChange={(event) =>
-                setField("submissionStartAt", event.target.value)
-              }
-              disabled={published}
-              required
-            />
-          </label>
-          <label>
-            Submission deadline
-            <input
-              type="datetime-local"
-              value={form.submissionDeadline}
-              onChange={(event) =>
-                setField("submissionDeadline", event.target.value)
-              }
-              required
-            />
-          </label>
         </div>
         <fieldset className="form-section">
-          <legend>Teams and ideas</legend>
+          <legend>Schedule</legend>
           <p className="field-hint">
-            Students form teams of this size, leader included, until the
-            formation deadline. Between that and the completion deadline you
-            place anyone still without a team, by hand or by auto-grouping (use
-            the same date for both to skip that step). Each team's leader then
-            submits a project idea by the idea deadline; a rejected idea can be
-            resubmitted until submissions open. All three dates must be no
-            later than submissions open. Sizes cannot change once the cycle is
-            published.
+            The project runs in three steps, one after another. Students see
+            these dates on the cycle page.
           </p>
-          <div className="form-grid">
-            <label>
-              Minimum team size
-              <input
-                type="number"
-                value={form.minTeamSize}
-                onChange={(event) => setField("minTeamSize", event.target.value)}
-                disabled={published}
-                min={1}
-                max={10}
-                required
-              />
-            </label>
-            <label>
-              Maximum team size
-              <input
-                type="number"
-                value={form.maxTeamSize}
-                onChange={(event) => setField("maxTeamSize", event.target.value)}
-                disabled={published}
-                min={1}
-                max={10}
-                required
-              />
-            </label>
-            <label>
-              Team formation deadline (students)
-              <input
-                type="datetime-local"
-                value={form.teamFormationDeadline}
-                onChange={(event) =>
-                  setField("teamFormationDeadline", event.target.value)
-                }
-                disabled={ended.formation}
-                required
-              />
-            </label>
-            <label>
-              Team completion deadline (faculty)
-              <input
-                type="datetime-local"
-                value={form.teamCompletionDeadline}
-                onChange={(event) =>
-                  setField("teamCompletionDeadline", event.target.value)
-                }
-                disabled={ended.completion}
-                required
-              />
-            </label>
-            <label>
-              Idea deadline (teams)
-              <input
-                type="datetime-local"
-                value={form.ideaDeadline}
-                onChange={(event) =>
-                  setField("ideaDeadline", event.target.value)
-                }
-                disabled={ended.idea}
-                required
-              />
-            </label>
-          </div>
+          <ol className="schedule-steps">
+            <li>
+              <h3>Teams</h3>
+              <p className="field-hint">
+                Students create their own teams and add batch-mates. After the
+                date below, teams are fixed for students. Team sizes include the
+                leader and cannot change once the cycle is published.
+              </p>
+              <div className="form-grid">
+                <label>
+                  Minimum team size
+                  <input
+                    type="number"
+                    value={form.minTeamSize}
+                    onChange={(event) =>
+                      setField("minTeamSize", event.target.value)
+                    }
+                    disabled={published}
+                    min={1}
+                    max={10}
+                    required
+                  />
+                </label>
+                <label>
+                  Maximum team size
+                  <input
+                    type="number"
+                    value={form.maxTeamSize}
+                    onChange={(event) =>
+                      setField("maxTeamSize", event.target.value)
+                    }
+                    disabled={published}
+                    min={1}
+                    max={10}
+                    required
+                  />
+                </label>
+                <DateField
+                  field="teamFormationDeadline"
+                  label="Students form teams until"
+                  value={form.teamFormationDeadline}
+                  onChange={setField}
+                  disabled={ended.formation}
+                  note={ended.formation ? "This step has ended." : undefined}
+                  problem={problems.teamFormationDeadline}
+                />
+              </div>
+              <label className="check-row">
+                <input
+                  type="checkbox"
+                  checked={placing}
+                  onChange={(event) => togglePlacing(event.target.checked)}
+                  disabled={ended.formation || ended.completion}
+                />
+                Give me time after that to place students who are still
+                without a team (by hand or by auto-grouping)
+              </label>
+              {placing && (
+                <div className="form-grid">
+                  <DateField
+                    field="teamCompletionDeadline"
+                    label="You place students without a team until"
+                    value={form.teamCompletionDeadline}
+                    onChange={setField}
+                    disabled={ended.completion}
+                    note={ended.completion ? "This step has ended." : undefined}
+                    problem={problems.teamCompletionDeadline}
+                  />
+                </div>
+              )}
+            </li>
+            <li>
+              <h3>Project ideas</h3>
+              <p className="field-hint">
+                Each team picks one of the ideas you list on the cycle page, or
+                proposes its own for you to review. If you reject an idea, the
+                team can revise it until the cycle closes.
+              </p>
+              <div className="form-grid">
+                <DateField
+                  field="ideaDeadline"
+                  label="Ideas due by"
+                  value={form.ideaDeadline}
+                  onChange={setField}
+                  disabled={ended.idea}
+                  note={ended.idea ? "This step has ended." : undefined}
+                  problem={problems.ideaDeadline}
+                />
+              </div>
+            </li>
+            <li>
+              <h3>Project work</h3>
+              <p className="field-hint">
+                Teams with an approved idea submit links to their work, as
+                often as they like. The last version before the final deadline
+                counts.
+              </p>
+              <div className="form-grid">
+                <DateField
+                  field="submissionStartAt"
+                  label="Submissions open"
+                  value={form.submissionStartAt}
+                  onChange={setField}
+                  disabled={published}
+                  note={
+                    published ? "Fixed once the cycle is published." : undefined
+                  }
+                  problem={problems.submissionStartAt}
+                />
+                <DateField
+                  field="submissionDeadline"
+                  label="Final submission deadline"
+                  value={form.submissionDeadline}
+                  onChange={setField}
+                  problem={problems.submissionDeadline}
+                />
+              </div>
+            </li>
+          </ol>
+          {scheduleOk && (
+            <p className="schedule-summary" role="status">
+              {scheduleSummary(form, placing)}
+            </p>
+          )}
         </fieldset>
         {error && <p className="form-error">{error}</p>}
         <div className="form-actions">
@@ -355,11 +408,62 @@ export function CycleEditorPage() {
           >
             Cancel
           </button>
-          <button className="primary-button" disabled={busy}>
+          <button className="primary-button" disabled={busy || !scheduleOk}>
             {busy ? "Saving…" : cycle ? "Save changes" : "Create draft"}
           </button>
         </div>
+        {!scheduleOk && (
+          <p className="field-hint form-actions-note">
+            Fix the dates marked in the schedule to continue.
+          </p>
+        )}
       </form>
     </section>
+  );
+}
+
+/** A date with its problem (or a note) below it, outside the label so its name stays short. */
+function DateField({
+  field,
+  label,
+  value,
+  onChange,
+  disabled = false,
+  note,
+  problem,
+}: {
+  field: ScheduleField;
+  label: string;
+  value: string;
+  onChange: (field: ScheduleField, value: string) => void;
+  disabled?: boolean;
+  note?: string;
+  problem?: string;
+}) {
+  const hintId = `${field}-hint`;
+  const hint = problem ?? note;
+  return (
+    <div className="date-field">
+      <label>
+        {label}
+        <input
+          type="datetime-local"
+          value={value}
+          onChange={(event) => onChange(field, event.target.value)}
+          disabled={disabled}
+          aria-invalid={problem ? true : undefined}
+          aria-describedby={hint ? hintId : undefined}
+          required
+        />
+      </label>
+      {hint && (
+        <span
+          id={hintId}
+          className={problem ? "field-problem" : "field-hint"}
+        >
+          {hint}
+        </span>
+      )}
+    </div>
   );
 }
