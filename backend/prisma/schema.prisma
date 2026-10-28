@@ -65,6 +65,11 @@ enum AuditAction {
   IDEA_UPDATED
   IDEA_APPROVED
   IDEA_REJECTED
+  CATALOG_IDEA_ADDED
+  CATALOG_IDEA_UPDATED
+  CATALOG_IDEA_REMOVED
+  IDEA_PICKED
+  SUBMISSION_CREATED
 }
 
 model User {
@@ -95,6 +100,8 @@ model User {
   teamSeeking            TeamSeeker[]
   submittedIdeas         ProjectIdea[]           @relation("IdeaSubmitter")
   ideaReviews            IdeaReview[]            @relation("IdeaReviewer")
+  catalogIdeas           CatalogIdea[]           @relation("CatalogIdeaAuthor")
+  submissions            Submission[]            @relation("SubmissionAuthor")
 
   @@index([role])
   @@index([batchYear])
@@ -203,6 +210,7 @@ model CourseProjectCycle {
   teams                  Team[]
   enrollments            CycleEnrollment[]
   teamSeekers            TeamSeeker[]
+  catalogIdeas           CatalogIdea[]
 
   @@index([createdByFacultyId, createdAt])
   @@index([batchYear, status, publishedAt])
@@ -231,18 +239,19 @@ enum TeamOrigin {
 }
 
 model Team {
-  id        String             @id @default(uuid())
-  cycleId   String
-  cycle     CourseProjectCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict)
-  name      String
+  id          String             @id @default(uuid())
+  cycleId     String
+  cycle       CourseProjectCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict)
+  name        String
   // The student who created the team, or the one the faculty chose. Never transferred.
-  leaderId  String
-  leader    User               @relation("TeamLeader", fields: [leaderId], references: [id], onDelete: Restrict)
-  origin    TeamOrigin         @default(STUDENT)
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
-  members   TeamMember[]
-  idea      ProjectIdea?
+  leaderId    String
+  leader      User               @relation("TeamLeader", fields: [leaderId], references: [id], onDelete: Restrict)
+  origin      TeamOrigin         @default(STUDENT)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  members     TeamMember[]
+  idea        ProjectIdea?
+  submissions Submission[]
 
   // Target of TeamMember's composite foreign key, which keeps every member row in its team's cycle.
   @@unique([id, cycleId])
@@ -293,6 +302,32 @@ enum IdeaDecision {
   REJECTED
 }
 
+// PROPOSAL: the team's own idea, reviewed by the faculty. CATALOG: picked from the faculty's list.
+enum IdeaSource {
+  PROPOSAL
+  CATALOG
+}
+
+// An idea the cycle's faculty offer; any number of teams can pick it (ADR 014).
+model CatalogIdea {
+  id          String             @id @default(uuid())
+  cycleId     String
+  cycle       CourseProjectCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict)
+  title       String
+  description String
+  link        String?
+  createdById String
+  createdBy   User               @relation("CatalogIdeaAuthor", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  // Teams that picked it keep a copy of its content; a picked idea cannot be removed.
+  picks       ProjectIdea[]
+
+  // Target of ProjectIdea's composite foreign key: a team picks only from its own cycle's list.
+  @@unique([id, cycleId])
+  @@index([cycleId, createdAt])
+}
+
 // A team's current project idea: one per team, submitted by its leader, reviewed by the owning faculty.
 model ProjectIdea {
   id            String       @id @default(uuid())
@@ -302,11 +337,17 @@ model ProjectIdea {
   // Goes with the team, which can only be disbanded while students still form teams.
   team          Team         @relation(fields: [teamId, cycleId], references: [id, cycleId], onDelete: Cascade)
   title         String
+  // For a pick: the catalog idea's description.
   problem       String
-  solution      String
+  // Null only for a pick (a CHECK in the migration).
+  solution      String?
   link          String?
   status        IdeaStatus   @default(SUBMITTED)
-  // 1 for the first submission, one more for each resubmission after a rejection.
+  // A pick is approved at once; CHECKs tie source, catalogIdeaId and status together.
+  source        IdeaSource   @default(PROPOSAL)
+  catalogIdeaId String?
+  catalogIdea   CatalogIdea? @relation(fields: [catalogIdeaId, cycleId], references: [id, cycleId], onDelete: Restrict)
+  // 1 for the first version, one more for every change of content.
   // The migration adds a CHECK: version >= 1.
   version       Int          @default(1)
   submittedById String
@@ -319,6 +360,7 @@ model ProjectIdea {
   // One idea per team (the team id alone decides the cycle).
   @@unique([teamId, cycleId])
   @@index([cycleId, status])
+  @@index([catalogIdeaId])
 }
 
 // One faculty decision on one version of an idea; the history stays when the team resubmits.
@@ -335,4 +377,27 @@ model IdeaReview {
   createdAt  DateTime     @default(now())
 
   @@unique([ideaId, version])
+}
+
+// Submissions
+
+// One version of a team's work. Every save adds a version; the latest is the current one (ADR 015).
+model Submission {
+  id            String   @id @default(uuid())
+  teamId        String
+  // Copied from the team; the composite foreign key keeps it equal to the team's cycle.
+  cycleId       String
+  team          Team     @relation(fields: [teamId, cycleId], references: [id, cycleId], onDelete: Restrict)
+  // 1, 2, 3… per team. The migration adds a CHECK: version >= 1.
+  version       Int
+  repositoryUrl String
+  demoUrl       String?
+  reportUrl     String?
+  notes         String?
+  submittedById String
+  submittedBy   User     @relation("SubmissionAuthor", fields: [submittedById], references: [id], onDelete: Restrict)
+  submittedAt   DateTime
+
+  @@unique([teamId, version])
+  @@index([cycleId, submittedAt])
 }

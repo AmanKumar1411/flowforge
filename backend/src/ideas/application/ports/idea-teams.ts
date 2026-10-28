@@ -8,6 +8,11 @@ export abstract class IdeaTeams {
     actor: TeamActor,
     teamId: string,
   ): Promise<{ team: IdeaTeam; cycle: IdeaCycle }>;
+  /** A cycle the actor may see; CYCLE_NOT_FOUND otherwise. */
+  abstract getVisibleCycle(
+    actor: TeamActor,
+    cycleId: string,
+  ): Promise<IdeaCycle>;
   /** A cycle the actor may see, and every team of it the actor may see. */
   abstract listForCycle(
     actor: TeamActor,

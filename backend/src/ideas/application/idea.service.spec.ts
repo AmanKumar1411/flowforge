@@ -7,7 +7,9 @@ import { TeamActor } from "../../teams/domain/team-access.policy";
 import { IdeaCycle, IdeaTeam } from "../domain/idea";
 import { IdeaDomainError } from "../domain/idea.errors";
 import { IdeaRules } from "../domain/idea-rules";
+import { InMemoryIdeaCatalogRepository } from "../testing/in-memory-idea-catalog.repository";
 import { InMemoryIdeaRepository } from "../testing/in-memory-idea.repository";
+import { IdeaCatalogService } from "./idea-catalog.service";
 import { IdeaService } from "./idea.service";
 import { IdeaTeams } from "./ports/idea-teams";
 
@@ -18,13 +20,14 @@ jest.mock("@nestjs/common", () => ({
 
 const HOUR_MS = 60 * 60 * 1000;
 const NOW = "2026-11-05T09:00:00.000Z";
-// The idea deadline is 4 days away; submissions open a day after it.
+// The idea deadline is 4 days away; submissions open a day after it and close a month later.
 const cycle: IdeaCycle = {
   id: "cycle",
   status: "PUBLISHED",
   createdByFacultyId: "faculty",
   ideaDeadline: new Date("2026-11-09T09:00:00.000Z"),
   submissionStartAt: new Date("2026-11-10T09:00:00.000Z"),
+  submissionDeadline: new Date("2026-12-10T09:00:00.000Z"),
 };
 
 const person = (id: string, role: TeamActor["role"]): TeamActor => ({
@@ -68,6 +71,17 @@ const content = {
 /** Members see their team; the owning faculty and admins see every team; nobody else does. */
 class FakeIdeaTeams extends IdeaTeams {
   readonly teams = new Map([falcon, kestrel].map((team) => [team.id, team]));
+  readonly cycle: IdeaCycle = { ...cycle };
+
+  /** Other faculty do not see the cycle; everyone else in these tests does. */
+  getVisibleCycle(actor: TeamActor) {
+    if (actor.role === "FACULTY" && actor.id !== cycle.createdByFacultyId) {
+      return Promise.reject(
+        new IdeaDomainError("TEAM_NOT_FOUND", "Cycle not found"),
+      );
+    }
+    return Promise.resolve(this.cycle);
+  }
 
   getVisible(actor: TeamActor, teamId: string) {
     const team = this.teams.get(teamId);
@@ -81,11 +95,14 @@ class FakeIdeaTeams extends IdeaTeams {
         new IdeaDomainError("TEAM_NOT_FOUND", "Team not found"),
       );
     }
-    return Promise.resolve({ team, cycle });
+    return Promise.resolve({ team, cycle: this.cycle });
   }
 
   listForCycle() {
-    return Promise.resolve({ cycle, teams: [...this.teams.values()] });
+    return Promise.resolve({
+      cycle: this.cycle,
+      teams: [...this.teams.values()],
+    });
   }
 }
 
@@ -99,19 +116,31 @@ function createKit() {
     (id) => ({ id, name: id }),
     (teamId) => !disbanded.has(teamId),
   );
+  const catalog = new InMemoryIdeaCatalogRepository((id) =>
+    ideas.pickCount(id),
+  );
+  const audit = {
+    record: async (_tx: Transaction, event: AuditEvent) => {
+      audited.push(event);
+    },
+  } as unknown as AuditService;
   const service = new IdeaService(
     ideas,
+    catalog,
     teams,
     new IdeaRules(),
-    {
-      record: async (_tx: Transaction, event: AuditEvent) => {
-        audited.push(event);
-      },
-    } as unknown as AuditService,
+    audit,
     new ImmediateTransactionRunner(),
     clock,
   );
-  return { service, clock, audited, disbanded };
+  const catalogService = new IdeaCatalogService(
+    catalog,
+    teams,
+    new IdeaRules(),
+    audit,
+    new ImmediateTransactionRunner(),
+  );
+  return { service, catalogService, teams, clock, audited, disbanded };
 }
 
 describe("IdeaService", () => {
@@ -214,7 +243,7 @@ describe("IdeaService", () => {
       ).rejects.toMatchObject({ code: "IDEA_CHANGED" });
     });
 
-    it("needs feedback to reject, then lets the team resubmit until submissions open", async () => {
+    it("needs feedback to reject, then lets the team resubmit after the idea deadline", async () => {
       await expect(
         kit.service.review(faculty, "falcon", {
           version: 1,
@@ -268,13 +297,21 @@ describe("IdeaService", () => {
       ]);
     });
 
-    it("ends resubmission when submissions open", async () => {
+    it("keeps the rounds going after submissions open and close, until the cycle closes", async () => {
       await kit.service.review(faculty, "falcon", {
         version: 1,
         decision: "REJECTED",
         feedback: "Too broad",
       });
-      kit.clock.advance(5 * 24 * HOUR_MS);
+      kit.clock.advance(40 * 24 * HOUR_MS);
+      const second = await kit.service.submit(leader, "falcon", content);
+      expect(second).toMatchObject({ status: "SUBMITTED", version: 2 });
+      await kit.service.review(faculty, "falcon", {
+        version: 2,
+        decision: "REJECTED",
+        feedback: "Still too broad",
+      });
+      kit.teams.cycle.status = "CLOSED";
       await expect(
         kit.service.submit(leader, "falcon", content),
       ).rejects.toMatchObject({
@@ -309,6 +346,151 @@ describe("IdeaService", () => {
       kit.service.submit(leader, "falcon", content),
     ).rejects.toMatchObject({
       code: "TEAM_NOT_FOUND",
+    });
+  });
+
+  describe("picking from the faculty's catalog", () => {
+    const brief = {
+      title: "Library seat finder",
+      description: "Show free library seats",
+      link: null,
+    };
+
+    it("makes the pick the team's idea, approved at once; only the leader picks", async () => {
+      const offered = await kit.catalogService.add(faculty, "cycle", brief);
+      await expect(
+        kit.service.pick(member, "falcon", offered.id),
+      ).rejects.toMatchObject({ code: "NOT_TEAM_LEADER" });
+      const picked = await kit.service.pick(leader, "falcon", offered.id);
+      expect(picked).toMatchObject({
+        title: "Library seat finder",
+        problem: "Show free library seats",
+        solution: null,
+        source: "CATALOG",
+        catalogIdeaId: offered.id,
+        status: "APPROVED",
+        version: 1,
+      });
+      await expect(
+        kit.service.submit(leader, "falcon", content),
+      ).rejects.toMatchObject({ code: "IDEA_ALREADY_APPROVED" });
+      expect(kit.audited.at(-1)).toMatchObject({
+        action: "IDEA_PICKED",
+        metadata: { teamId: "falcon", version: 1, catalogIdeaId: offered.id },
+      });
+    });
+
+    it("lets any number of teams pick the same idea, and counts them", async () => {
+      const offered = await kit.catalogService.add(faculty, "cycle", brief);
+      await kit.service.pick(leader, "falcon", offered.id);
+      await kit.service.pick(
+        person("other-leader", "STUDENT"),
+        "kestrel",
+        offered.id,
+      );
+      expect(await kit.catalogService.list(leader, "cycle")).toMatchObject([
+        { id: offered.id, pickCount: 2 },
+      ]);
+    });
+
+    it("replaces a waiting proposal before the deadline, or a rejected one after it", async () => {
+      const offered = await kit.catalogService.add(faculty, "cycle", brief);
+      await kit.service.submit(leader, "falcon", content);
+      const instead = await kit.service.pick(leader, "falcon", offered.id);
+      expect(instead).toMatchObject({ source: "CATALOG", version: 2 });
+
+      await kit.service.submit(
+        person("other-leader", "STUDENT"),
+        "kestrel",
+        content,
+      );
+      await kit.service.review(faculty, "kestrel", {
+        version: 1,
+        decision: "REJECTED",
+        feedback: "Pick one of ours",
+      });
+      kit.clock.advance(10 * 24 * HOUR_MS);
+      const afterRejection = await kit.service.pick(
+        person("other-leader", "STUDENT"),
+        "kestrel",
+        offered.id,
+      );
+      expect(afterRejection).toMatchObject({
+        status: "APPROVED",
+        version: 2,
+      });
+    });
+
+    it("needs the first idea, pick or proposal, before the idea deadline", async () => {
+      const offered = await kit.catalogService.add(faculty, "cycle", brief);
+      kit.clock.advance(4 * 24 * HOUR_MS);
+      await expect(
+        kit.service.pick(leader, "falcon", offered.id),
+      ).rejects.toMatchObject({ code: "IDEA_SUBMISSION_CLOSED" });
+    });
+
+    it("refuses an idea that is not in the cycle's catalog", async () => {
+      await expect(
+        kit.service.pick(leader, "falcon", "catalog-404"),
+      ).rejects.toMatchObject({ code: "CATALOG_IDEA_NOT_FOUND" });
+    });
+  });
+
+  describe("the catalog itself", () => {
+    const brief = {
+      title: " Library seat finder ",
+      description: "Show free library seats",
+      link: " ",
+    };
+
+    it("lets the owning faculty add, edit and remove ideas, each audited", async () => {
+      const added = await kit.catalogService.add(faculty, "cycle", brief);
+      expect(added).toMatchObject({ title: "Library seat finder", link: null });
+      const edited = await kit.catalogService.update(
+        faculty,
+        "cycle",
+        added.id,
+        {
+          ...brief,
+          title: "Seat finder",
+        },
+      );
+      expect(edited.title).toBe("Seat finder");
+      await kit.catalogService.remove(faculty, "cycle", added.id);
+      expect(await kit.catalogService.list(admin, "cycle")).toEqual([]);
+      expect(kit.audited.map((event) => event.action)).toEqual([
+        "CATALOG_IDEA_ADDED",
+        "CATALOG_IDEA_UPDATED",
+        "CATALOG_IDEA_REMOVED",
+      ]);
+    });
+
+    it("keeps a picked idea; the team keeps its copy when the faculty edit it", async () => {
+      const added = await kit.catalogService.add(faculty, "cycle", brief);
+      await kit.service.pick(leader, "falcon", added.id);
+      await expect(
+        kit.catalogService.remove(faculty, "cycle", added.id),
+      ).rejects.toMatchObject({ code: "CATALOG_IDEA_PICKED" });
+      await kit.catalogService.update(faculty, "cycle", added.id, {
+        ...brief,
+        title: "Renamed",
+      });
+      expect((await kit.service.get(leader, "falcon"))?.title).toBe(
+        "Library seat finder",
+      );
+    });
+
+    it("is changed only by the owning faculty, and not once the cycle is closed", async () => {
+      await expect(
+        kit.catalogService.add(otherFaculty, "cycle", brief),
+      ).rejects.toMatchObject({ code: "TEAM_NOT_FOUND" });
+      await expect(
+        kit.catalogService.add(leader, "cycle", brief),
+      ).rejects.toMatchObject({ code: "CATALOG_IDEA_NOT_FOUND" });
+      kit.teams.cycle.status = "CLOSED";
+      await expect(
+        kit.catalogService.add(faculty, "cycle", brief),
+      ).rejects.toMatchObject({ code: "CATALOG_CLOSED" });
     });
   });
 });

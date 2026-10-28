@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { getCycle } from "../api/cycles";
 import { BatchPanel } from "../components/BatchPanel";
+import { FacultyCatalogSection } from "../components/CatalogPanel";
 import { Info } from "../components/CycleParts";
 import { EnrollmentPanel } from "../components/EnrollmentPanel";
 import { FacultyTeamsSection } from "../components/FacultyTeamPanels";
 import { FacultyIdeasSection } from "../components/IdeaPanels";
+import { FacultySubmissionsSection } from "../components/SubmissionPanels";
 import { StudentTeamPanel } from "../components/TeamPanels";
 import { formatDate } from "../dates";
 import { readableError } from "../errors";
@@ -91,10 +93,12 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
           ) : (
             <BatchPanel cycle={cycle} />
           )}
+          <FacultyCatalogSection cycle={cycle} />
           {cycle.status !== "DRAFT" && (
             <>
               <FacultyTeamsSection cycle={cycle} />
               <FacultyIdeasSection cycle={cycle} canReview />
+              <FacultySubmissionsSection cycle={cycle} />
             </>
           )}
         </>

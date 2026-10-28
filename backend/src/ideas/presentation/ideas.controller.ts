@@ -14,7 +14,11 @@ import { AuthenticatedUser } from "../../auth/application/authenticated-user";
 import { CurrentUser } from "../../auth/presentation/decorators/current-user.decorator";
 import { Roles } from "../../auth/presentation/decorators/roles.decorator";
 import { IdeaService } from "../application/idea.service";
-import { ReviewIdeaDto, SubmitIdeaDto } from "./dto/idea-requests.dto";
+import {
+  PickIdeaDto,
+  ReviewIdeaDto,
+  SubmitIdeaDto,
+} from "./dto/idea-requests.dto";
 import { IdeaResponseDto, TeamIdeaDto } from "./dto/idea-responses.dto";
 
 @ApiTags("ideas")
@@ -40,9 +44,9 @@ export class IdeasController {
   @Put()
   @Roles("STUDENT")
   @ApiOperation({
-    summary: "Submit, change or resubmit the idea (leader only)",
+    summary: "Submit, change or resubmit the team's own proposal (leader only)",
     description:
-      "First submission and changes while it waits for review: until the idea deadline. After a rejection: until submissions open. An approved idea is final.",
+      "First submission and changes while it waits for review: until the idea deadline. After a rejection: any number of rounds while the cycle is published. An approved idea is final.",
   })
   @ApiOkResponse({ type: IdeaResponseDto })
   async submit(
@@ -60,13 +64,32 @@ export class IdeasController {
     );
   }
 
+  @Post("pick")
+  @Roles("STUDENT")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Pick an idea from the faculty's catalog (leader only)",
+    description:
+      "The pick is approved at once and final. Allowed when a proposal could be saved: as the first idea before the idea deadline, instead of a waiting proposal until then, or after a rejection.",
+  })
+  @ApiOkResponse({ type: IdeaResponseDto })
+  async pick(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("teamId", new ParseUUIDPipe()) teamId: string,
+    @Body() dto: PickIdeaDto,
+  ): Promise<IdeaResponseDto> {
+    return IdeaResponseDto.from(
+      await this.ideas.pick(user, teamId, dto.catalogIdeaId),
+    );
+  }
+
   @Post("review")
   @Roles("FACULTY")
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: "Approve or reject the idea (the cycle's owning faculty)",
     description:
-      "Send the version you read. A rejection needs feedback; the team can then resubmit until submissions open.",
+      "Send the version you read. A rejection needs feedback; the team then revises or picks from the catalog, for as many rounds as it takes.",
   })
   @ApiOkResponse({ type: IdeaResponseDto })
   async review(

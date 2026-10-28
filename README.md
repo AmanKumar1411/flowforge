@@ -20,10 +20,15 @@ Implemented so far:
   can mark themselves "looking for a team". Electives have an enrollment list the faculty import.
 - **Phase 6:** project ideas. Each team's leader submits one idea by the idea deadline; the
   owning faculty approve it or reject it with feedback, and a rejected idea can be resubmitted
-  until submissions open. Faculty can also register a core batch's students before they sign
-  in, so nobody is left out of teams.
+  (until submissions open at first; Phase 7 removed that cut-off). Faculty can also register a
+  core batch's students before they sign in, so nobody is left out of teams.
+- **Phase 7:** the faculty's idea list and submissions. Faculty can publish ideas that teams
+  pick (approved at once, any number of teams per idea), next to proposals; after a rejection,
+  feedback rounds continue until the cycle closes. Teams with an approved or picked idea submit
+  their work as links and notes: any member, a new version each time, until the submission
+  deadline.
 
-Submissions and evaluations come later.
+Evaluations come later.
 
 ## Prerequisites
 
@@ -152,7 +157,7 @@ In `backend/`:
 | `npm run build` / `npm run lint` / `npm run typecheck` | Compile, lint, type-check including `test/` |
 | `npm run seed:demo` | Create the [demo accounts](#demo-accounts); safe to run again |
 | `npm test` | Jest unit tests (domain rules, sessions, config, Google token verification) |
-| `npm run test:integration` | `node:test` against real PostgreSQL `flowforge_test`: Google flow (Google faked at its network boundary), faculty access, sessions, admin, RBAC matrix, boot checks, Phase 2 scenario, teams (including races and database constraints) |
+| `npm run test:integration` | `node:test` against real PostgreSQL `flowforge_test`: Google flow (Google faked at its network boundary), faculty access, sessions, admin, RBAC matrix, boot checks, Phase 2 scenario, teams, ideas and submissions (including races and database constraints) |
 
 Integration tests use `TEST_DATABASE_URL` if set; otherwise they take `DATABASE_URL` from
 `backend/.env` and switch the database to `flowforge_test`. They refuse to run against any other
@@ -161,9 +166,9 @@ Node 22, which is why integration tests use Node's built-in runner.
 
 In `frontend/`: `npm run build` and `npm run lint`.
 
-Browser end-to-end checks of the sign-in flows, the team screens, team completion and ideas live in
-[e2e/browser](e2e/browser/README.md). The latest results are in the
-[Phase 6 test report](docs/testing/phase6-test-report.md).
+Browser end-to-end checks of the sign-in flows, the team screens, team completion, ideas and
+submissions live in [e2e/browser](e2e/browser/README.md). The latest results are in the
+[Phase 7 test report](docs/testing/phase7-test-report.md).
 
 ## API
 
@@ -208,9 +213,16 @@ All routes use the `/api` prefix and every error is `{ code, message }`. Interac
 | POST | `/teams/:id/members` | FACULTY owner, between the two team deadlines |
 | GET, POST | `/course-cycles/:id/batch-students` | FACULTY owner of a core cycle: the batch list; POST `{ emails }` registers students who have not signed in |
 | GET | `/teams/:id/idea` | Team members, FACULTY owner, ADMIN |
-| PUT | `/teams/:id/idea` | Team leader: submit or edit before the idea deadline; resubmit a rejected idea before submissions open |
+| PUT | `/teams/:id/idea` | Team leader: propose or edit before the idea deadline; after a rejection, resubmit any time while the cycle is published |
+| POST | `/teams/:id/idea/pick` | Team leader: `{ catalogIdeaId }`, approved at once; whenever a proposal could be saved |
 | POST | `/teams/:id/idea/review` | FACULTY owner: `{ version, decision, feedback }` (feedback required to reject) |
 | GET | `/course-cycles/:id/ideas` | FACULTY owner, ADMIN: every team with its idea |
+| GET | `/course-cycles/:id/idea-catalog` | STUDENT of the cycle, FACULTY owner, ADMIN: the faculty's ideas with how many teams picked each |
+| POST | `/course-cycles/:id/idea-catalog` | FACULTY owner, until the cycle closes: `{ title, description, link? }` |
+| PUT, DELETE | `/course-cycles/:id/idea-catalog/:ideaId` | FACULTY owner; a picked idea cannot be removed |
+| GET | `/teams/:id/submissions` | Team members, FACULTY owner, ADMIN: every version, newest first |
+| POST | `/teams/:id/submissions` | Any team member, with an approved or picked idea, between "submissions open" and the deadline: `{ repositoryUrl, demoUrl?, reportUrl?, notes? }` |
+| GET | `/course-cycles/:id/submissions` | FACULTY owner, ADMIN: every team with its idea and latest version |
 
 Cycles accept `minTeamSize`, `maxTeamSize` (defaults 1 and 4, at most 10),
 `teamFormationDeadline` (students; defaults to `submissionStartAt`), `teamCompletionDeadline`
@@ -241,11 +253,14 @@ reads the allowlist through `FacultyDirectory`, so `SignInService` and `RoleReso
 - [Phase 5 test report](docs/testing/phase5-test-report.md) (team completion, electives, demo
   accounts)
 - [Phase 6 test report](docs/testing/phase6-test-report.md) (ideas, pre-registered students)
+- [Phase 7 test report](docs/testing/phase7-test-report.md) (idea list, open-ended rounds,
+  submissions)
 - [Architecture: foundation](docs/architecture/foundation.md),
   [course cycles](docs/architecture/course-cycles.md),
   [authentication and RBAC](docs/architecture/auth-and-rbac.md),
   [teams](docs/architecture/teams.md),
-  [ideas and pre-registered students](docs/architecture/ideas.md)
+  [ideas and pre-registered students](docs/architecture/ideas.md),
+  [submissions](docs/architecture/submissions.md)
 - Decisions: [001 Google Sign-In](docs/decisions/001-google-sign-in-domain-restricted.md),
   [002 server-side roles](docs/decisions/002-roles-resolved-server-side.md),
   [003 Google sub](docs/decisions/003-identify-users-by-google-sub.md),
@@ -258,4 +273,6 @@ reads the allowlist through `FacultyDirectory`, so `SignInService` and `RoleReso
   [010 elective rosters](docs/decisions/010-elective-rosters-and-removal-checks.md),
   [011 faculty team completion and auto-group](docs/decisions/011-faculty-team-completion-and-auto-group.md),
   [012 pre-registered students](docs/decisions/012-pre-registered-students.md),
-  [013 project ideas](docs/decisions/013-project-ideas.md)
+  [013 project ideas](docs/decisions/013-project-ideas.md),
+  [014 idea list and open-ended rounds](docs/decisions/014-idea-catalog-and-open-ended-rounds.md),
+  [015 versioned submissions](docs/decisions/015-versioned-submissions.md)

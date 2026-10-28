@@ -39,6 +39,7 @@ interface Case {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MISSING_ID = "00000000-0000-4000-8000-000000000000";
 const inDays = (days: number) =>
   new Date(Date.now() + days * DAY_MS).toISOString();
 
@@ -334,6 +335,65 @@ describe("RBAC matrix", () => {
       body: () => ({ version: 1, decision: "APPROVED" }),
       allowed: { facultyOwner: 404, otherFaculty: 404 },
       notFound: "*",
+    },
+    {
+      method: "GET",
+      path: () => `/course-cycles/${published}/idea-catalog`,
+      allowed: {
+        admin: 200,
+        facultyOwner: 200,
+        otherFaculty: 404,
+        student: 200,
+        otherBatchStudent: 404,
+      },
+    },
+    {
+      method: "POST",
+      path: () => `/course-cycles/${published}/idea-catalog`,
+      body: () => ({ title: "Matrix", description: "From the matrix" }),
+      allowed: { facultyOwner: 201, otherFaculty: 404 },
+    },
+    // An unknown catalog idea: the owner hears CATALOG_IDEA_NOT_FOUND, other faculty CYCLE_NOT_FOUND.
+    {
+      method: "PUT",
+      path: () => `/course-cycles/${published}/idea-catalog/${MISSING_ID}`,
+      body: () => ({ title: "Matrix", description: "From the matrix" }),
+      allowed: { facultyOwner: 404, otherFaculty: 404 },
+      notFound: "*",
+    },
+    {
+      method: "DELETE",
+      path: () => `/course-cycles/${published}/idea-catalog/${MISSING_ID}`,
+      allowed: { facultyOwner: 404, otherFaculty: 404 },
+      notFound: "*",
+    },
+    {
+      method: "POST",
+      path: () => `/teams/${bystanderTeam}/idea/pick`,
+      body: () => ({ catalogIdeaId: MISSING_ID }),
+      allowed: { student: 404, otherBatchStudent: 404 },
+    },
+    {
+      method: "GET",
+      path: () => `/teams/${bystanderTeam}/submissions`,
+      allowed: {
+        admin: 200,
+        facultyOwner: 200,
+        otherFaculty: 404,
+        student: 404,
+        otherBatchStudent: 404,
+      },
+    },
+    {
+      method: "POST",
+      path: () => `/teams/${bystanderTeam}/submissions`,
+      body: () => ({ repositoryUrl: "https://github.com/matrix/app" }),
+      allowed: { student: 404, otherBatchStudent: 404 },
+    },
+    {
+      method: "GET",
+      path: () => `/course-cycles/${published}/submissions`,
+      allowed: { admin: 200, facultyOwner: 200, otherFaculty: 404 },
     },
 
     {

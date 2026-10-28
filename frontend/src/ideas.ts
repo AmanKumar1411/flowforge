@@ -8,11 +8,9 @@ export function isIdeaSubmissionOpen(cycle: Cycle, now: number) {
   return cycle.status === "PUBLISHED" && now < Date.parse(cycle.ideaDeadline);
 }
 
-/** A rejected idea can be resubmitted until submissions open. */
-export function isIdeaResubmissionOpen(cycle: Cycle, now: number) {
-  return (
-    cycle.status === "PUBLISHED" && now < Date.parse(cycle.submissionStartAt)
-  );
+/** After a rejection, rounds continue with no deadline while the cycle is published. */
+export function isIdeaResubmissionOpen(cycle: Cycle) {
+  return cycle.status === "PUBLISHED";
 }
 
 const STATUS_LABELS: Record<IdeaStatus, string> = {
@@ -21,8 +19,11 @@ const STATUS_LABELS: Record<IdeaStatus, string> = {
   REJECTED: "Rejected",
 };
 
-export function ideaStatusLabel(status: IdeaStatus) {
-  return STATUS_LABELS[status];
+export function ideaStatusLabel(
+  status: IdeaStatus,
+  source: Idea["source"] = "PROPOSAL",
+) {
+  return source === "CATALOG" ? "Picked from the list" : STATUS_LABELS[status];
 }
 
 export type IdeaAction = "SUBMIT" | "EDIT" | "RESUBMIT";
@@ -38,7 +39,7 @@ export function ideaAction(
     return isIdeaSubmissionOpen(cycle, now) ? "EDIT" : null;
   }
   if (idea.status === "REJECTED") {
-    return isIdeaResubmissionOpen(cycle, now) ? "RESUBMIT" : null;
+    return isIdeaResubmissionOpen(cycle) ? "RESUBMIT" : null;
   }
   return null;
 }
@@ -52,4 +53,14 @@ export function reviewOrder(status: IdeaStatus | null) {
       : status === null
         ? 2
         : 3;
+}
+
+export type SubmissionWindow = "NOT_OPEN" | "OPEN" | "CLOSED";
+
+/** Mirrors the API: open from `submissionStartAt` until `submissionDeadline`, while published. */
+export function submissionWindow(cycle: Cycle, now: number): SubmissionWindow {
+  if (cycle.status !== "PUBLISHED" || now >= Date.parse(cycle.submissionDeadline)) {
+    return "CLOSED";
+  }
+  return now < Date.parse(cycle.submissionStartAt) ? "NOT_OPEN" : "OPEN";
 }

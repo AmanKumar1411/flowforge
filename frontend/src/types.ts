@@ -40,7 +40,7 @@ export interface Cycle {
   teamFormationDeadline: string;
   /** The owning faculty place students without a team until this moment. */
   teamCompletionDeadline: string;
-  /** Teams submit their first idea until this moment; a rejected idea can be resubmitted until submissionStartAt. */
+  /** Teams submit or pick their first idea until this moment; after a rejection, rounds continue while the cycle is published. */
   ideaDeadline: string;
   kind: CourseKind;
   status: CycleStatus;
@@ -186,10 +186,17 @@ export interface IdeaReview {
   reviewedAt: string;
 }
 
-export interface Idea extends IdeaContent {
+/** PROPOSAL: the team's own idea, reviewed. CATALOG: picked from the faculty's list, approved at once. */
+export type IdeaSource = "PROPOSAL" | "CATALOG";
+
+export interface Idea extends Omit<IdeaContent, "solution"> {
   id: string;
   teamId: string;
   cycleId: string;
+  /** Null for a pick from the catalog. */
+  solution: string | null;
+  source: IdeaSource;
+  catalogIdeaId: string | null;
   status: IdeaStatus;
   /** Goes up with every change; a review sends back the version it read. */
   version: number;
@@ -207,6 +214,44 @@ export interface CycleIdea {
     memberCount: number;
   };
   idea: Idea | null;
+}
+
+export interface CatalogIdeaContent {
+  title: string;
+  description: string;
+  link: string | null;
+}
+
+/** An idea the cycle's faculty offer; any number of teams can pick it. */
+export interface CatalogIdea extends CatalogIdeaContent {
+  id: string;
+  cycleId: string;
+  pickCount: number;
+  createdAt: string;
+}
+
+export interface SubmissionContent {
+  repositoryUrl: string;
+  demoUrl: string | null;
+  reportUrl: string | null;
+  notes: string | null;
+}
+
+/** One version of a team's work; the highest version is the current one. */
+export interface Submission extends SubmissionContent {
+  id: string;
+  teamId: string;
+  cycleId: string;
+  version: number;
+  submittedBy: { id: string; name: string };
+  submittedAt: string;
+}
+
+export interface CycleSubmission {
+  team: CycleIdea["team"];
+  idea: { title: string; status: IdeaStatus; source: IdeaSource } | null;
+  latest: Submission | null;
+  versionCount: number;
 }
 
 export interface AdminUser {

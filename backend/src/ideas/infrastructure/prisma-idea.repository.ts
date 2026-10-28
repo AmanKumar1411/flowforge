@@ -25,6 +25,8 @@ const toDomain = (row: IdeaRow): Idea => ({
   problem: row.problem,
   solution: row.solution,
   link: row.link,
+  source: row.source,
+  catalogIdeaId: row.catalogIdeaId,
   status: row.status,
   version: row.version,
   submittedBy: row.submittedBy,

@@ -1,9 +1,11 @@
 import { ApiProperty } from "@nestjs/swagger";
 import type { CycleIdea } from "../../application/idea.service";
 import type {
+  CatalogIdea,
   Idea,
   IdeaDecision,
   IdeaReview,
+  IdeaSource,
   IdeaStatus,
   Person,
 } from "../../domain/idea";
@@ -46,10 +48,21 @@ export class IdeaResponseDto {
   title!: string;
   @ApiProperty()
   problem!: string;
-  @ApiProperty()
-  solution!: string;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: "Null for a pick from the catalog",
+  })
+  solution!: string | null;
   @ApiProperty({ type: String, nullable: true })
   link!: string | null;
+  @ApiProperty({
+    enum: ["PROPOSAL", "CATALOG"],
+    description: "CATALOG: picked from the faculty's list, approved at once",
+  })
+  source!: IdeaSource;
+  @ApiProperty({ type: String, nullable: true })
+  catalogIdeaId!: string | null;
   @ApiProperty({ enum: ["SUBMITTED", "APPROVED", "REJECTED"] })
   status!: IdeaStatus;
   @ApiProperty({
@@ -124,6 +137,30 @@ export class CycleIdeaDto {
         memberCount: team.members.length,
       },
       idea: idea ? IdeaResponseDto.from(idea) : null,
+    });
+  }
+}
+
+export class CatalogIdeaDto {
+  @ApiProperty()
+  id!: string;
+  @ApiProperty()
+  cycleId!: string;
+  @ApiProperty()
+  title!: string;
+  @ApiProperty()
+  description!: string;
+  @ApiProperty({ type: String, nullable: true })
+  link!: string | null;
+  @ApiProperty({ description: "How many teams picked it; there is no limit" })
+  pickCount!: number;
+  @ApiProperty()
+  createdAt!: string;
+
+  static from(idea: CatalogIdea): CatalogIdeaDto {
+    return Object.assign(new CatalogIdeaDto(), {
+      ...idea,
+      createdAt: idea.createdAt.toISOString(),
     });
   }
 }

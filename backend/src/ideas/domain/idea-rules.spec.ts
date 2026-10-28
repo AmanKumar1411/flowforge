@@ -5,6 +5,7 @@ import { IdeaRules } from "./idea-rules";
 const rules = new IdeaRules();
 const IDEA_DEADLINE = new Date("2026-11-09T09:00:00.000Z");
 const SUBMISSIONS_OPEN = new Date("2026-11-10T09:00:00.000Z");
+const SUBMISSION_DEADLINE = new Date("2026-12-10T09:00:00.000Z");
 const before = new Date("2026-11-05T09:00:00.000Z");
 const betweenDeadlines = new Date("2026-11-09T18:00:00.000Z");
 
@@ -14,6 +15,7 @@ const cycle = (overrides: Partial<IdeaCycle> = {}): IdeaCycle => ({
   createdByFacultyId: "faculty",
   ideaDeadline: IDEA_DEADLINE,
   submissionStartAt: SUBMISSIONS_OPEN,
+  submissionDeadline: SUBMISSION_DEADLINE,
   ...overrides,
 });
 
@@ -54,6 +56,18 @@ describe("IdeaRules", () => {
         betweenDeadlines,
         "RESUBMIT",
       ],
+      [
+        "a rejected idea once submissions are open (rounds have no deadline)",
+        "REJECTED",
+        SUBMISSIONS_OPEN,
+        "RESUBMIT",
+      ],
+      [
+        "a rejected idea after the submission deadline",
+        "REJECTED",
+        SUBMISSION_DEADLINE,
+        "RESUBMIT",
+      ],
     ] as const)("%s: %s", (_label, status, now, expected) => {
       expect(
         rules.submissionAction(status ? { status } : null, cycle(), now),
@@ -78,12 +92,6 @@ describe("IdeaRules", () => {
         "SUBMITTED",
         betweenDeadlines,
         "IDEA_SUBMISSION_CLOSED",
-      ],
-      [
-        "a rejected idea once submissions are open",
-        "REJECTED",
-        SUBMISSIONS_OPEN,
-        "IDEA_RESUBMISSION_CLOSED",
       ],
       ["an approved idea", "APPROVED", before, "IDEA_ALREADY_APPROVED"],
     ] as const)("refuses %s", (_label, status, now, code) => {
@@ -199,6 +207,70 @@ describe("IdeaRules", () => {
         solution: " S ",
         link: "  ",
       }),
-    ).toEqual({ title: "T", problem: "P", solution: "S", link: null });
+    ).toEqual({
+      title: "T",
+      problem: "P",
+      solution: "S",
+      link: null,
+      source: "PROPOSAL",
+      catalogIdeaId: null,
+    });
+  });
+
+  describe("the faculty's catalog", () => {
+    const catalogIdea = {
+      id: "catalog-1",
+      cycleId: "cycle",
+      title: "Library seat finder",
+      description: "Show free library seats",
+      link: "https://example.edu/brief",
+      createdAt: before,
+      pickCount: 0,
+    };
+
+    it("copies a picked idea: its description becomes the problem, with no solution", () => {
+      expect(rules.pickContent(catalogIdea)).toEqual({
+        title: "Library seat finder",
+        problem: "Show free library seats",
+        solution: null,
+        link: "https://example.edu/brief",
+        source: "CATALOG",
+        catalogIdeaId: "catalog-1",
+      });
+    });
+
+    it("lets the owning faculty edit it in a draft or published cycle, not a closed one", () => {
+      const owner = { id: "faculty", role: "FACULTY" as const };
+      expect(() =>
+        rules.assertCatalogEditor(owner, cycle({ status: "DRAFT" })),
+      ).not.toThrow();
+      expect(() => rules.assertCatalogEditor(owner, cycle())).not.toThrow();
+      expect(
+        codeOf(() =>
+          rules.assertCatalogEditor(owner, cycle({ status: "CLOSED" })),
+        ),
+      ).toBe("CATALOG_CLOSED");
+      for (const actor of [
+        { id: "other", role: "FACULTY" as const },
+        { id: "faculty", role: "STUDENT" as const },
+      ]) {
+        expect(codeOf(() => rules.assertCatalogEditor(actor, cycle()))).toBe(
+          "CATALOG_IDEA_NOT_FOUND",
+        );
+      }
+    });
+
+    it("keeps an idea once a team picked it", () => {
+      expect(() => rules.assertCanRemove(catalogIdea)).not.toThrow();
+      expect(
+        codeOf(() => rules.assertCanRemove({ ...catalogIdea, pickCount: 2 })),
+      ).toBe("CATALOG_IDEA_PICKED");
+    });
+
+    it("trims catalog content and treats an empty link as none", () => {
+      expect(
+        rules.cleanCatalog({ title: " T ", description: " D ", link: " " }),
+      ).toEqual({ title: "T", description: "D", link: null });
+    });
   });
 });

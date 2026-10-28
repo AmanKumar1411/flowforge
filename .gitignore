@@ -1,32 +1,43 @@
-# Dependencies and generated output
-node_modules/
-dist/
-build/
-coverage/
-*.tsbuildinfo
+# Git tracks only what is needed to understand, build, run and test FlowForge.
 
-# Local configuration and secrets
+# Secrets: real values live in local .env files (backend/, frontend/, infra/); the examples are committed
 .env
-.env.local
-infra/.env
+.env.*
+!.env.example
+*.pem
+*.key
 
-# Prisma generated client
-backend/src/generated/prisma/
+# Dependencies
+node_modules/
 
-# Tooling and editor state
-.DS_Store
-.idea/
-.vscode/*
-!.vscode/extensions.json
-backend/.agents/
-backend/.claude/
-backend/.windsurf/
-backend/skills-lock.json
+# Build output and generated code (TypeScript build info is written inside dist/ and node_modules/)
+dist/
+backend/src/generated/
 
-# Logs and temporary files
-*.log
-npm-debug.log*
-*.tmp
-
-# Browser end-to-end run output
+# Tests and reports
+coverage/
 e2e/browser/out/
+
+# Logs
+*.log
+
+# OS and editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Personal study material and AI-agent files (not part of the public repo)
+docs/study/
+CLAUDE.md
+AGENTS.md
+.claude/
+.cursor/
+.agents/
+.windsurf/
+skills-lock.json
+prompts/
+AUDIT*.md
+*_NOTES.md
+BEHAVIOR.md

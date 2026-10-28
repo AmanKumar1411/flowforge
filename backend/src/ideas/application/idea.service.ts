@@ -9,9 +9,12 @@ import {
   IdeaCycle,
   IdeaDecision,
   IdeaTeam,
+  IdeaVersionContent,
+  SavedIdeaStatus,
 } from "../domain/idea";
 import { IdeaDomainError } from "../domain/idea.errors";
 import { IdeaRules } from "../domain/idea-rules";
+import { IdeaCatalogRepository } from "./ports/idea-catalog.repository";
 import { IdeaTeams } from "./ports/idea-teams";
 import { IdeaRepository } from "./ports/idea.repository";
 
@@ -28,15 +31,22 @@ export interface CycleIdea {
   idea: Idea | null;
 }
 
+/** A team the caller may see, its cycle and its idea. */
+export interface TeamIdea extends CycleIdea {
+  cycle: IdeaCycle;
+}
+
 /**
- * Team ideas: the leader submits and revises, the owning faculty review,
- * members and admins read. Each change runs in one transaction under the
- * team's and the idea's row locks, and is audited with it.
+ * Team ideas: the leader proposes and revises, or picks from the faculty's
+ * catalog; the owning faculty review proposals; members and admins read.
+ * Each change runs in one transaction under the team's and the idea's row
+ * locks, and is audited with it.
  */
 @Injectable()
 export class IdeaService {
   constructor(
     private readonly ideas: IdeaRepository,
+    private readonly catalog: IdeaCatalogRepository,
     private readonly teams: IdeaTeams,
     private readonly rules: IdeaRules,
     private readonly audit: AuditService,
@@ -50,7 +60,13 @@ export class IdeaService {
     return this.ideas.findByTeam(teamId);
   }
 
-  /** Creates, edits or resubmits the idea, whichever the rules allow now. */
+  /** The team, its cycle and its idea, for anyone who can see the team (used by submissions). */
+  async getTeamIdea(actor: TeamActor, teamId: string): Promise<TeamIdea> {
+    const { team, cycle } = await this.teams.getVisible(actor, teamId);
+    return { team, cycle, idea: await this.ideas.findByTeam(team.id) };
+  }
+
+  /** Creates, edits or resubmits the team's own proposal, whichever the rules allow now. */
   async submit(
     actor: TeamActor,
     teamId: string,
@@ -63,39 +79,54 @@ export class IdeaService {
       const current = await this.lock(team.id, tx);
       const now = this.clock.now();
       const action = this.rules.submissionAction(current, cycle, now);
-      if (action === "CREATE" || !current) {
-        const created = await this.ideas.create(
-          {
-            ...clean,
-            teamId: team.id,
-            cycleId: cycle.id,
-            submittedById: actor.id,
-            submittedAt: now,
-          },
-          tx,
-        );
-        await this.record("IDEA_SUBMITTED", actor, created, cycle, tx);
-        return created;
-      }
-      const revised = await this.ideas.revise(
-        current.id,
-        {
-          ...clean,
-          version: current.version + 1,
-          status: "SUBMITTED",
-          submittedById: actor.id,
-          submittedAt: now,
-        },
+      const saved = await this.save(
+        { team, cycle, current, actor, now },
+        clean,
+        "SUBMITTED",
         tx,
       );
       await this.record(
-        action === "RESUBMIT" ? "IDEA_SUBMITTED" : "IDEA_UPDATED",
+        action === "EDIT" ? "IDEA_UPDATED" : "IDEA_SUBMITTED",
         actor,
-        revised,
+        saved,
         cycle,
         tx,
       );
-      return revised;
+      return saved;
+    });
+  }
+
+  /**
+   * Makes a catalog idea the team's idea, approved at once (ADR 014). Allowed
+   * whenever a proposal could be saved: as the first idea before the idea
+   * deadline, instead of a waiting proposal until then, or after a rejection.
+   */
+  async pick(
+    actor: TeamActor,
+    teamId: string,
+    catalogIdeaId: string,
+  ): Promise<Idea> {
+    const { team, cycle } = await this.teams.getVisible(actor, teamId);
+    this.rules.assertLeader(actor, team);
+    return this.transactions.run(async (tx) => {
+      const current = await this.lock(team.id, tx);
+      const now = this.clock.now();
+      this.rules.submissionAction(current, cycle, now);
+      const catalogIdea = await this.catalog.lock(catalogIdeaId, cycle.id, tx);
+      if (!catalogIdea) {
+        throw new IdeaDomainError(
+          "CATALOG_IDEA_NOT_FOUND",
+          "This idea is not in the cycle's list",
+        );
+      }
+      const saved = await this.save(
+        { team, cycle, current, actor, now },
+        this.rules.pickContent(catalogIdea),
+        "APPROVED",
+        tx,
+      );
+      await this.record("IDEA_PICKED", actor, saved, cycle, tx);
+      return saved;
     });
   }
 
@@ -149,6 +180,37 @@ export class IdeaService {
     return teams.map((team) => ({ team, idea: byTeam.get(team.id) ?? null }));
   }
 
+  /** The first version, or the next one of the current idea. */
+  private save(
+    at: {
+      team: IdeaTeam;
+      cycle: IdeaCycle;
+      current: Idea | null;
+      actor: TeamActor;
+      now: Date;
+    },
+    content: IdeaVersionContent,
+    status: SavedIdeaStatus,
+    tx: Transaction,
+  ): Promise<Idea> {
+    const submitted = {
+      ...content,
+      status,
+      submittedById: at.actor.id,
+      submittedAt: at.now,
+    };
+    return at.current
+      ? this.ideas.revise(
+          at.current.id,
+          { ...submitted, version: at.current.version + 1 },
+          tx,
+        )
+      : this.ideas.create(
+          { ...submitted, teamId: at.team.id, cycleId: at.cycle.id },
+          tx,
+        );
+  }
+
   private async lock(teamId: string, tx: Transaction): Promise<Idea | null> {
     const { teamExists, idea } = await this.ideas.lockTeamIdea(teamId, tx);
     if (!teamExists) {
@@ -159,7 +221,11 @@ export class IdeaService {
 
   private record(
     action:
-      "IDEA_SUBMITTED" | "IDEA_UPDATED" | "IDEA_APPROVED" | "IDEA_REJECTED",
+      | "IDEA_SUBMITTED"
+      | "IDEA_UPDATED"
+      | "IDEA_APPROVED"
+      | "IDEA_REJECTED"
+      | "IDEA_PICKED",
     actor: TeamActor,
     idea: Idea,
     cycle: IdeaCycle,
@@ -174,6 +240,7 @@ export class IdeaService {
         cycleId: cycle.id,
         teamId: idea.teamId,
         version: idea.version,
+        ...(idea.catalogIdeaId ? { catalogIdeaId: idea.catalogIdeaId } : {}),
       },
     });
   }

@@ -700,6 +700,12 @@ h2 {
   justify-content: flex-end;
 }
 
+/* A flex table cell leaves its row's borders; keep it a cell and right-align its buttons. */
+td.row-actions {
+  display: table-cell;
+  text-align: right;
+}
+
 .row-muted td {
   color: var(--muted);
 }
@@ -1124,4 +1130,69 @@ h2 {
   .idea-details dl {
     grid-template-columns: 1fr;
   }
+}
+
+.catalog-list {
+  margin: 14px 0 0;
+}
+
+.catalog-list h3 {
+  margin: 0 0 8px;
+  font-size: .95rem;
+}
+
+.catalog-list ul,
+ul.catalog-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.catalog-list li {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: .9rem;
+}
+
+.catalog-list li p {
+  margin: 4px 0;
+  white-space: pre-wrap;
+}
+
+.catalog-list li a {
+  overflow-wrap: anywhere;
+}
+
+.idea-details a,
+.catalog-list a,
+.submission-links a {
+  color: var(--navy);
+  font-weight: 600;
+  text-underline-offset: 2px;
+}
+
+.submission-history {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.submission-history li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: .86rem;
+}
+
+.submission-history li p {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+}
+
+.submission-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 4px;
 }

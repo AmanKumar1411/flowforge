@@ -3,6 +3,7 @@ import type { AdminErrorCode } from "../../admin/admin.errors";
 import type { AuthErrorCode } from "../../auth/domain/auth.errors";
 import type { CycleErrorCode } from "../../course-cycles/domain/cycle.errors";
 import type { IdeaErrorCode } from "../../ideas/domain/idea.errors";
+import type { SubmissionErrorCode } from "../../submissions/domain/submission.errors";
 import type { TeamErrorCode } from "../../teams/domain/team.errors";
 import type { CommonErrorCode } from "./domain-error";
 
@@ -12,7 +13,8 @@ type DomainErrorCode =
   | CycleErrorCode
   | AdminErrorCode
   | TeamErrorCode
-  | IdeaErrorCode;
+  | IdeaErrorCode
+  | SubmissionErrorCode;
 
 // `satisfies` makes the build fail when a new error code has no HTTP status.
 const statusByCode = {
@@ -80,6 +82,14 @@ const statusByCode = {
   IDEA_CHANGED: HttpStatus.CONFLICT,
   IDEA_REVIEW_CLOSED: HttpStatus.CONFLICT,
   IDEA_FEEDBACK_REQUIRED: HttpStatus.BAD_REQUEST,
+  CATALOG_IDEA_NOT_FOUND: HttpStatus.NOT_FOUND,
+  CATALOG_IDEA_PICKED: HttpStatus.CONFLICT,
+  CATALOG_CLOSED: HttpStatus.CONFLICT,
+
+  SUBMISSION_NOT_OPEN: HttpStatus.CONFLICT,
+  SUBMISSION_CLOSED: HttpStatus.CONFLICT,
+  IDEA_NOT_APPROVED: HttpStatus.CONFLICT,
+  SUBMISSION_CHANGED: HttpStatus.CONFLICT,
 } satisfies Record<DomainErrorCode, HttpStatus>;
 
 export const statusForCode = (code: string): HttpStatus =>
