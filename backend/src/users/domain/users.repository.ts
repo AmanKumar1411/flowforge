@@ -33,7 +33,16 @@ export abstract class UsersRepository {
   ): Promise<User>;
   abstract list(query: UserListQuery): Promise<UserPage>;
   abstract findByIds(ids: readonly string[], tx?: Transaction): Promise<User[]>;
-  abstract findByEmails(emails: readonly string[]): Promise<User[]>;
+  abstract findByEmails(
+    emails: readonly string[],
+    tx?: Transaction,
+  ): Promise<User[]>;
+  /** Gives a pre-registered account its provider sub; null if it was claimed meanwhile. */
+  abstract claim(
+    id: string,
+    googleSub: string,
+    tx: Transaction,
+  ): Promise<User | null>;
   /** Active students in the scope, ordered by name. */
   abstract listActiveStudents(scope: StudentScope): Promise<User[]>;
   /** Active students in the scope matching the query, ordered by name. */

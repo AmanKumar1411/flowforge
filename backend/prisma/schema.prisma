@@ -60,11 +60,17 @@ enum AuditAction {
   ENROLLMENT_ADDED
   ENROLLMENT_REMOVED
   AUTO_GROUP_APPLIED
+  USER_CLAIMED
+  IDEA_SUBMITTED
+  IDEA_UPDATED
+  IDEA_APPROVED
+  IDEA_REJECTED
 }
 
 model User {
   id           String     @id @default(uuid())
-  googleSub    String     @unique
+  // Null for a student pre-registered from a faculty import; their first sign-in claims the account.
+  googleSub    String?    @unique
   email        String     @unique
   name         String
   avatarUrl    String?
@@ -87,6 +93,8 @@ model User {
   addedTeamMembers       TeamMember[]            @relation("TeamMemberAdder")
   addedEnrollments       CycleEnrollment[]
   teamSeeking            TeamSeeker[]
+  submittedIdeas         ProjectIdea[]           @relation("IdeaSubmitter")
+  ideaReviews            IdeaReview[]            @relation("IdeaReviewer")
 
   @@index([role])
   @@index([batchYear])
@@ -178,10 +186,12 @@ model CourseProjectCycle {
   minTeamSize            Int               @default(1)
   maxTeamSize            Int               @default(4)
   // Students change their own teams until teamFormationDeadline. The owning faculty then
-  // complete teams until teamCompletionDeadline, which is also the idea deadline.
-  // The migration adds a CHECK: formation <= completion.
+  // complete teams until teamCompletionDeadline. Teams submit their first idea by ideaDeadline;
+  // a rejected idea can be resubmitted until submissionStartAt.
+  // The migrations add CHECKs: formation <= completion <= idea deadline <= submissionStartAt.
   teamFormationDeadline  DateTime
   teamCompletionDeadline DateTime
+  ideaDeadline           DateTime
   kind                   CourseKind        @default(CORE)
   status                 CycleStatus       @default(DRAFT)
   createdByFacultyId     String
@@ -232,6 +242,7 @@ model Team {
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
   members   TeamMember[]
+  idea      ProjectIdea?
 
   // Target of TeamMember's composite foreign key, which keeps every member row in its team's cycle.
   @@unique([id, cycleId])
@@ -267,4 +278,61 @@ model TeamSeeker {
   createdAt DateTime           @default(now())
 
   @@id([cycleId, userId])
+}
+
+// Ideas
+
+enum IdeaStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum IdeaDecision {
+  APPROVED
+  REJECTED
+}
+
+// A team's current project idea: one per team, submitted by its leader, reviewed by the owning faculty.
+model ProjectIdea {
+  id            String       @id @default(uuid())
+  teamId        String
+  // Copied from the team; the composite foreign key keeps it equal to the team's cycle.
+  cycleId       String
+  // Goes with the team, which can only be disbanded while students still form teams.
+  team          Team         @relation(fields: [teamId, cycleId], references: [id, cycleId], onDelete: Cascade)
+  title         String
+  problem       String
+  solution      String
+  link          String?
+  status        IdeaStatus   @default(SUBMITTED)
+  // 1 for the first submission, one more for each resubmission after a rejection.
+  // The migration adds a CHECK: version >= 1.
+  version       Int          @default(1)
+  submittedById String
+  submittedBy   User         @relation("IdeaSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
+  submittedAt   DateTime
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  reviews       IdeaReview[]
+
+  // One idea per team (the team id alone decides the cycle).
+  @@unique([teamId, cycleId])
+  @@index([cycleId, status])
+}
+
+// One faculty decision on one version of an idea; the history stays when the team resubmits.
+model IdeaReview {
+  id         String       @id @default(uuid())
+  ideaId     String
+  idea       ProjectIdea  @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  version    Int
+  decision   IdeaDecision
+  // Required for a rejection (checked by the app and a CHECK in the migration).
+  feedback   String?
+  reviewerId String
+  reviewer   User         @relation("IdeaReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+  createdAt  DateTime     @default(now())
+
+  @@unique([ideaId, version])
 }

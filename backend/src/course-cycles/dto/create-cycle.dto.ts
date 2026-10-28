@@ -109,9 +109,18 @@ export class CreateCycleDto {
   @ApiPropertyOptional({
     example: "2026-10-25T17:00:00.000Z",
     description:
-      "The owning faculty complete teams until then; also the idea deadline. Defaults to teamFormationDeadline (no completion window).",
+      "The owning faculty complete teams until then. Defaults to teamFormationDeadline (no completion window). Must be by submissionStartAt.",
   })
   @IsOptional()
   @IsISO8601()
   teamCompletionDeadline?: string;
+
+  @ApiPropertyOptional({
+    example: "2026-10-28T17:00:00.000Z",
+    description:
+      "Teams submit their first idea until then; a rejected idea can be resubmitted until submissionStartAt. Defaults to teamCompletionDeadline. Must be between it and submissionStartAt.",
+  })
+  @IsOptional()
+  @IsISO8601()
+  ideaDeadline?: string;
 }

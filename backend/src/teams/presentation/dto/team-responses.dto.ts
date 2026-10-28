@@ -92,6 +92,11 @@ export class TeamCandidateDto {
   lookingForTeam!: boolean;
   @ApiProperty({ type: String, nullable: true })
   note!: string | null;
+  @ApiProperty({
+    description:
+      "False for a pre-registered student who has not signed in yet; they can still be added",
+  })
+  signedIn!: boolean;
 
   static from(candidate: TeamCandidate): TeamCandidateDto {
     return Object.assign(new TeamCandidateDto(), candidate);
@@ -109,6 +114,8 @@ export class UnassignedStudentDto {
   lookingForTeam!: boolean;
   @ApiProperty({ type: String, nullable: true })
   note!: string | null;
+  @ApiProperty({ description: "False until the student first signs in" })
+  signedIn!: boolean;
 
   static from(student: UnassignedStudent): UnassignedStudentDto {
     return Object.assign(new UnassignedStudentDto(), student);
@@ -126,7 +133,7 @@ export class CompletionOverviewDto {
   @ApiProperty({
     type: [String],
     description:
-      "Enrolled emails with no account yet (electives); they cannot be placed until they sign in",
+      "Elective emails enrolled before accounts were pre-registered; enrolling them again registers them so they can be placed",
   })
   notSignedIn!: string[];
 

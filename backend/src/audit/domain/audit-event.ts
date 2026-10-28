@@ -20,7 +20,12 @@ export type AuditAction =
   | "TEAM_DISBANDED"
   | "ENROLLMENT_ADDED"
   | "ENROLLMENT_REMOVED"
-  | "AUTO_GROUP_APPLIED";
+  | "AUTO_GROUP_APPLIED"
+  | "USER_CLAIMED"
+  | "IDEA_SUBMITTED"
+  | "IDEA_UPDATED"
+  | "IDEA_APPROVED"
+  | "IDEA_REJECTED";
 
 export type AuditEntityType =
   | "User"
@@ -29,7 +34,8 @@ export type AuditEntityType =
   | "FacultyAllowlistEntry"
   | "RefreshTokenFamily"
   | "Team"
-  | "CourseProjectCycle";
+  | "CourseProjectCycle"
+  | "ProjectIdea";
 
 export type AuditMetadata = Record<
   string,

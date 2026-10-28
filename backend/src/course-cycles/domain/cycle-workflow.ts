@@ -4,13 +4,13 @@ import {
   CyclePatch,
   CycleSchedule,
   CycleStatus,
+  StageDeadline,
   TEAM_SIZE_LIMIT,
-  TeamDeadline,
 } from "./cycle.types";
 import { CycleErrorCode } from "./cycle.errors";
 
 const deadlineRules: Record<
-  TeamDeadline,
+  StageDeadline,
   { label: string; invalid: CycleErrorCode }
 > = {
   teamFormationDeadline: {
@@ -20,6 +20,10 @@ const deadlineRules: Record<
   teamCompletionDeadline: {
     label: "Team completion",
     invalid: "INVALID_TEAM_COMPLETION_DEADLINE",
+  },
+  ideaDeadline: {
+    label: "Idea submission",
+    invalid: "INVALID_IDEA_DEADLINE",
   },
 };
 
@@ -46,6 +50,7 @@ const editableFields: Record<CycleStatus, readonly (keyof CyclePatch)[]> = {
     "maxTeamSize",
     "teamFormationDeadline",
     "teamCompletionDeadline",
+    "ideaDeadline",
     "kind",
   ],
   // Sizes and the kind are fixed once students can act; the deadlines can still move (see assertTeamDeadlineChange).
@@ -54,6 +59,7 @@ const editableFields: Record<CycleStatus, readonly (keyof CyclePatch)[]> = {
     "submissionDeadline",
     "teamFormationDeadline",
     "teamCompletionDeadline",
+    "ideaDeadline",
   ],
   CLOSED: [],
 };
@@ -127,10 +133,11 @@ export class CycleWorkflow {
         `Team size must satisfy 1 <= minimum <= maximum <= ${TEAM_SIZE_LIMIT}`,
       );
     }
-    if (!(schedule.teamFormationDeadline < schedule.submissionDeadline)) {
+    // Teams and ideas settle by the time submissions open, one stage after another.
+    if (schedule.teamFormationDeadline > schedule.submissionStartAt) {
       throw new CycleDomainError(
         "INVALID_TEAM_FORMATION_DEADLINE",
-        "Team formation must end before the submission deadline",
+        "Team formation must end by the time submissions open",
       );
     }
     if (schedule.teamCompletionDeadline < schedule.teamFormationDeadline) {
@@ -139,20 +146,32 @@ export class CycleWorkflow {
         "Faculty team completion cannot end before students' team formation",
       );
     }
-    if (!(schedule.teamCompletionDeadline < schedule.submissionDeadline)) {
+    if (schedule.teamCompletionDeadline > schedule.submissionStartAt) {
       throw new CycleDomainError(
         "INVALID_TEAM_COMPLETION_DEADLINE",
-        "Team completion must end before the submission deadline",
+        "Team completion must end by the time submissions open",
+      );
+    }
+    if (schedule.ideaDeadline < schedule.teamCompletionDeadline) {
+      throw new CycleDomainError(
+        "INVALID_IDEA_DEADLINE",
+        "Ideas cannot be due before the faculty finish completing teams",
+      );
+    }
+    if (schedule.ideaDeadline > schedule.submissionStartAt) {
+      throw new CycleDomainError(
+        "INVALID_IDEA_DEADLINE",
+        "Ideas must be due by the time submissions open",
       );
     }
   }
 
   /**
-   * On a published cycle a team deadline may move only while its stage is
+   * On a published cycle a stage deadline may move only while its stage is
    * still open, and never into the past: a stage that has ended stays ended.
    */
-  assertTeamDeadlineChange(
-    deadline: TeamDeadline,
+  assertStageDeadlineChange(
+    deadline: StageDeadline,
     current: Date,
     next: Date,
     now: Date,

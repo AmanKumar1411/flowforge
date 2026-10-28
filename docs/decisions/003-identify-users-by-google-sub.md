@@ -1,6 +1,7 @@
 # ADR 003: Identify users by Google `sub`, not by email
 
-**Status:** Accepted (Phase 3)
+**Status:** Accepted (Phase 3). Narrowed by [ADR 012](012-pre-registered-students.md): an account the faculty
+pre-registered, which has no sub yet, is claimed by the first sign-in with its email.
 
 ## Context
 

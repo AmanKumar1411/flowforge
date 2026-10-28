@@ -15,8 +15,15 @@ Implemented so far:
   a team, becomes its leader and adds batch-mates found by name or email; they are members at
   once. Leaders can change members until the deadline, after which teams are fixed. The
   database guarantees one team per student per cycle.
+- **Phase 5:** team completion and electives. After the students' deadline the owning faculty
+  place everyone still without a team, by hand or by random auto-group with a preview. Students
+  can mark themselves "looking for a team". Electives have an enrollment list the faculty import.
+- **Phase 6:** project ideas. Each team's leader submits one idea by the idea deadline; the
+  owning faculty approve it or reject it with feedback, and a rejected idea can be resubmitted
+  until submissions open. Faculty can also register a core batch's students before they sign
+  in, so nobody is left out of teams.
 
-Project ideas (Phase 5, due at the same deadline), submissions and evaluations come later.
+Submissions and evaluations come later.
 
 ## Prerequisites
 
@@ -154,9 +161,9 @@ Node 22, which is why integration tests use Node's built-in runner.
 
 In `frontend/`: `npm run build` and `npm run lint`.
 
-Browser end-to-end checks of the sign-in flows, the team screens and team completion live in
+Browser end-to-end checks of the sign-in flows, the team screens, team completion and ideas live in
 [e2e/browser](e2e/browser/README.md). The latest results are in the
-[Phase 5 test report](docs/testing/phase5-test-report.md).
+[Phase 6 test report](docs/testing/phase6-test-report.md).
 
 ## API
 
@@ -199,11 +206,18 @@ All routes use the `/api` prefix and every error is `{ code, message }`. Interac
 | POST | `/course-cycles/:id/team-completion/teams` | FACULTY owner, between the two team deadlines |
 | POST | `/course-cycles/:id/team-completion/auto-group/preview`, `/auto-group` | FACULTY owner, between the two team deadlines |
 | POST | `/teams/:id/members` | FACULTY owner, between the two team deadlines |
+| GET, POST | `/course-cycles/:id/batch-students` | FACULTY owner of a core cycle: the batch list; POST `{ emails }` registers students who have not signed in |
+| GET | `/teams/:id/idea` | Team members, FACULTY owner, ADMIN |
+| PUT | `/teams/:id/idea` | Team leader: submit or edit before the idea deadline; resubmit a rejected idea before submissions open |
+| POST | `/teams/:id/idea/review` | FACULTY owner: `{ version, decision, feedback }` (feedback required to reject) |
+| GET | `/course-cycles/:id/ideas` | FACULTY owner, ADMIN: every team with its idea |
 
 Cycles accept `minTeamSize`, `maxTeamSize` (defaults 1 and 4, at most 10),
 `teamFormationDeadline` (students; defaults to `submissionStartAt`), `teamCompletionDeadline`
-(faculty; defaults to the formation deadline, which means no faculty window) and `kind` (`CORE`
-for the whole batch, `ELECTIVE` for enrolled students only). The rules are in
+(faculty; defaults to the formation deadline, which means no faculty window), `ideaDeadline`
+(defaults to the completion deadline) and `kind` (`CORE` for the whole batch, `ELECTIVE` for
+enrolled students only). The three deadlines come in that order, no later than
+`submissionStartAt`. The rules are in
 [teams.md](docs/architecture/teams.md).
 
 ## Future work: faculty CSV import
@@ -226,10 +240,12 @@ reads the allowlist through `FacultyDirectory`, so `SignInService` and `RoleReso
   [test report](docs/testing/phase4-test-report.md)
 - [Phase 5 test report](docs/testing/phase5-test-report.md) (team completion, electives, demo
   accounts)
+- [Phase 6 test report](docs/testing/phase6-test-report.md) (ideas, pre-registered students)
 - [Architecture: foundation](docs/architecture/foundation.md),
   [course cycles](docs/architecture/course-cycles.md),
   [authentication and RBAC](docs/architecture/auth-and-rbac.md),
-  [teams](docs/architecture/teams.md)
+  [teams](docs/architecture/teams.md),
+  [ideas and pre-registered students](docs/architecture/ideas.md)
 - Decisions: [001 Google Sign-In](docs/decisions/001-google-sign-in-domain-restricted.md),
   [002 server-side roles](docs/decisions/002-roles-resolved-server-side.md),
   [003 Google sub](docs/decisions/003-identify-users-by-google-sub.md),
@@ -238,4 +254,8 @@ reads the allowlist through `FacultyDirectory`, so `SignInService` and `RoleReso
   [006 dev identity provider](docs/decisions/006-dev-identity-provider.md),
   [007 leader forms the team](docs/decisions/007-leader-forms-team-without-invitations.md),
   [008 one team per student in the database](docs/decisions/008-one-team-per-student-enforced-by-database.md),
-  [009 team rules and formation deadline](docs/decisions/009-team-rules-and-formation-deadline.md)
+  [009 team rules and formation deadline](docs/decisions/009-team-rules-and-formation-deadline.md),
+  [010 elective rosters](docs/decisions/010-elective-rosters-and-removal-checks.md),
+  [011 faculty team completion and auto-group](docs/decisions/011-faculty-team-completion-and-auto-group.md),
+  [012 pre-registered students](docs/decisions/012-pre-registered-students.md),
+  [013 project ideas](docs/decisions/013-project-ideas.md)

@@ -11,7 +11,9 @@ export type CycleErrorCode =
   | "INVALID_TEAM_SIZE"
   | "INVALID_TEAM_FORMATION_DEADLINE"
   | "INVALID_TEAM_COMPLETION_DEADLINE"
+  | "INVALID_IDEA_DEADLINE"
   | "CYCLE_NOT_ELECTIVE"
+  | "CYCLE_NOT_CORE"
   | "ENROLLMENT_NOT_FOUND";
 
 export class CycleDomainError extends DomainError<CycleErrorCode> {}

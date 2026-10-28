@@ -16,6 +16,14 @@ const DATE_FIELDS: (keyof CycleInput)[] = [
   "submissionDeadline",
   "teamFormationDeadline",
   "teamCompletionDeadline",
+  "ideaDeadline",
+];
+
+/** The deadlines that end one stage after another before submissions open. */
+const STAGE_FIELDS: (keyof CycleInput)[] = [
+  "teamFormationDeadline",
+  "teamCompletionDeadline",
+  "ideaDeadline",
 ];
 
 /** Form values (local date inputs) to API values (ISO timestamps). */
@@ -47,8 +55,12 @@ export function CycleEditorPage() {
   const navigate = useNavigate();
   const [cycle, setCycle] = useState<Cycle | null>(null);
   const [loadedForm, setLoadedForm] = useState<CycleInput | null>(null);
-  // The API refuses to move a team deadline that has passed: that stage is over.
-  const [ended, setEnded] = useState({ formation: false, completion: false });
+  // The API refuses to move a stage deadline that has passed: that stage is over.
+  const [ended, setEnded] = useState({
+    formation: false,
+    completion: false,
+    idea: false,
+  });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const year = new Date().getFullYear();
@@ -65,6 +77,7 @@ export function CycleEditorPage() {
     maxTeamSize: 4,
     teamFormationDeadline: localDateInput(),
     teamCompletionDeadline: localDateInput(),
+    ideaDeadline: localDateInput(),
     kind: "CORE",
   });
   useEffect(() => {
@@ -86,6 +99,7 @@ export function CycleEditorPage() {
             teamCompletionDeadline: localDateInput(
               loaded.teamCompletionDeadline,
             ),
+            ideaDeadline: localDateInput(loaded.ideaDeadline),
             kind: loaded.kind,
           };
           setCycle(loaded);
@@ -96,16 +110,31 @@ export function CycleEditorPage() {
           setEnded({
             formation: passed(loaded.teamFormationDeadline),
             completion: passed(loaded.teamCompletionDeadline),
+            idea: passed(loaded.ideaDeadline),
           });
           setForm(loadedValues);
         })
         .catch((caught) => setError(readableError(caught)));
   }, [cycleId]);
   const setField = (field: keyof CycleInput, value: string) =>
-    setForm((current) => ({
-      ...current,
-      [field]: NUMBER_FIELDS.includes(field) ? Number(value) : value,
-    }));
+    setForm((current) => {
+      const next = {
+        ...current,
+        [field]: NUMBER_FIELDS.includes(field) ? Number(value) : value,
+      };
+      // As on the server: a later stage that ended together with this one moves with it.
+      const index = STAGE_FIELDS.indexOf(field);
+      for (
+        let later = index + 1;
+        index >= 0 && later < STAGE_FIELDS.length;
+        later += 1
+      ) {
+        const [before, after] = [STAGE_FIELDS[later - 1], STAGE_FIELDS[later]];
+        if (current[after] !== current[before]) break;
+        Object.assign(next, { [after]: next[before] });
+      }
+      return next;
+    });
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
@@ -243,14 +272,16 @@ export function CycleEditorPage() {
           </label>
         </div>
         <fieldset className="form-section">
-          <legend>Teams</legend>
+          <legend>Teams and ideas</legend>
           <p className="field-hint">
             Students form teams of this size, leader included, until the
             formation deadline. Between that and the completion deadline you
-            place anyone still without a team, by hand or by auto-grouping;
-            project ideas are due at the completion deadline. Use the same
-            date for both to skip that step. Sizes cannot change once the cycle
-            is published.
+            place anyone still without a team, by hand or by auto-grouping (use
+            the same date for both to skip that step). Each team's leader then
+            submits a project idea by the idea deadline; a rejected idea can be
+            resubmitted until submissions open. All three dates must be no
+            later than submissions open. Sizes cannot change once the cycle is
+            published.
           </p>
           <div className="form-grid">
             <label>
@@ -298,6 +329,18 @@ export function CycleEditorPage() {
                   setField("teamCompletionDeadline", event.target.value)
                 }
                 disabled={ended.completion}
+                required
+              />
+            </label>
+            <label>
+              Idea deadline (teams)
+              <input
+                type="datetime-local"
+                value={form.ideaDeadline}
+                onChange={(event) =>
+                  setField("ideaDeadline", event.target.value)
+                }
+                disabled={ended.idea}
                 required
               />
             </label>

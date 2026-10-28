@@ -384,22 +384,32 @@ describe("Team completion and electives", () => {
       ).toEqual([neha.email]);
     });
 
-    it("list students who have not signed in yet", async () => {
+    it("register students who have not signed in yet, so the faculty can place them", async () => {
       await enrollments.add(owner, elective, [
         neha.email,
         "new.s26csai@nst.rishihood.edu.in",
       ]);
       expect(await enrollments.list(owner, elective)).toEqual([
-        expect.objectContaining({ email: neha.email, name: "Neha" }),
+        expect.objectContaining({
+          email: neha.email,
+          name: "Neha",
+          signedIn: true,
+        }),
         expect.objectContaining({
           email: "new.s26csai@nst.rishihood.edu.in",
-          userId: null,
+          name: "New S",
+          signedIn: false,
         }),
       ]);
       clock.advance(untilFormationEnds);
-      expect((await completion.overview(owner, elective)).notSignedIn).toEqual([
-        "new.s26csai@nst.rishihood.edu.in",
-      ]);
+      const overview = await completion.overview(owner, elective);
+      expect(overview.notSignedIn).toEqual([]);
+      expect(overview.unassigned).toContainEqual(
+        expect.objectContaining({
+          email: "new.s26csai@nst.rishihood.edu.in",
+          signedIn: false,
+        }),
+      );
     });
 
     it("form teams only from the roster", async () => {

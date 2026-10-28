@@ -1,6 +1,6 @@
 # Browser end-to-end checks
 
-Three scripts drive the real React app in headless Chrome against the real API:
+Four scripts drive the real React app in headless Chrome against the real API:
 
 - `auth-ui.e2e.cjs` (Phase 3) runs 20 checks: the Google redirect (state, nonce, PKCE), token
   storage, single-flight refresh, the student / pending staff / admin / faculty journeys,
@@ -20,11 +20,18 @@ Three scripts drive the real React app in headless Chrome against the real API:
     team with room;
   - auto-group preview, re-roll and confirmation, and the auto-grouped student seeing their team.
   It waits 45 seconds for a formation deadline to pass.
+- `ideas-ui.e2e.cjs` (Phase 6) runs 9 checks:
+  - the idea deadline in the cycle editor, with later dates following an earlier one;
+  - registering a core batch's students who have not signed in, and a leader adding one
+    (tagged "Not signed in yet") who then finds the team at their first sign-in;
+  - the leader submitting and editing the idea, the faculty rejecting it with feedback, the
+    leader resubmitting, and the faculty approving the new version.
 
-The Phase 4 and Phase 5 scripts set up their faculty member and students through the API, so all
-three run one after another on the same database. Each owns a batch, so their counts never mix:
-`auth-ui` uses 2023 (its batch-correction check moves a student to 2025), `teams-ui` 2026 and
-`completion-ui` 2024. Shared helpers (dev sign-in, API sessions, dates) are in `support.cjs`.
+The Phase 4 to 6 scripts set up their faculty member and students through the API, so all four
+run one after another on the same database. Each owns a batch, so their counts never mix:
+`auth-ui` uses 2023 (its batch-correction check moves a student to 2025), `teams-ui` 2026,
+`completion-ui` 2024 (its elective's newcomer is in 2022) and `ideas-ui` 2027. Shared helpers
+(dev sign-in, API sessions, dates) are in `support.cjs`.
 
 It uses `playwright-core` with your installed Google Chrome, so nothing is downloaded and the app
 gets no new dependency.
@@ -55,6 +62,8 @@ node teams-ui.e2e.cjs "/Applications/Google Chrome.app/Contents/MacOS/Google Chr
   http://localhost:5173 http://localhost:3100/api ./out
 node completion-ui.e2e.cjs "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   http://localhost:5173 http://localhost:3100/api ./out
+node ideas-ui.e2e.cjs "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  http://localhost:5173 http://localhost:3100/api ./out
 ```
 
 To keep a development frontend on 5173 running, start this one on another port (for example
@@ -62,5 +71,5 @@ To keep a development frontend on 5173 running, start this one on another port (
 `http://localhost:5174` to the scripts.
 
 Each check prints `PASS` or `FAIL`. Results are written to `out/browser-e2e.json`,
-`out/teams-browser-e2e.json` and `out/completion-browser-e2e.json`, with a screenshot of the page
-for every failure. Each script exits with code 1 if any check fails.
+`out/teams-browser-e2e.json`, `out/completion-browser-e2e.json` and `out/ideas-browser-e2e.json`,
+with a screenshot of the page for every failure. Each script exits with code 1 if any check fails.

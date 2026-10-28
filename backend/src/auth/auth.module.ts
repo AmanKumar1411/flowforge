@@ -9,6 +9,7 @@ import { AppConfig } from "../config/app-config";
 import { UsersModule } from "../users/users.module";
 import { AuthService } from "./application/auth.service";
 import { DemoAccountsService } from "./application/demo-accounts.service";
+import { StudentPreRegistration } from "./application/student-pre-registration";
 import { FacultyAccessService } from "./application/faculty-access.service";
 import { DevIdentityProvider } from "./application/ports/dev-identity-provider";
 import { FacultyDirectory } from "./application/ports/faculty-directory";
@@ -63,6 +64,7 @@ const ONE_MINUTE_MS = 60_000;
   providers: [
     AuthService,
     DemoAccountsService,
+    StudentPreRegistration,
     SignInService,
     SessionService,
     FacultyAccessService,
@@ -108,6 +110,7 @@ const ONE_MINUTE_MS = 60_000;
     SessionService,
     BatchYearPolicy,
     UniversityIdentityParser,
+    StudentPreRegistration,
   ],
 })
 export class AuthModule {}

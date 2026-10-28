@@ -119,7 +119,11 @@ export class DemoAccountsService {
         roleBefore: null,
       };
     }
-    if (existing.googleSub !== devSubject(account.email)) {
+    // A pre-registered account (no sub yet) is claimed by its first dev login, like any other.
+    if (
+      existing.googleSub !== null &&
+      existing.googleSub !== devSubject(account.email)
+    ) {
       return {
         account,
         skipped: "Signed in with Google before, so dev login cannot use it",

@@ -31,6 +31,7 @@ const user = (
   role: "STUDENT",
   status: "ACTIVE",
   batchYear: 2026,
+  lastLoginAt: new Date("2026-10-20T09:00:00.000Z"),
   ...overrides,
 });
 

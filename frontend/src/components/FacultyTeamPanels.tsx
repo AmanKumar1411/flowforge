@@ -22,7 +22,7 @@ import type {
   Team,
   UnassignedStudent,
 } from "../types";
-import { FormationNote } from "./TeamPanels";
+import { FormationNote, NotSignedInTag } from "./TeamPanels";
 
 /** The owning faculty's view of a cycle's teams, and their tools for students left without one. */
 export function FacultyTeamsSection({ cycle }: { cycle: Cycle }) {
@@ -336,6 +336,7 @@ function CompletionPanel({
                     {student.lookingForTeam && (
                       <span className="looking-tag">Looking</span>
                     )}
+                    {!student.signedIn && <NotSignedInTag />}
                   </strong>
                   <small>{student.note ?? student.email}</small>
                 </span>
@@ -423,7 +424,8 @@ function CompletionPanel({
 
       {notSignedIn.length > 0 && (
         <p className="field-hint">
-          Enrolled but not signed in yet, so they cannot be placed:{" "}
+          Enrolled before student accounts were registered, so they cannot be
+          placed yet (enroll them again to register them):{" "}
           {notSignedIn.join(", ")}.
         </p>
       )}

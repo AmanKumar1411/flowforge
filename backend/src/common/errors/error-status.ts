@@ -2,6 +2,7 @@ import { HttpStatus } from "@nestjs/common";
 import type { AdminErrorCode } from "../../admin/admin.errors";
 import type { AuthErrorCode } from "../../auth/domain/auth.errors";
 import type { CycleErrorCode } from "../../course-cycles/domain/cycle.errors";
+import type { IdeaErrorCode } from "../../ideas/domain/idea.errors";
 import type { TeamErrorCode } from "../../teams/domain/team.errors";
 import type { CommonErrorCode } from "./domain-error";
 
@@ -10,7 +11,8 @@ type DomainErrorCode =
   | AuthErrorCode
   | CycleErrorCode
   | AdminErrorCode
-  | TeamErrorCode;
+  | TeamErrorCode
+  | IdeaErrorCode;
 
 // `satisfies` makes the build fail when a new error code has no HTTP status.
 const statusByCode = {
@@ -55,7 +57,9 @@ const statusByCode = {
   INVALID_TEAM_SIZE: HttpStatus.BAD_REQUEST,
   INVALID_TEAM_FORMATION_DEADLINE: HttpStatus.BAD_REQUEST,
   INVALID_TEAM_COMPLETION_DEADLINE: HttpStatus.BAD_REQUEST,
+  INVALID_IDEA_DEADLINE: HttpStatus.BAD_REQUEST,
   CYCLE_NOT_ELECTIVE: HttpStatus.CONFLICT,
+  CYCLE_NOT_CORE: HttpStatus.CONFLICT,
   ENROLLMENT_NOT_FOUND: HttpStatus.NOT_FOUND,
 
   TEAM_NOT_FOUND: HttpStatus.NOT_FOUND,
@@ -67,6 +71,15 @@ const statusByCode = {
   TEAM_COMPLETION_CLOSED: HttpStatus.CONFLICT,
   DUPLICATE_TEAM_MEMBER: HttpStatus.BAD_REQUEST,
   ENROLLED_STUDENT_IN_TEAM: HttpStatus.CONFLICT,
+
+  IDEA_NOT_FOUND: HttpStatus.NOT_FOUND,
+  IDEA_SUBMISSION_CLOSED: HttpStatus.CONFLICT,
+  IDEA_RESUBMISSION_CLOSED: HttpStatus.CONFLICT,
+  IDEA_ALREADY_APPROVED: HttpStatus.CONFLICT,
+  IDEA_NOT_AWAITING_REVIEW: HttpStatus.CONFLICT,
+  IDEA_CHANGED: HttpStatus.CONFLICT,
+  IDEA_REVIEW_CLOSED: HttpStatus.CONFLICT,
+  IDEA_FEEDBACK_REQUIRED: HttpStatus.BAD_REQUEST,
 } satisfies Record<DomainErrorCode, HttpStatus>;
 
 export const statusForCode = (code: string): HttpStatus =>

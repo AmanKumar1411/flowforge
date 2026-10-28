@@ -71,6 +71,8 @@ export interface DirectoryUser {
   role: Role;
   status: UserStatus;
   batchYear: number | null;
+  /** Null for a pre-registered student who has not signed in yet. */
+  lastLoginAt: Date | null;
 }
 
 /** A student without a team who asked to be found. */
@@ -90,6 +92,8 @@ export interface TeamCandidate {
   availability: CandidateAvailability;
   lookingForTeam: boolean;
   note: string | null;
+  /** False for a pre-registered student who has not signed in yet; they can still be added. */
+  signedIn: boolean;
 }
 
 /** A participant of the cycle who is in no team yet. */
@@ -99,6 +103,7 @@ export interface UnassignedStudent {
   email: string;
   lookingForTeam: boolean;
   note: string | null;
+  signedIn: boolean;
 }
 
 /** A team the faculty want created: by hand, or accepted from an auto-group preview. */

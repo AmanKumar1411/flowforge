@@ -3,6 +3,7 @@
 const path = require("node:path");
 const fs = require("node:fs");
 const { chromium } = require("playwright-core");
+const { localInput, minuteFromNow } = require("./support.cjs");
 const [chromePath, FRONTEND, API, OUT] = process.argv.slice(2);
 
 const DOMAIN = "@nst.rishihood.edu.in";
@@ -193,8 +194,9 @@ const panel = (page, heading) =>
       await staff.getByLabel("Cycle title").fill("Browser E2E cycle");
       await staff.getByLabel("Batch year").fill("2023");
       await staff.getByLabel("Academic year").fill("2026-27");
-      await staff.getByLabel("Submission opens").fill("2026-10-20T09:00");
-      await staff.getByLabel("Submission deadline").fill("2026-12-01T17:00");
+      // Team and idea dates default to now, so submissions must open later than that.
+      await staff.getByLabel("Submission opens").fill(localInput(minuteFromNow(7 * 24 * 60)));
+      await staff.getByLabel("Submission deadline").fill(localInput(minuteFromNow(30 * 24 * 60)));
       await staff.getByRole("button", { name: "Create draft" }).click();
       await staff.waitForURL(/\/faculty\/cycles\/[0-9a-f-]{36}$/);
       await staff.getByRole("button", { name: "← Back to cycles" }).click();

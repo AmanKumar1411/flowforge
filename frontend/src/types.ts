@@ -38,8 +38,10 @@ export interface Cycle {
   maxTeamSize: number;
   /** Students change their own teams until this moment. */
   teamFormationDeadline: string;
-  /** The owning faculty place students without a team until this moment; also the idea deadline. */
+  /** The owning faculty place students without a team until this moment. */
   teamCompletionDeadline: string;
+  /** Teams submit their first idea until this moment; a rejected idea can be resubmitted until submissionStartAt. */
+  ideaDeadline: string;
   kind: CourseKind;
   status: CycleStatus;
   publishedAt: string | null;
@@ -61,6 +63,7 @@ export interface CycleInput {
   maxTeamSize: number;
   teamFormationDeadline: string;
   teamCompletionDeadline: string;
+  ideaDeadline: string;
   kind: CourseKind;
 }
 
@@ -96,6 +99,8 @@ export interface TeamCandidate {
   availability: CandidateAvailability;
   lookingForTeam: boolean;
   note: string | null;
+  /** False for a student the faculty registered who has not signed in yet; they can still be added. */
+  signedIn: boolean;
 }
 
 export interface Person {
@@ -107,12 +112,13 @@ export interface Person {
 export interface UnassignedStudent extends Person {
   lookingForTeam: boolean;
   note: string | null;
+  signedIn: boolean;
 }
 
 export interface CompletionOverview {
   open: boolean;
   unassigned: UnassignedStudent[];
-  /** Enrolled emails with no account yet. */
+  /** Elective emails enrolled before accounts were registered; enrolling them again registers them. */
   notSignedIn: string[];
 }
 
@@ -129,16 +135,78 @@ export interface AutoGroupPreview {
 
 export interface EnrolledStudent {
   email: string;
-  /** Null until the student first signs in. */
+  /** Null only for an email enrolled before accounts were registered. */
   userId: string | null;
   name: string | null;
+  /** False until the student first signs in. */
+  signedIn: boolean;
   enrolledAt: string;
+}
+
+export interface RejectedEmail {
+  email: string;
+  reason: string;
 }
 
 export interface EnrollmentResult {
   added: string[];
   alreadyEnrolled: string[];
-  rejected: { email: string; reason: string }[];
+  rejected: RejectedEmail[];
+}
+
+/** A student of a core cycle's batch: signed in, or registered by the faculty. */
+export interface BatchStudent {
+  userId: string;
+  email: string;
+  name: string;
+  signedIn: boolean;
+}
+
+export interface BatchImportResult {
+  registered: string[];
+  alreadyRegistered: string[];
+  rejected: RejectedEmail[];
+}
+
+export type IdeaStatus = "SUBMITTED" | "APPROVED" | "REJECTED";
+export type IdeaDecision = "APPROVED" | "REJECTED";
+
+export interface IdeaContent {
+  title: string;
+  problem: string;
+  solution: string;
+  link: string | null;
+}
+
+export interface IdeaReview {
+  version: number;
+  decision: IdeaDecision;
+  feedback: string | null;
+  reviewer: { id: string; name: string };
+  reviewedAt: string;
+}
+
+export interface Idea extends IdeaContent {
+  id: string;
+  teamId: string;
+  cycleId: string;
+  status: IdeaStatus;
+  /** Goes up with every change; a review sends back the version it read. */
+  version: number;
+  submittedBy: { id: string; name: string };
+  submittedAt: string;
+  /** Newest first. */
+  reviews: IdeaReview[];
+}
+
+export interface CycleIdea {
+  team: {
+    id: string;
+    name: string;
+    leader: { id: string; name: string };
+    memberCount: number;
+  };
+  idea: Idea | null;
 }
 
 export interface AdminUser {

@@ -13,6 +13,7 @@ import {
 import { readableError } from "../errors";
 import { extractEmails } from "../teams";
 import type { Cycle, EnrolledStudent, EnrollmentResult } from "../types";
+import { NotSignedInTag } from "./TeamPanels";
 
 /** An elective's roster: only these students see the cycle and can be in its teams. */
 export function EnrollmentPanel({ cycle }: { cycle: Cycle }) {
@@ -87,7 +88,9 @@ export function EnrollmentPanel({ cycle }: { cycle: Cycle }) {
       <p className="field-hint">
         Only enrolled students see this elective and can be in its teams, in
         any batch. Paste emails or upload a CSV; anything that is not a
-        student email of this university is reported, not added.
+        student email of this university is reported, not added. Students who
+        have not signed in yet are registered, so they can be placed in teams
+        right away.
       </p>
       {!closed && (
         <form className="team-editor" onSubmit={submit}>
@@ -150,9 +153,8 @@ export function EnrollmentPanel({ cycle }: { cycle: Cycle }) {
             {students.map((student) => (
               <tr key={student.email}>
                 <td>
-                  {student.name ?? (
-                    <span className="muted">Not signed in yet</span>
-                  )}
+                  {student.name ?? <span className="muted">No account yet</span>}
+                  {student.name && !student.signedIn && <NotSignedInTag />}
                 </td>
                 <td>{student.email}</td>
                 <td className="row-actions">

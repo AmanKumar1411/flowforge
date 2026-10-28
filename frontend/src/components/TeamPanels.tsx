@@ -26,6 +26,7 @@ import {
   isFormationOpen,
 } from "../teams";
 import type { Cycle, Person, Team, TeamCandidate } from "../types";
+import { TeamIdeaPanel } from "./IdeaPanels";
 
 export function FormationNote({ cycle, now }: { cycle: Cycle; now: number }) {
   const deadline = formatDate(cycle.teamFormationDeadline);
@@ -46,6 +47,11 @@ export function FormationNote({ cycle, now }: { cycle: Cycle; now: number }) {
       {completion}
     </p>
   );
+}
+
+/** A student the faculty registered from a list, who has not signed in yet; they can still join a team. */
+export function NotSignedInTag() {
+  return <span className="pending-tag">Not signed in yet</span>;
 }
 
 export function MemberList({ team }: { team: Team }) {
@@ -100,76 +106,81 @@ export function StudentTeamPanel({ cycle }: { cycle: Cycle }) {
 
   const leader = team?.members.find((member) => member.isLeader);
   return (
-    <section className="team-panel" aria-labelledby="team-heading">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">Your team</p>
-          <h2 id="team-heading">
-            {team === undefined ? "Loading…" : (team?.name ?? "No team yet")}
-          </h2>
-        </div>
-        {team && !editing && open && team.leaderId === myId && (
-          <div className="row-actions">
-            <button className="text-button" onClick={disband}>
-              Disband
-            </button>
-            <button
-              className="dark-button compact"
-              onClick={() => setEditing(true)}
-            >
-              Edit team
-            </button>
+    <>
+      <section className="team-panel" aria-labelledby="team-heading">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Your team</p>
+            <h2 id="team-heading">
+              {team === undefined ? "Loading…" : (team?.name ?? "No team yet")}
+            </h2>
           </div>
-        )}
-      </div>
-      <FormationNote cycle={cycle} now={now} />
-      {error && <p className="form-error">{error}</p>}
-      {editing ? (
-        <TeamEditor
-          cycle={cycle}
-          team={team ?? null}
-          onSaved={(saved) => {
-            setTeam(saved);
-            setEditing(false);
-          }}
-          onCancel={() => setEditing(false)}
-        />
-      ) : team ? (
-        <>
-          <MemberList team={team} />
-          {team.leaderId !== myId && (
-            <p className="muted">
-              {leader?.name ?? "The leader"} leads this team. Only the leader
-              can change it.
-            </p>
+          {team && !editing && open && team.leaderId === myId && (
+            <div className="row-actions">
+              <button className="text-button" onClick={disband}>
+                Disband
+              </button>
+              <button
+                className="dark-button compact"
+                onClick={() => setEditing(true)}
+              >
+                Edit team
+              </button>
+            </div>
           )}
-        </>
-      ) : team === null && open ? (
-        <>
-          <div className="team-empty">
-            <p>
-              Create a team to become its leader and pick your teammates, or
-              wait for a leader to add you. Added students join at once.
+        </div>
+        <FormationNote cycle={cycle} now={now} />
+        {error && <p className="form-error">{error}</p>}
+        {editing ? (
+          <TeamEditor
+            cycle={cycle}
+            team={team ?? null}
+            onSaved={(saved) => {
+              setTeam(saved);
+              setEditing(false);
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        ) : team ? (
+          <>
+            <MemberList team={team} />
+            {team.leaderId !== myId && (
+              <p className="muted">
+                {leader?.name ?? "The leader"} leads this team. Only the leader
+                can change it.
+              </p>
+            )}
+          </>
+        ) : team === null && open ? (
+          <>
+            <div className="team-empty">
+              <p>
+                Create a team to become its leader and pick your teammates, or
+                wait for a leader to add you. Added students join at once.
+              </p>
+              <button
+                className="primary-button"
+                onClick={() => setEditing(true)}
+              >
+                Create a team
+              </button>
+            </div>
+            <LookingSwitch cycleId={cycle.id} myId={myId} />
+          </>
+        ) : (
+          team === null && (
+            <p className="muted">
+              {isCompletionOpen(cycle, now)
+                ? `You are not in a team yet. Your faculty will place you in one by ${formatDate(cycle.teamCompletionDeadline)}.`
+                : "You are not in a team for this cycle. Contact your faculty."}
             </p>
-            <button
-              className="primary-button"
-              onClick={() => setEditing(true)}
-            >
-              Create a team
-            </button>
-          </div>
-          <LookingSwitch cycleId={cycle.id} myId={myId} />
-        </>
-      ) : (
-        team === null && (
-          <p className="muted">
-            {isCompletionOpen(cycle, now)
-              ? `You are not in a team yet. Your faculty will place you in one by ${formatDate(cycle.teamCompletionDeadline)}.`
-              : "You are not in a team for this cycle. Contact your faculty."}
-          </p>
-        )
+          )
+        )}
+      </section>
+      {team && !editing && (
+        <TeamIdeaPanel cycle={cycle} team={team} myId={myId} />
       )}
-    </section>
+    </>
   );
 }
 
@@ -257,6 +268,7 @@ function CandidateRow({
           {candidate.lookingForTeam && (
             <span className="looking-tag">Looking</span>
           )}
+          {!candidate.signedIn && <NotSignedInTag />}
         </strong>
         <small>{candidate.note ?? candidate.email}</small>
       </span>

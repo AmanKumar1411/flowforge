@@ -293,6 +293,48 @@ describe("RBAC matrix", () => {
       body: () => ({ userId: bystanderId }),
       allowed: { facultyOwner: 409, otherFaculty: 404 },
     },
+    {
+      method: "GET",
+      path: () => `/course-cycles/${published}/batch-students`,
+      allowed: { facultyOwner: 200, otherFaculty: 404 },
+    },
+    {
+      method: "POST",
+      path: () => `/course-cycles/${published}/batch-students`,
+      body: () => ({ emails: [`matrix.b26csai${DOMAIN}`] }),
+      allowed: { facultyOwner: 201, otherFaculty: 404 },
+    },
+    {
+      method: "GET",
+      path: () => `/course-cycles/${published}/ideas`,
+      allowed: { admin: 200, facultyOwner: 200, otherFaculty: 404 },
+    },
+    // No actor is a member of the bystander's team, so students cannot even see it.
+    {
+      method: "GET",
+      path: () => `/teams/${bystanderTeam}/idea`,
+      allowed: {
+        admin: 200,
+        facultyOwner: 200,
+        otherFaculty: 404,
+        student: 404,
+        otherBatchStudent: 404,
+      },
+    },
+    {
+      method: "PUT",
+      path: () => `/teams/${bystanderTeam}/idea`,
+      body: () => ({ title: "Matrix", problem: "P", solution: "S" }),
+      allowed: { student: 404, otherBatchStudent: 404 },
+    },
+    // The team has no idea yet: the owner hears IDEA_NOT_FOUND, other faculty TEAM_NOT_FOUND.
+    {
+      method: "POST",
+      path: () => `/teams/${bystanderTeam}/idea/review`,
+      body: () => ({ version: 1, decision: "APPROVED" }),
+      allowed: { facultyOwner: 404, otherFaculty: 404 },
+      notFound: "*",
+    },
 
     {
       method: "POST",
