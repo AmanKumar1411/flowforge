@@ -1795,20 +1795,23 @@ ul.catalog-list {
 }
 
 .glance {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 8px 16px;
   margin: 0;
-  font-size: .9rem;
+  padding: 0;
+  list-style: none;
+  font-size: .92rem;
 }
 
-.glance dt {
-  color: var(--muted);
-  font-weight: 700;
+.glance li {
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
 }
 
-.glance dd {
-  margin: 0;
+.glance .text-button {
+  padding: 0;
+}
+
+.students-page > .team-panel {
+  max-width: 920px;
 }
 
 .attention-card h2 {

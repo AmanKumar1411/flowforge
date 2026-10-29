@@ -9,7 +9,6 @@ const {
   apiSession,
   dayFromToday,
   plannedDates,
-  openSection,
   openTeamPage,
 } = require("./support.cjs");
 const [chromePath, FRONTEND, API, OUT] = process.argv.slice(2);
@@ -77,7 +76,8 @@ const REGISTERED = [`yash.b27csai${DOMAIN}`, `ira.d27csai${DOMAIN}`];
 
     await run.check("Faculty registers batch students who have not signed in yet", async () => {
       await faculty.reload();
-      await openSection(faculty, "Students");
+      await faculty.getByRole("link", { name: "Manage" }).click();
+      await faculty.getByRole("heading", { level: 1, name: "Students" }).waitFor();
       await faculty.getByLabel("Batch student emails").fill([...REGISTERED, `tara.n26csai${DOMAIN}`].join("\n"));
       await faculty.getByRole("button", { name: "Register 3" }).click();
       await faculty.getByText("Registered 2 · already registered 0 · not added 1").waitFor();
@@ -134,7 +134,7 @@ const REGISTERED = [`yash.b27csai${DOMAIN}`, `ira.d27csai${DOMAIN}`];
     }, leader);
 
     await run.check("Faculty see the waiting idea and reject it with feedback", async () => {
-      await faculty.reload();
+      await faculty.goto(`${FRONTEND}/faculty/cycles/${cycleId}`);
       await faculty.locator(".team-row", { hasText: "Nimbus" }).getByText("Waiting for review").waitFor();
       await openTeamPage(faculty, "Nimbus");
       await faculty.getByText("A live map of free rooms from the timetable.").waitFor();

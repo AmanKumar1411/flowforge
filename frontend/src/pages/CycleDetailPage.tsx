@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { closeCycle, getCycle, publishCycle } from "../api/cycles";
-import { BatchPanel } from "../components/BatchPanel";
 import { FacultyCatalogSection } from "../components/CatalogPanel";
 import { CycleSection } from "../components/CycleSection";
 import { PublishDialog } from "../components/CycleWizardSteps";
-import { EnrollmentPanel } from "../components/EnrollmentPanel";
 import { CompletionPanel } from "../components/FacultyTeamPanels";
 import { PhaseTimeline } from "../components/PhaseTimeline";
 import { StudentTeamPanel } from "../components/TeamPanels";
@@ -17,6 +15,7 @@ import {
   primaryAction,
   sectionFor,
   sectionSummary,
+  shows,
   type PageTarget,
   type SectionKey,
 } from "../cycle-page";
@@ -27,16 +26,11 @@ import { teamRows, type TeamFilter } from "../team-rows";
 import { describeTeamSize } from "../teams";
 import type { Cycle } from "../types";
 
-const SECTIONS: { key: SectionKey; title: string }[] = [
-  { key: "students", title: "Students" },
-  { key: "catalog", title: "Idea list" },
-];
-
 function openSectionsKey(cycleId: string) {
   return `flowforge:cycle-sections:${cycleId}`;
 }
 
-/** What this viewer opened or closed on this device; the students start open in a draft. */
+/** What this viewer opened or closed on this device; the idea list starts open in a draft. */
 interface SectionChoices {
   opened: SectionKey[];
   closed: SectionKey[];
@@ -115,7 +109,8 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
     setVersion((current) => current + 1);
   };
   const go = (target: PageTarget) => {
-    if (target === "students" || target === "catalog") {
+    if (target === "students") return navigate(`/faculty/cycles/${cycleId}/students`);
+    if (target === "catalog") {
       if (!open.has(target)) toggle(target, true);
       return scrollToPart(`section-${target}`);
     }
@@ -126,7 +121,8 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
       setQuery("");
       setFilter("waiting");
     }
-    scrollToPart(target === "completion" ? "completion" : "teams");
+    // An elective has no completion panel; its teams' pages take students without a team.
+    scrollToPart(target === "completion" && cycle && shows(cycle.kind, "teamCompletion") ? "completion" : "teams");
   };
 
   if (error)
@@ -275,7 +271,7 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
                   </p>
                 }
               />
-              {data.teams && data.overview && (
+              {shows(cycle.kind, "teamCompletion") && data.teams && data.overview && (
                 <div id="completion">
                   <CompletionPanel
                     cycle={cycle}
@@ -286,26 +282,17 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
                   />
                 </div>
               )}
-              {SECTIONS.map(({ key, title }) => (
+              {shows(cycle.kind, "ideaList") && (
                 <CycleSection
-                  key={key}
-                  id={`section-${key}`}
-                  title={title}
-                  summary={sectionSummary(key, cycle, phase, counts)}
-                  open={open.has(key)}
-                  onToggle={(isOpen) => toggle(key, isOpen)}
+                  id="section-catalog"
+                  title="Idea list"
+                  summary={sectionSummary("catalog", cycle, phase, counts)}
+                  open={open.has("catalog")}
+                  onToggle={(isOpen) => toggle("catalog", isOpen)}
                 >
-                  {key === "students" ? (
-                    cycle.kind === "ELECTIVE" ? (
-                      <EnrollmentPanel cycle={cycle} />
-                    ) : (
-                      <BatchPanel cycle={cycle} />
-                    )
-                  ) : (
-                    <FacultyCatalogSection cycle={cycle} />
-                  )}
+                  <FacultyCatalogSection cycle={cycle} />
                 </CycleSection>
-              ))}
+              )}
             </>
           ) : (
             <StudentTeamPanel cycle={cycle} />
@@ -315,12 +302,20 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
           <aside className="cycle-side" aria-label="The cycle at a glance">
             <section className="side-card" aria-labelledby="glance-heading">
               <h2 id="glance-heading">At a glance</h2>
-              <dl className="glance">
-                <dt>Students</dt>
-                <dd>{sectionSummary("students", cycle, phase, counts)}</dd>
-                <dt>Submissions</dt>
-                <dd>{sectionSummary("submissions", cycle, phase, counts)}</dd>
-              </dl>
+              <ul className="glance">
+                {shows(cycle.kind, "studentsLink") && (
+                  <li>
+                    {cycle.kind === "ELECTIVE" ? "Enrolled students" : `Batch ${cycle.batchYear} students`}
+                    {counts.roster && ` (${counts.roster.total})`} ·{" "}
+                    <Link className="text-button" to={`/faculty/cycles/${cycle.id}/students`}>
+                      Manage
+                    </Link>
+                  </li>
+                )}
+                {shows(cycle.kind, "submissionCount") && (
+                  <li>{sectionSummary("submissions", cycle, phase, counts)}</li>
+                )}
+              </ul>
             </section>
           </aside>
         )}

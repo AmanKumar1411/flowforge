@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   attentionItems,
+  PAGE_PARTS,
   phaseOf,
   primaryAction,
   sectionFor,
   sectionSummary,
+  shows,
   type CycleCounts,
 } from "./cycle-page";
 import type { Cycle } from "./types";
@@ -47,7 +49,7 @@ describe("phaseOf", () => {
   it("follows the status for drafts and closed cycles", () => {
     expect(phaseOf({ ...cycle, status: "DRAFT" }, at("2026-11-20T00:00:00.000Z"))).toBe("draft");
     expect(phaseOf({ ...cycle, status: "CLOSED" }, at("2026-11-01T00:00:00.000Z"))).toBe("closed");
-    expect(sectionFor("draft")).toBe("students");
+    expect(sectionFor("draft")).toBe("catalog");
     expect(sectionFor("placing")).toBeNull();
   });
 });
@@ -86,6 +88,17 @@ describe("what the page asks of the faculty", () => {
       { text: "No students are enrolled yet", action: "Enroll students" },
     ]);
     expect(attentionItems(cycle, "closed", counts)).toEqual([]);
+  });
+});
+
+describe("PAGE_PARTS", () => {
+  it("shows an elective only its teams, submissions and students; a core course also its idea list and team completion", () => {
+    expect(PAGE_PARTS.ELECTIVE).toEqual(["teamsList", "submissionCount", "studentsLink"]);
+    expect(shows("ELECTIVE", "ideaList")).toBe(false);
+    expect(shows("ELECTIVE", "teamCompletion")).toBe(false);
+    expect(shows("CORE", "ideaList")).toBe(true);
+    expect(shows("CORE", "teamCompletion")).toBe(true);
+    for (const part of PAGE_PARTS.ELECTIVE) expect(shows("CORE", part)).toBe(true);
   });
 });
 

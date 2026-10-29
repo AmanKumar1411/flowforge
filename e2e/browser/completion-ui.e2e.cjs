@@ -69,6 +69,8 @@ const teamRow = (page, name) => page.locator(".team-row", { hasText: name });
       });
       const completion = plannedDates(plan).teamCompletionDeadline;
       await faculty.getByText(/ \/ Elective/).waitFor();
+      // An elective's page links to its students; enrolling happens there.
+      await faculty.getByRole("link", { name: "Manage" }).click();
       await faculty.getByRole("heading", { name: /Enrolled students/ }).waitFor();
       const saved = (await facultyApi.call("GET", `/course-cycles/${electiveId}`)).body;
       assert(saved.kind === "ELECTIVE", `kind ${saved.kind}`);

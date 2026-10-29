@@ -137,7 +137,7 @@ const PARTNER = `neha.s20csai${DOMAIN}`;
       await faculty.locator(".teams-empty").getByText(/No teams yet/).waitFor();
       const openSections = await faculty.locator("details.cycle-section[open]").count();
       assert(openSections === 0, `${openSections} sections open on a published cycle`);
-      await faculty.locator(".cycle-section-summary", { hasText: /in batch 2020/ }).waitFor();
+      await faculty.locator(".glance", { hasText: /Batch 2020 students \(\d+\) · Manage/ }).waitFor();
     }, faculty);
 
     await run.check("'Needs your attention' lists a waiting idea, and its link opens that team's page to review it", async () => {

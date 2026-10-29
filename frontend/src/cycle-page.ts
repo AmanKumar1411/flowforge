@@ -1,5 +1,5 @@
 import { formatDay } from "./dates";
-import type { Cycle } from "./types";
+import type { CourseKind, Cycle } from "./types";
 
 /**
  * What the faculty's cycle page says about a cycle, free of React: which
@@ -18,6 +18,26 @@ export type CyclePhase =
   | "closed";
 
 export type SectionKey = "students" | "catalog" | "teams" | "ideas" | "submissions";
+
+/** The parts of the faculty's cycle page below the header and the phases. */
+export type PagePart =
+  | "teamsList"
+  | "submissionCount"
+  | "studentsLink"
+  | "ideaList"
+  | "teamCompletion";
+
+/** Which parts each course type shows; the page asks this map, never the course type itself. */
+export const PAGE_PARTS: Record<CourseKind, readonly PagePart[]> = {
+  // Enrolled students form their own teams and propose their own ideas.
+  ELECTIVE: ["teamsList", "submissionCount", "studentsLink"],
+  // The whole batch: the faculty also offer ideas and place students left without a team.
+  CORE: ["teamsList", "submissionCount", "studentsLink", "ideaList", "teamCompletion"],
+};
+
+export function shows(kind: CourseKind, part: PagePart) {
+  return PAGE_PARTS[kind].includes(part);
+}
 
 export interface CycleCounts {
   /** Students taking part (the batch, or an elective's list), and how many have not signed in. */
@@ -43,15 +63,15 @@ export function phaseOf(cycle: Cycle, now: number): CyclePhase {
 }
 
 /**
- * Where an action takes the faculty on the page: a collapsible section, the
+ * Where an action takes the faculty: the students page, the idea list, the
  * teams list, the teams list showing only ideas waiting for review (or that
  * one team's page), or the students without a team.
  */
 export type PageTarget = "students" | "catalog" | "teams" | "review" | "completion";
 
-/** The collapsible section that starts open: the students, while the cycle is a draft. */
+/** The idea list starts open while the cycle is a draft, when there is time to fill it. */
 export function sectionFor(phase: CyclePhase): SectionKey | null {
-  return phase === "draft" ? "students" : null;
+  return phase === "draft" ? "catalog" : null;
 }
 
 const plural = (count: number, one: string, many = `${one}s`) =>

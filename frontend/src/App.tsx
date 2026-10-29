@@ -5,6 +5,7 @@ import { AppShell } from "./components/AppShell";
 import { AdminPage } from "./pages/AdminPage";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { CycleDetailPage } from "./pages/CycleDetailPage";
+import { CycleStudentsPage } from "./pages/CycleStudentsPage";
 import { CycleWizardPage } from "./pages/CycleWizardPage";
 import { FacultyCyclesPage } from "./pages/FacultyCyclesPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -65,6 +66,7 @@ function App() {
                 <Route path="cycles/new" element={<CycleWizardPage />} />
                 <Route path="cycles/:cycleId" element={<CycleDetailPage faculty />} />
                 <Route path="cycles/:cycleId/edit" element={<CycleWizardPage />} />
+                <Route path="cycles/:cycleId/students" element={<CycleStudentsPage />} />
                 <Route path="cycles/:cycleId/teams/:teamId" element={<TeamDetailPage />} />
               </Routes>
             </RequireRole>
