@@ -72,10 +72,12 @@
   color: var(--ink);
 }
 
+/* One page container for every page: up to 1280px wide, with side padding that shrinks to 16px. */
 .page-content {
-  width: min(1180px, calc(100% - 40px));
+  width: 100%;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 72px 0 100px;
+  padding: 72px clamp(16px, 4vw, 48px) 100px;
 }
 
 .eyebrow,
@@ -420,9 +422,6 @@ h2 {
   border-top: 1px solid var(--line);
 }
 
-.detail-page {
-  max-width: 920px;
-}
 
 .loading {
   color: var(--muted);
@@ -440,7 +439,6 @@ h2 {
   }
 
   .page-content {
-    width: min(100% - 28px, 560px);
     padding-top: 44px;
   }
 
@@ -1473,20 +1471,32 @@ ul.catalog-list {
   margin: 0;
 }
 
-/* A cycle's phases: one bar, each segment as long as its phase. */
+/* A cycle's phases: one bar where there is room, a list where it is narrow. */
+.phase-frame {
+  container-type: inline-size;
+  margin: 20px 0 8px;
+}
+
 .phase-timeline {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
-  margin: 20px 0 8px;
+  margin: 0;
   padding: 0;
   list-style: none;
+}
+
+/* Room above the bar for the "Today" tag, clear of the phases' edges. */
+.phase-timeline.has-today {
+  padding-top: 24px;
 }
 
 .phase {
   position: relative;
   flex: 1 1 0;
-  min-width: 0;
-  padding: 10px 12px;
+  /* Never narrower than its two lines of text. */
+  min-width: max-content;
+  padding: 8px 12px 10px;
   border-top: 6px solid var(--line);
   background: white;
   font-size: .82rem;
@@ -1498,8 +1508,13 @@ ul.catalog-list {
 .phase-work { border-top-color: var(--lime); }
 .phase-closed { border-top-color: #b9b9ad; }
 
-.phase-name {
+.phase-name,
+.phase-dates {
   display: block;
+  white-space: nowrap;
+}
+
+.phase-name {
   font-weight: 800;
 }
 
@@ -1509,7 +1524,6 @@ ul.catalog-list {
 }
 
 .phase-dates {
-  display: block;
   margin-top: 2px;
   color: var(--muted);
 }
@@ -1525,15 +1539,69 @@ ul.catalog-list {
 
 .today-marker {
   position: absolute;
-  top: -14px;
-  transform: translateX(-50%);
-  padding: 0 4px;
+  /* Above the phase's coloured edge (6px) with a gap, never on it. */
+  bottom: calc(100% + 10px);
+  padding: 0 5px;
   background: var(--ink);
   color: var(--paper);
   font-size: .68rem;
   font-weight: 800;
   line-height: 1.4;
   white-space: nowrap;
+}
+
+.today-marker::after {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  border: 4px solid transparent;
+  border-top-color: var(--ink);
+  transform: translateX(-50%);
+  content: "";
+}
+
+@container (max-width: 34rem) {
+  .phase-timeline {
+    flex-direction: column;
+  }
+
+  .phase-timeline.has-today {
+    padding-top: 0;
+  }
+
+  .phase {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 2px 12px;
+    min-width: 0;
+    border-top: 0;
+    border-left: 6px solid var(--line);
+  }
+
+  .phase-name,
+  .phase-dates {
+    white-space: normal;
+  }
+
+  .phase-teams { border-left-color: #9fc3e2; }
+  .phase-placing { border-left-color: #c9b6e4; }
+  .phase-ideas { border-left-color: #f2c38f; }
+  .phase-work { border-left-color: var(--lime); }
+  .phase-closed { border-left-color: #b9b9ad; }
+
+  .today-marker {
+    position: static;
+    order: -1;
+    flex-basis: 100%;
+    max-width: max-content;
+    transform: none !important;
+  }
+
+  .today-marker::after {
+    display: none;
+  }
 }
 
 /* A dialog over the page. */
@@ -1587,28 +1655,6 @@ ul.catalog-list {
     margin-top: 0;
   }
 
-  .phase-timeline {
-    flex-direction: column;
-  }
-
-  .phase {
-    border-top: 0;
-    border-left: 6px solid var(--line);
-  }
-
-  .phase-teams { border-left-color: #9fc3e2; }
-  .phase-placing { border-left-color: #c9b6e4; }
-  .phase-ideas { border-left-color: #f2c38f; }
-  .phase-work { border-left-color: var(--lime); }
-  .phase-closed { border-left-color: #b9b9ad; }
-
-  .today-marker {
-    position: static;
-    display: inline-block;
-    margin-top: 4px;
-    transform: none;
-  }
-
   .review-section dl {
     grid-template-columns: 1fr;
   }
@@ -1618,22 +1664,53 @@ ul.catalog-list {
   }
 }
 
-/* The cycle page: header, phases, what needs attention, collapsible sections. */
+/* The cycle page: a header across the page, then the main column (teams) and a side column. */
+.page-content:has(> .detail-page) {
+  padding-top: 32px;
+}
+
+.detail-page .back-button {
+  margin-bottom: 14px;
+}
+
 .cycle-header {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 18px;
+  align-items: flex-end;
+  gap: 14px 32px;
+}
+
+.cycle-heading {
+  flex: 1 1 520px;
+  min-width: 0;
+}
+
+.cycle-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin: 0 0 8px;
+}
+
+.cycle-kicker .eyebrow {
+  margin: 0;
 }
 
 .cycle-header h1 {
-  margin: 4px 0 8px;
+  max-width: none;
+  margin: 0 0 8px;
+  font-size: clamp(2rem, 3.4vw, 2.75rem);
+  line-height: 1.1;
+  letter-spacing: -.02em;
+  overflow-wrap: anywhere;
 }
 
 .cycle-description {
-  max-width: 720px;
+  max-width: 760px;
   margin: 0 0 8px;
+  line-height: 1.5;
 }
 
 .cycle-facts {
@@ -1646,16 +1723,92 @@ ul.catalog-list {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
-  padding-top: 26px;
+  gap: 10px 18px;
+}
+
+.cycle-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  grid-template-areas:
+    "main attention"
+    "main side";
+  grid-template-rows: auto 1fr;
+  column-gap: 32px;
+  align-items: start;
+  margin-top: 22px;
+}
+
+.cycle-main {
+  grid-area: main;
+  min-width: 0;
+}
+
+.cycle-side {
+  grid-area: side;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.cycle-layout > .attention-card {
+  grid-area: attention;
+  margin: 0 0 16px;
+}
+
+.cycle-main > .cycle-section:first-child {
+  margin-top: 0;
+}
+
+@media (max-width: 1023px) {
+  .cycle-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "attention"
+      "main"
+      "side";
+    grid-template-rows: auto;
+  }
+
+  .cycle-side {
+    margin-top: 16px;
+  }
 }
 
 .attention-card {
-  margin: 22px 0 6px;
+  margin: 0;
   padding: 16px 20px;
   border: 1px solid var(--line);
   border-left: 4px solid var(--coral);
   background: white;
+}
+
+.side-card {
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.side-card h2 {
+  margin: 0 0 10px;
+  font-size: 1.15rem;
+}
+
+.glance {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 0;
+  font-size: .9rem;
+}
+
+.glance dt {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.glance dd {
+  margin: 0;
 }
 
 .attention-card h2 {

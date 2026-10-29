@@ -245,13 +245,15 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
         ← Back to cycles
       </button>
       <header className="cycle-header">
-        <div>
-          <span className={`status status-${cycle.status.toLowerCase()}`}>
-            {cycle.status === "PUBLISHED" ? "Open" : cycle.status === "DRAFT" ? "Draft" : "Closed"}
-          </span>
-          <p className="eyebrow">
-            {cycle.courseName} / Batch {cycle.batchYear}
-            {cycle.kind === "ELECTIVE" && " / Elective"}
+        <div className="cycle-heading">
+          <p className="cycle-kicker">
+            <span className={`status status-${cycle.status.toLowerCase()}`}>
+              {cycle.status === "PUBLISHED" ? "Open" : cycle.status === "DRAFT" ? "Draft" : "Closed"}
+            </span>
+            <span className="eyebrow">
+              {cycle.courseName} / Batch {cycle.batchYear}
+              {cycle.kind === "ELECTIVE" && " / Elective"}
+            </span>
           </p>
           <h1>{cycle.title}</h1>
           {cycle.description && <p className="cycle-description">{cycle.description}</p>}
@@ -292,37 +294,54 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
           can then form teams until {formatDay(cycle.teamFormationDeadline)}.
         </p>
       )}
-      {attention.length > 0 && (
-        <section className="attention-card" aria-labelledby="attention-heading">
-          <h2 id="attention-heading">Needs your attention</h2>
-          <ul>
-            {attention.map((item) => (
-              <li key={item.key}>
-                <span>{item.text}</span>
-                <button className="text-button" onClick={() => reveal(item.section)}>
-                  {item.action}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      {faculty ? (
-        SECTIONS.map(({ key, title }) => (
-          <CycleSection
-            key={key}
-            id={`section-${key}`}
-            title={title}
-            summary={sectionSummary(key, cycle, phase, counts)}
-            open={open.has(key)}
-            onToggle={(isOpen) => toggle(key, isOpen)}
-          >
-            <SectionBody section={key} cycle={cycle} counts={counts} phase={phase} />
-          </CycleSection>
-        ))
-      ) : (
-        <StudentTeamPanel cycle={cycle} />
-      )}
+      <div className="cycle-layout">
+        {attention.length > 0 && (
+          <section className="attention-card" aria-labelledby="attention-heading">
+            <h2 id="attention-heading">Needs your attention</h2>
+            <ul>
+              {attention.map((item) => (
+                <li key={item.key}>
+                  <span>{item.text}</span>
+                  <button className="text-button" onClick={() => reveal(item.section)}>
+                    {item.action}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        <div className="cycle-main">
+          {faculty ? (
+            SECTIONS.map(({ key, title }) => (
+              <CycleSection
+                key={key}
+                id={`section-${key}`}
+                title={title}
+                summary={sectionSummary(key, cycle, phase, counts)}
+                open={open.has(key)}
+                onToggle={(isOpen) => toggle(key, isOpen)}
+              >
+                <SectionBody section={key} cycle={cycle} counts={counts} phase={phase} />
+              </CycleSection>
+            ))
+          ) : (
+            <StudentTeamPanel cycle={cycle} />
+          )}
+        </div>
+        {faculty && (
+          <aside className="cycle-side" aria-label="The cycle at a glance">
+            <section className="side-card" aria-labelledby="glance-heading">
+              <h2 id="glance-heading">At a glance</h2>
+              <dl className="glance">
+                <dt>Students</dt>
+                <dd>{sectionSummary("students", cycle, phase, counts)}</dd>
+                <dt>Submissions</dt>
+                <dd>{sectionSummary("submissions", cycle, phase, counts)}</dd>
+              </dl>
+            </section>
+          </aside>
+        )}
+      </div>
       {publishing && (
         <PublishDialog
           audience={
