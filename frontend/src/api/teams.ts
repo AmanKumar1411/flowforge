@@ -12,6 +12,11 @@ export function listCycleTeams(cycleId: string) {
   return apiRequest<Team[]>(`/course-cycles/${cycleId}/teams`);
 }
 
+/** Members, the cycle's owning faculty and admins can read a team. */
+export function getTeam(teamId: string) {
+  return apiRequest<Team>(`/teams/${teamId}`);
+}
+
 export function listMyTeams() {
   return apiRequest<Team[]>("/teams/mine");
 }

@@ -124,7 +124,7 @@ const PARTNER = `neha.s20csai${DOMAIN}`;
       }
       assert((await focused()).includes("Check and save"), `focus is on: ${await focused()}`);
     });
-    await run.check("The cycle page shows the phases with today, one primary action, and only the current section open", async () => {
+    await run.check("The cycle page shows the phases with today, one primary action, and the teams list", async () => {
       await faculty.goto(`${FRONTEND}/faculty/cycles/${cycleId}`);
       const phases = faculty.getByRole("list", { name: "Where the cycle is" });
       const current = phases.locator('[aria-current="step"]');
@@ -133,13 +133,14 @@ const PARTNER = `neha.s20csai${DOMAIN}`;
       await current.getByText("Today").waitFor();
       await faculty.getByRole("button", { name: "See the teams" }).waitFor();
       assert(await faculty.getByRole("heading", { name: "Needs your attention" }).count() === 0, "attention card with nothing to do");
-      const openSections = await faculty.locator("details.cycle-section[open] .cycle-section-title").allTextContents();
-      assert(JSON.stringify(openSections) === '["Teams"]', `open sections ${JSON.stringify(openSections)}`);
-      await faculty.locator(".cycle-section-summary", { hasText: "Ideas come once teams form" }).waitFor();
+      await faculty.getByRole("heading", { name: "Teams (0)" }).waitFor();
+      await faculty.locator(".teams-empty").getByText(/No teams yet/).waitFor();
+      const openSections = await faculty.locator("details.cycle-section[open]").count();
+      assert(openSections === 0, `${openSections} sections open on a published cycle`);
       await faculty.locator(".cycle-section-summary", { hasText: /in batch 2020/ }).waitFor();
     }, faculty);
 
-    await run.check("'Needs your attention' lists a waiting idea, and its link opens the Ideas section", async () => {
+    await run.check("'Needs your attention' lists a waiting idea, and its link opens that team's page to review it", async () => {
       const partnerApi = await session(PARTNER, "Neha S");
       const partnerId = (await partnerApi.call("GET", "/auth/me")).body.id;
       const team = await studentApi.call("POST", `/course-cycles/${cycleId}/teams`, { name: "Indexers", memberIds: [partnerId] });
@@ -154,8 +155,11 @@ const PARTNER = `neha.s20csai${DOMAIN}`;
       const card = faculty.locator(".attention-card");
       await card.getByText("1 idea is waiting for your review").waitFor();
       await faculty.getByRole("button", { name: "Review 1 idea" }).waitFor();
+      await faculty.locator(".team-row", { hasText: "Indexers" }).getByText("Waiting for review").waitFor();
       await card.getByRole("button", { name: "Review", exact: true }).click();
-      await faculty.getByRole("button", { name: "Open the idea of Indexers" }).waitFor();
+      await faculty.getByRole("heading", { level: 1, name: "Indexers" }).waitFor();
+      await faculty.getByText("Draw them as trees").waitFor();
+      await faculty.getByRole("button", { name: "Approve idea" }).waitFor();
     }, faculty);
 
     await run.check("A draft's page publishes it through the same confirmation", async () => {
@@ -175,8 +179,8 @@ const PARTNER = `neha.s20csai${DOMAIN}`;
       await faculty.reload();
       const current = faculty.getByRole("list", { name: "Where the cycle is" }).locator('[aria-current="step"]');
       await current.getByText("Closed").waitFor();
-      await faculty.locator(".cycle-section-summary", { hasText: "No teams were formed" }).waitFor();
-      await faculty.locator(".cycle-section-summary", { hasText: "No work was submitted" }).waitFor();
+      await faculty.locator(".teams-empty").getByText("No teams were formed.").waitFor();
+      await faculty.locator(".glance", { hasText: "No work was submitted" }).waitFor();
       assert(await faculty.getByRole("button", { name: "Edit cycle" }).count() === 0, "Edit offered on a closed cycle");
       assert(await faculty.getByRole("heading", { name: "Needs your attention" }).count() === 0, "attention card on a closed cycle");
     }, faculty);

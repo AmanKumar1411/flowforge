@@ -42,19 +42,16 @@ export function phaseOf(cycle: Cycle, now: number): CyclePhase {
   return "ended";
 }
 
-/** The section that starts open: the one the current phase is about. */
-export function sectionFor(phase: CyclePhase): SectionKey {
-  switch (phase) {
-    case "draft":
-      return "students";
-    case "teams":
-    case "placing":
-      return "teams";
-    case "ideas":
-      return "ideas";
-    default:
-      return "submissions";
-  }
+/**
+ * Where an action takes the faculty on the page: a collapsible section, the
+ * teams list, the teams list showing only ideas waiting for review (or that
+ * one team's page), or the students without a team.
+ */
+export type PageTarget = "students" | "catalog" | "teams" | "review" | "completion";
+
+/** The collapsible section that starts open: the students, while the cycle is a draft. */
+export function sectionFor(phase: CyclePhase): SectionKey | null {
+  return phase === "draft" ? "students" : null;
 }
 
 const plural = (count: number, one: string, many = `${one}s`) =>
@@ -63,7 +60,7 @@ const plural = (count: number, one: string, many = `${one}s`) =>
 export type PageAction =
   | { kind: "publish"; label: string }
   | { kind: "close"; label: string }
-  | { kind: "open"; label: string; section: SectionKey };
+  | { kind: "go"; label: string; target: PageTarget };
 
 /** The single most useful thing to do now. */
 export function primaryAction(
@@ -73,29 +70,29 @@ export function primaryAction(
   if (phase === "draft") return { kind: "publish", label: "Publish to students" };
   if (phase === "placing" && counts.unplaced) {
     return {
-      kind: "open",
+      kind: "go",
       label: `Place ${plural(counts.unplaced, "student")}`,
-      section: "teams",
+      target: "completion",
     };
   }
   if (phase !== "closed" && counts.ideas?.waiting) {
     return {
-      kind: "open",
+      kind: "go",
       label: `Review ${plural(counts.ideas.waiting, "idea")}`,
-      section: "ideas",
+      target: "review",
     };
   }
   if (phase === "ended") return { kind: "close", label: "Close the cycle" };
-  if (phase === "teams") return { kind: "open", label: "See the teams", section: "teams" };
-  if (phase === "ideas") return { kind: "open", label: "See the ideas", section: "ideas" };
-  return { kind: "open", label: "View submissions", section: "submissions" };
+  if (phase === "teams") return { kind: "go", label: "See the teams", target: "teams" };
+  if (phase === "ideas") return { kind: "go", label: "See the ideas", target: "teams" };
+  return { kind: "go", label: "View submissions", target: "teams" };
 }
 
 export interface AttentionItem {
   key: string;
   text: string;
   action: string;
-  section: SectionKey;
+  target: PageTarget;
 }
 
 /** Only things the faculty can act on now; empty when there is nothing. */
@@ -111,7 +108,7 @@ export function attentionItems(
       key: "enroll",
       text: "No students are enrolled yet",
       action: "Enroll students",
-      section: "students",
+      target: "students",
     });
   }
   if (phase === "placing" && counts.unplaced) {
@@ -119,7 +116,7 @@ export function attentionItems(
       key: "place",
       text: `${plural(counts.unplaced, "student has", "students have")} no team`,
       action: "Place them",
-      section: "teams",
+      target: "completion",
     });
   }
   if (counts.ideas?.waiting) {
@@ -127,7 +124,7 @@ export function attentionItems(
       key: "review",
       text: `${plural(counts.ideas.waiting, "idea is", "ideas are")} waiting for your review`,
       action: "Review",
-      section: "ideas",
+      target: "review",
     });
   }
   if (phase === "work" && counts.ideas) {
@@ -136,8 +133,8 @@ export function attentionItems(
       items.push({
         key: "blocked",
         text: `${plural(blocked, "team has", "teams have")} no approved idea, so ${blocked === 1 ? "it" : "they"} can't submit work`,
-        action: "See ideas",
-        section: "ideas",
+        action: "See the teams",
+        target: "teams",
       });
     }
   }

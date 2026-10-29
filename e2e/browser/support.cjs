@@ -157,6 +157,12 @@ async function openSection(page, title) {
   }
 }
 
+/** Opens a team's page from the teams list on the faculty's cycle page. */
+async function openTeamPage(page, teamName) {
+  await page.getByRole("link", { name: `View details of ${teamName}` }).click();
+  await page.getByRole("heading", { level: 1, name: teamName }).waitFor();
+}
+
 module.exports = {
   DOMAIN,
   MINUTE_MS,
@@ -170,4 +176,5 @@ module.exports = {
   plannedDates,
   createCycleInWizard,
   openSection,
+  openTeamPage,
 };

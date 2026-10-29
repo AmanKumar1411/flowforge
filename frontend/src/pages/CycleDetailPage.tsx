@@ -1,120 +1,42 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import {
-  closeCycle,
-  getCycle,
-  listBatchStudents,
-  listEnrollments,
-  publishCycle,
-} from "../api/cycles";
-import { listCatalog, listCycleIdeas } from "../api/ideas";
-import { listCycleSubmissions } from "../api/submissions";
-import { getCompletionOverview } from "../api/teams";
+import { closeCycle, getCycle, publishCycle } from "../api/cycles";
 import { BatchPanel } from "../components/BatchPanel";
 import { FacultyCatalogSection } from "../components/CatalogPanel";
 import { CycleSection } from "../components/CycleSection";
 import { PublishDialog } from "../components/CycleWizardSteps";
 import { EnrollmentPanel } from "../components/EnrollmentPanel";
-import { FacultyTeamsSection } from "../components/FacultyTeamPanels";
-import { FacultyIdeasSection } from "../components/IdeaPanels";
+import { CompletionPanel } from "../components/FacultyTeamPanels";
 import { PhaseTimeline } from "../components/PhaseTimeline";
-import { FacultySubmissionsSection } from "../components/SubmissionPanels";
 import { StudentTeamPanel } from "../components/TeamPanels";
+import { TeamsList } from "../components/TeamsList";
+import { countsOf, useCycleData } from "../cycle-data";
 import {
   attentionItems,
   phaseOf,
   primaryAction,
   sectionFor,
   sectionSummary,
-  type CycleCounts,
+  type PageTarget,
   type SectionKey,
 } from "../cycle-page";
 import { formatDay } from "../dates";
 import { readableError } from "../errors";
 import { cyclePhases } from "../phases";
+import { teamRows, type TeamFilter } from "../team-rows";
 import { describeTeamSize } from "../teams";
 import type { Cycle } from "../types";
 
 const SECTIONS: { key: SectionKey; title: string }[] = [
   { key: "students", title: "Students" },
   { key: "catalog", title: "Idea list" },
-  { key: "teams", title: "Teams" },
-  { key: "ideas", title: "Ideas" },
-  { key: "submissions", title: "Submissions" },
 ];
-
-/** Counts for the summaries and the attention card, from the calls the sections make themselves. */
-function useCycleCounts(cycle: Cycle | null, version: number) {
-  const [counts, setCounts] = useState<CycleCounts>({});
-  useEffect(() => {
-    if (!cycle) return;
-    let live = true;
-    const merge = (part: CycleCounts) =>
-      live &&
-      setCounts((current) => ({
-        ...current,
-        ...part,
-        failed: { ...current.failed, ...part.failed },
-      }));
-    const fail = (...sections: SectionKey[]) => () =>
-      merge({ failed: Object.fromEntries(sections.map((key) => [key, true])) });
-    const roster =
-      cycle.kind === "ELECTIVE" ? listEnrollments(cycle.id) : listBatchStudents(cycle.id);
-    roster
-      .then((list) =>
-        merge({
-          roster: {
-            total: list.length,
-            notSignedIn: list.filter((student) => !student.signedIn).length,
-          },
-        }),
-      )
-      .catch(fail("students"));
-    listCatalog(cycle.id)
-      .then((list) =>
-        merge({
-          catalog: {
-            offered: list.length,
-            picked: list.reduce((sum, idea) => sum + idea.pickCount, 0),
-          },
-        }),
-      )
-      .catch(fail("catalog"));
-    if (cycle.status !== "DRAFT") {
-      listCycleIdeas(cycle.id)
-        .then((rows) => {
-          const count = (status: string | null) =>
-            rows.filter((row) => (row.idea?.status ?? null) === status).length;
-          merge({
-            teams: rows.length,
-            ideas: {
-              waiting: count("SUBMITTED"),
-              approved: count("APPROVED"),
-              rejected: count("REJECTED"),
-              none: count(null),
-            },
-          });
-        })
-        .catch(fail("teams", "ideas"));
-      getCompletionOverview(cycle.id)
-        .then((overview) => merge({ unplaced: overview.unassigned.length }))
-        .catch(fail("teams"));
-      listCycleSubmissions(cycle.id)
-        .then((rows) => merge({ submissions: { submitted: rows.filter((row) => row.latest).length } }))
-        .catch(fail("submissions"));
-    }
-    return () => {
-      live = false;
-    };
-  }, [cycle, version]);
-  return counts;
-}
 
 function openSectionsKey(cycleId: string) {
   return `flowforge:cycle-sections:${cycleId}`;
 }
 
-/** What this viewer opened or closed on this device; the current phase's section opens on its own. */
+/** What this viewer opened or closed on this device; the students start open in a draft. */
 interface SectionChoices {
   opened: SectionKey[];
   closed: SectionKey[];
@@ -130,16 +52,27 @@ function rememberedChoices(cycleId: string): SectionChoices {
   return { opened: [], closed: [] };
 }
 
+/** Brings a part of the page into view and moves focus to its heading. */
+function scrollToPart(id: string) {
+  requestAnimationFrame(() => {
+    const part = document.getElementById(id);
+    part?.scrollIntoView({ behavior: "smooth", block: "start" });
+    part?.querySelector<HTMLElement>("summary, h2")?.focus();
+  });
+}
+
 export function CycleDetailPage({ faculty }: { faculty: boolean }) {
   const { cycleId = "" } = useParams();
   const navigate = useNavigate();
   const [cycle, setCycle] = useState<Cycle | null>(null);
   const [error, setError] = useState("");
   const [now] = useState(() => Date.now());
-  // Refreshes the counts when a section is opened or closed, after the faculty may have changed something.
+  // Loads the page's parts again after the faculty changed something.
   const [version, setVersion] = useState(0);
   // Null until the viewer opens or closes a section on this visit.
   const [choices, setChoices] = useState<SectionChoices | null>(null);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<TeamFilter>("all");
   const [publishing, setPublishing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
@@ -151,12 +84,18 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
       .catch((caught) => setError(readableError(caught)));
   }, [cycleId]);
   useEffect(load, [load]);
-  const counts = useCycleCounts(faculty ? cycle : null, version);
+  const data = useCycleData(faculty ? cycle : null, version);
+  const counts = countsOf(data);
+  const rows =
+    data.teams && data.ideas && data.submissions
+      ? teamRows(data.teams, data.ideas, data.submissions)
+      : null;
 
-  // The current phase's section starts open, plus what the viewer opened, minus what they closed.
+  // The default section starts open, plus what the viewer opened, minus what they closed.
   const chosen = choices ?? (cycle ? rememberedChoices(cycle.id) : { opened: [], closed: [] });
+  const defaultSection = cycle ? sectionFor(phaseOf(cycle, now)) : null;
   const open = new Set(
-    [...(cycle ? [sectionFor(phaseOf(cycle, now))] : []), ...chosen.opened].filter(
+    [...(defaultSection ? [defaultSection] : []), ...chosen.opened].filter(
       (key) => !chosen.closed.includes(key),
     ),
   );
@@ -175,14 +114,19 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
     }
     setVersion((current) => current + 1);
   };
-  const reveal = (key: SectionKey) => {
-    if (!open.has(key)) toggle(key, true);
-    // After the section renders open, bring it into view and move focus to it.
-    requestAnimationFrame(() => {
-      const section = document.getElementById(`section-${key}`);
-      section?.scrollIntoView({ behavior: "smooth", block: "start" });
-      section?.querySelector("summary")?.focus();
-    });
+  const go = (target: PageTarget) => {
+    if (target === "students" || target === "catalog") {
+      if (!open.has(target)) toggle(target, true);
+      return scrollToPart(`section-${target}`);
+    }
+    if (target === "review") {
+      // One waiting proposal opens its team; several show only the waiting ones.
+      const waiting = rows?.filter((row) => row.idea?.status === "SUBMITTED") ?? [];
+      if (waiting.length === 1) return navigate(`/faculty/cycles/${cycleId}/teams/${waiting[0].id}`);
+      setQuery("");
+      setFilter("waiting");
+    }
+    scrollToPart(target === "completion" ? "completion" : "teams");
   };
 
   if (error)
@@ -213,7 +157,7 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
   );
 
   const runAction = async () => {
-    if (action.kind === "open") return reveal(action.section);
+    if (action.kind === "go") return go(action.target);
     if (action.kind === "publish") return setPublishing(true);
     if (!window.confirm("Close this cycle? Nothing can change afterwards, and students can no longer submit.")) return;
     setBusy(true);
@@ -302,7 +246,7 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
               {attention.map((item) => (
                 <li key={item.key}>
                   <span>{item.text}</span>
-                  <button className="text-button" onClick={() => reveal(item.section)}>
+                  <button className="text-button" onClick={() => go(item.target)}>
                     {item.action}
                   </button>
                 </li>
@@ -312,18 +256,57 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
         )}
         <div className="cycle-main">
           {faculty ? (
-            SECTIONS.map(({ key, title }) => (
-              <CycleSection
-                key={key}
-                id={`section-${key}`}
-                title={title}
-                summary={sectionSummary(key, cycle, phase, counts)}
-                open={open.has(key)}
-                onToggle={(isOpen) => toggle(key, isOpen)}
-              >
-                <SectionBody section={key} cycle={cycle} counts={counts} phase={phase} />
-              </CycleSection>
-            ))
+            <>
+              <TeamsList
+                cycle={cycle}
+                rows={rows}
+                error={data.failed.teams ? "Couldn't load the teams. Reload the page to try again." : ""}
+                query={query}
+                filter={filter}
+                onQuery={setQuery}
+                onFilter={setFilter}
+                empty={
+                  <p className="muted">
+                    {phase === "draft"
+                      ? "Students form teams once you publish the cycle."
+                      : phase === "closed"
+                        ? "No teams were formed."
+                        : "No teams yet. Students form their own teams now."}
+                  </p>
+                }
+              />
+              {data.teams && data.overview && (
+                <div id="completion">
+                  <CompletionPanel
+                    cycle={cycle}
+                    teams={data.teams}
+                    overview={data.overview}
+                    now={now}
+                    onChanged={() => setVersion((current) => current + 1)}
+                  />
+                </div>
+              )}
+              {SECTIONS.map(({ key, title }) => (
+                <CycleSection
+                  key={key}
+                  id={`section-${key}`}
+                  title={title}
+                  summary={sectionSummary(key, cycle, phase, counts)}
+                  open={open.has(key)}
+                  onToggle={(isOpen) => toggle(key, isOpen)}
+                >
+                  {key === "students" ? (
+                    cycle.kind === "ELECTIVE" ? (
+                      <EnrollmentPanel cycle={cycle} />
+                    ) : (
+                      <BatchPanel cycle={cycle} />
+                    )
+                  ) : (
+                    <FacultyCatalogSection cycle={cycle} />
+                  )}
+                </CycleSection>
+              ))}
+            </>
           ) : (
             <StudentTeamPanel cycle={cycle} />
           )}
@@ -358,61 +341,4 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
       )}
     </section>
   );
-}
-
-/** A section's panel, or one helpful line when there is nothing to show yet. */
-function SectionBody({
-  section,
-  cycle,
-  counts,
-  phase,
-}: {
-  section: SectionKey;
-  cycle: Cycle;
-  counts: CycleCounts;
-  phase: ReturnType<typeof phaseOf>;
-}) {
-  const closed = phase === "closed";
-  switch (section) {
-    case "students":
-      return cycle.kind === "ELECTIVE" ? <EnrollmentPanel cycle={cycle} /> : <BatchPanel cycle={cycle} />;
-    case "catalog":
-      return <FacultyCatalogSection cycle={cycle} />;
-    case "teams":
-      if (phase === "draft") {
-        return <p className="muted">Students form teams once you publish the cycle.</p>;
-      }
-      return <FacultyTeamsSection cycle={cycle} />;
-    case "ideas":
-      if (phase === "draft") {
-        return <p className="muted">Teams pick or propose ideas once they have formed.</p>;
-      }
-      if (counts.teams === 0) {
-        return (
-          <p className="muted">
-            {closed
-              ? "No teams were formed, so there were no ideas."
-              : "Ideas appear here once teams form. You can list ideas for teams to pick in the idea list meanwhile."}
-          </p>
-        );
-      }
-      return <FacultyIdeasSection cycle={cycle} canReview />;
-    case "submissions":
-      if (phase === "draft") {
-        return (
-          <p className="muted">
-            Teams submit work from {formatDay(cycle.submissionStartAt)} to{" "}
-            {formatDay(cycle.submissionDeadline)}, once their idea is approved.
-          </p>
-        );
-      }
-      if (counts.teams === 0) {
-        return (
-          <p className="muted">
-            {closed ? "No teams were formed, so no work was submitted." : "Submissions appear here once teams form."}
-          </p>
-        );
-      }
-      return <FacultySubmissionsSection cycle={cycle} />;
-  }
 }

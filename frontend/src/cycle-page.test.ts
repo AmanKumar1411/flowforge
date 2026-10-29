@@ -47,8 +47,8 @@ describe("phaseOf", () => {
   it("follows the status for drafts and closed cycles", () => {
     expect(phaseOf({ ...cycle, status: "DRAFT" }, at("2026-11-20T00:00:00.000Z"))).toBe("draft");
     expect(phaseOf({ ...cycle, status: "CLOSED" }, at("2026-11-01T00:00:00.000Z"))).toBe("closed");
-    expect(sectionFor("placing")).toBe("teams");
-    expect(sectionFor("closed")).toBe("submissions");
+    expect(sectionFor("draft")).toBe("students");
+    expect(sectionFor("placing")).toBeNull();
   });
 });
 
@@ -63,8 +63,8 @@ describe("what the page asks of the faculty", () => {
 
   it("offers one primary action that fits the phase", () => {
     expect(primaryAction("draft", {})).toEqual({ kind: "publish", label: "Publish to students" });
-    expect(primaryAction("placing", counts)).toMatchObject({ label: "Place 3 students", section: "teams" });
-    expect(primaryAction("ideas", counts)).toMatchObject({ label: "Review 2 ideas", section: "ideas" });
+    expect(primaryAction("placing", counts)).toMatchObject({ label: "Place 3 students", target: "completion" });
+    expect(primaryAction("ideas", counts)).toMatchObject({ label: "Review 2 ideas", target: "review" });
     expect(primaryAction("work", { ...counts, ideas: undefined })).toMatchObject({
       label: "View submissions",
     });

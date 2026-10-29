@@ -202,12 +202,16 @@ const teamPanel = (page) => page.locator(".team-panel");
 
     await check("Faculty sees every team of the cycle with its leader and members", async () => {
       await faculty.reload();
-      // The faculty's table of teams; the ideas table below it lists the same team names.
-      const row = faculty.locator('section[aria-labelledby="teams-heading"] tbody tr', { hasText: "Falcon" });
-      await row.waitFor();
-      const cells = await row.locator("td").allInnerTexts();
-      assert(JSON.stringify(cells) === JSON.stringify(["Falcon", "Isha", "Zoya", "2", "Students"]), `row ${JSON.stringify(cells)}`);
-      return cells.join(" | ");
+      const row = faculty.locator(".team-row", { hasText: "Falcon" });
+      await row.getByText("Led by Isha").waitFor();
+      await row.getByText("2/3 members").waitFor();
+      await row.getByRole("link", { name: "View details of Falcon" }).click();
+      await faculty.getByRole("heading", { level: 1, name: "Falcon" }).waitFor();
+      await faculty.getByText(/Formed by the students/).waitFor();
+      const members = await faculty.locator(".member-list li").allInnerTexts();
+      const flat = members.map((member) => member.replace(/\s+/g, " ").trim());
+      assert(flat.length === 2 && /^Isha .*leader$/i.test(flat[0]) && flat[1].startsWith("Zoya"), `members ${JSON.stringify(flat)}`);
+      return flat.join(" | ");
     }, faculty);
 
     await check("Leader disbands the team after confirming; every member is free again", async () => {

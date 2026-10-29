@@ -1897,3 +1897,176 @@ ul.catalog-list {
 .cycle-section-body > .team-panel:first-child > .panel-heading {
   justify-content: flex-end;
 }
+
+/* The teams list: one row per team, a link to its page on the right. */
+.cycle-main > .team-panel:first-child {
+  margin-top: 0;
+}
+
+.teams-card {
+  container-type: inline-size;
+}
+
+.teams-card .panel-heading {
+  margin-bottom: 8px;
+}
+
+.teams-card h2:focus {
+  outline: none;
+}
+
+.teams-card h2:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: 4px;
+}
+
+.teams-empty p {
+  margin: 0;
+}
+
+.teams-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin: 4px 0 6px;
+}
+
+.teams-tools label {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: .8rem;
+  font-weight: 800;
+}
+
+.teams-tools input,
+.teams-tools select {
+  border: 1px solid #c6c9bd;
+  padding: 9px 12px;
+  background: white;
+  color: var(--ink);
+}
+
+.team-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.team-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) 6.5rem minmax(0, 1.7fr) 7.5rem max-content;
+  align-items: center;
+  gap: 6px 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  font-size: .9rem;
+}
+
+.team-row-team {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.team-row-team span,
+.team-row-size,
+.team-row-work {
+  color: var(--muted);
+}
+
+.team-row-idea {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.team-row-idea > span:first-child {
+  overflow-wrap: anywhere;
+}
+
+a.text-button {
+  text-decoration: none;
+}
+
+.team-row-link {
+  justify-self: end;
+  white-space: nowrap;
+}
+
+@container (max-width: 40rem) {
+  .team-row {
+    grid-template-columns: minmax(0, 1fr) max-content;
+    grid-template-areas:
+      "team link"
+      "idea idea"
+      "size work";
+  }
+
+  .team-row-team { grid-area: team; }
+  .team-row-idea { grid-area: idea; }
+  .team-row-size { grid-area: size; }
+  .team-row-work { grid-area: work; justify-self: end; }
+  .team-row-link { grid-area: link; }
+}
+
+.final-tag {
+  margin-left: 8px;
+  padding: 1px 7px;
+  background: var(--lime);
+  font-size: .72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+/* The team page. */
+.side-card .member-list {
+  margin-bottom: 8px;
+}
+
+.place-student {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.place-student label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: .84rem;
+  font-weight: 800;
+}
+
+.place-student select {
+  border: 1px solid #c6c9bd;
+  padding: 9px 12px;
+  background: white;
+  color: var(--ink);
+}
+
+.place-student .dark-button {
+  align-self: flex-start;
+}
+
+@media (max-width: 1023px) {
+  /* On the team page the members come first. */
+  .cycle-layout.side-first {
+    grid-template-areas:
+      "side"
+      "main";
+  }
+
+  .cycle-layout.side-first .cycle-side {
+    margin: 0 0 16px;
+  }
+}

@@ -10,6 +10,7 @@ const {
   dayFromToday,
   plannedDates,
   openSection,
+  openTeamPage,
 } = require("./support.cjs");
 const [chromePath, FRONTEND, API, OUT] = process.argv.slice(2);
 
@@ -134,16 +135,14 @@ const REGISTERED = [`yash.b27csai${DOMAIN}`, `ira.d27csai${DOMAIN}`];
 
     await run.check("Faculty see the waiting idea and reject it with feedback", async () => {
       await faculty.reload();
-      await openSection(faculty, "Ideas");
-      const ideas = faculty.locator(".team-panel", { has: faculty.getByRole("heading", { name: "1 waiting for review" }) });
-      await ideas.getByRole("button", { name: "Open the idea of Nimbus" }).click();
-      const review = faculty.getByLabel("Idea of Nimbus");
-      await review.getByText("A live map of free rooms from the timetable.").waitFor();
-      await review.getByLabel("Reject").check();
-      await review.getByLabel(/Feedback for the team/).fill("Timetables change weekly; show how you keep it current.");
-      await review.getByRole("button", { name: "Reject idea" }).click();
+      await faculty.locator(".team-row", { hasText: "Nimbus" }).getByText("Waiting for review").waitFor();
+      await openTeamPage(faculty, "Nimbus");
+      await faculty.getByText("A live map of free rooms from the timetable.").waitFor();
+      await faculty.getByLabel("Reject").check();
+      await faculty.getByLabel(/Feedback for the team/).fill("Timetables change weekly; show how you keep it current.");
+      await faculty.getByRole("button", { name: "Reject idea" }).click();
       await faculty.getByText("Rejected the idea of Nimbus.").waitFor();
-      await faculty.getByRole("heading", { name: "0 waiting for review" }).waitFor();
+      await faculty.locator(".idea-status", { hasText: "Rejected" }).waitFor();
     }, faculty);
 
     await run.check("The leader sees the feedback, revises and resubmits", async () => {
@@ -158,12 +157,12 @@ const REGISTERED = [`yash.b27csai${DOMAIN}`, `ira.d27csai${DOMAIN}`];
     }, leader);
 
     await run.check("Faculty approve the new version; the team sees it approved and final", async () => {
-      await faculty.reload();
-      await openSection(faculty, "Ideas");
-      await faculty.getByRole("button", { name: "Open the idea of Nimbus" }).click();
-      const review = faculty.getByLabel("Idea of Nimbus");
-      await review.getByText("Decision on version 3").waitFor();
-      await review.getByRole("button", { name: "Approve idea" }).click();
+      // The one waiting proposal: the header's button opens its team.
+      await faculty.goto(`${FRONTEND}/faculty/cycles/${cycleId}`);
+      await faculty.getByRole("button", { name: "Review 1 idea" }).click();
+      await faculty.getByRole("heading", { level: 1, name: "Nimbus" }).waitFor();
+      await faculty.getByText("Decision on version 3").waitFor();
+      await faculty.getByRole("button", { name: "Approve idea" }).click();
       await faculty.getByText("Approved the idea of Nimbus.").waitFor();
       await leader.reload();
       await leader.locator(".idea-status", { hasText: "Approved" }).waitFor();

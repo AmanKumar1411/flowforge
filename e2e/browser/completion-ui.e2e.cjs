@@ -25,8 +25,8 @@ const STUDENTS = {
 const name = (key) => key[0].toUpperCase() + key.slice(1);
 const email = (key) => `${STUDENTS[key]}${DOMAIN}`;
 const FORMATION_SECONDS = 45;
-// The faculty's table of teams (the ideas table below it lists the same team names).
-const teamsTable = (page) => page.locator('section[aria-labelledby="teams-heading"] tbody');
+// A team's row in the faculty's teams list.
+const teamRow = (page, name) => page.locator(".team-row", { hasText: name });
 
 (async () => {
   const run = createRun(OUT, "completion-browser-e2e");
@@ -176,9 +176,12 @@ const teamsTable = (page) => page.locator('section[aria-labelledby="teams-headin
       await faculty.getByLabel("Leader").selectOption({ label: "Dia" });
       await faculty.getByRole("button", { name: "Create team" }).click();
       await faculty.getByText("Created Kestrel.").waitFor();
-      const row = teamsTable(faculty).locator("tr", { hasText: "Kestrel" });
-      const cells = await row.locator("td").allInnerTexts();
-      assert(JSON.stringify(cells) === JSON.stringify(["Kestrel", "Dia", "Chen", "2", "Faculty"]), `row ${JSON.stringify(cells)}`);
+      const row = teamRow(faculty, "Kestrel");
+      await row.getByText("Led by Dia").waitFor();
+      await row.getByText("2/3 members").waitFor();
+      const kestrel = (await facultyApi.call("GET", `/course-cycles/${cycleId}/teams`)).body.find((team) => team.name === "Kestrel");
+      const members = kestrel.members.map((member) => `${member.name}${member.isLeader ? " (leader)" : ""}`);
+      assert(kestrel.origin === "FACULTY" && JSON.stringify(members) === '["Dia (leader)","Chen"]', `Kestrel ${kestrel.origin} ${members}`);
       await faculty.getByRole("heading", { name: "Students without a team (3)" }).waitFor();
     }, faculty);
 
@@ -201,7 +204,7 @@ const teamsTable = (page) => page.locator('section[aria-labelledby="teams-headin
       await proposal.getByRole("button", { name: "Create these teams" }).click();
       await faculty.getByText("Created 1 team.").waitFor();
       await faculty.getByText("Every student is in a team.").waitFor();
-      await teamsTable(faculty).locator("tr", { hasText: "Auto-group" }).waitFor();
+      await teamRow(faculty, /Auto team \d+/).waitFor();
     }, faculty);
 
     await run.check("An auto-grouped student sees their new team without doing anything", async () => {

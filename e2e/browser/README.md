@@ -10,7 +10,7 @@ Six scripts drive the real React app in headless Chrome against the real API:
     wizard, with what publishing locked shown as locked;
   - creating a team with the size counter, and the added member seeing it without acting;
   - "already in a team" in another leader's search;
-  - swapping a member, the faculty's team table, disbanding;
+  - swapping a member, the team in the faculty's teams list and on its page, disbanding;
   - a team fixed after its deadline.
 - `completion-ui.e2e.cjs` (Phase 5) runs 11 checks:
   - creating an elective with extra placing time in the wizard, enrolling students by pasted
@@ -40,10 +40,11 @@ Six scripts drive the real React app in headless Chrome against the real API:
   - setting up a cycle from blank and saving a draft that students cannot see; editing the draft
     in the same wizard and publishing it after the confirmation; a student of the batch seeing it;
     starting a new cycle from a previous one; the wizard with the keyboard alone at 375px wide;
-  - the page's phase timeline with "Today", its one primary action and only the current phase's
-    section open; "Needs your attention" for a waiting idea, whose link opens the Ideas section;
+  - the page's phase timeline with "Today", its one primary action and the empty teams list;
+    "Needs your attention" for a waiting idea, whose link opens that team's page to review it;
     publishing a draft from its page; a closed cycle in the past tense with nothing left to do.
-  Sections other than the current phase's start closed; `openSection` in `support.cjs` opens one.
+  `openSection` in `support.cjs` opens a collapsible section of the cycle page, and `openTeamPage`
+  opens a team's page from the teams list.
 
 The Phase 4 to 7 scripts and `cycles-ui` set up their faculty member and students through the
 API, so all six run one after another on the same database. Each owns a batch, so their counts never mix:

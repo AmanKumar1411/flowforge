@@ -8,6 +8,7 @@ const {
   devSignIn,
   apiSession,
   openSection,
+  openTeamPage,
 } = require("./support.cjs");
 const [chromePath, FRONTEND, API, OUT] = process.argv.slice(2);
 
@@ -159,11 +160,14 @@ const SUBMISSIONS_OPEN_S = 55;
 
     await run.check("Faculty see each team's latest version and its history", async () => {
       await faculty.reload();
-      await faculty.getByRole("heading", { name: "1 of 2 teams submitted" }).waitFor();
-      await faculty.getByRole("button", { name: "Versions of Orbit" }).click();
-      const work = faculty.getByLabel("Work of Orbit");
+      await faculty.locator(".glance", { hasText: "1 of 2 teams submitted" }).waitFor();
+      await faculty.locator(".team-row", { hasText: "Orbit" }).getByText("2 submissions").waitFor();
+      await openTeamPage(faculty, "Orbit");
+      const work = faculty.getByRole("list", { name: "Submitted versions" });
       await work.getByText("Version 2").waitFor();
       await work.getByText("Version 1").waitFor();
+      // Submissions are still open, so the newest version is marked as the latest, not yet final.
+      await work.locator("li").first().locator(".final-tag", { hasText: "Latest" }).waitFor();
       const rows = (await facultyApi.call("GET", `/course-cycles/${cycleId}/submissions`)).body;
       const orbitRow = rows.find((row) => row.team.name === "Orbit");
       assert(orbitRow.versionCount === 2 && orbitRow.latest.demoUrl === "https://orbit.example.edu", JSON.stringify(orbitRow));
