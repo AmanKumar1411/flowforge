@@ -556,7 +556,7 @@ export function TimelineStep({
         label="Final deadline"
         hint={
           schedule && workDays !== null
-            ? `${formatDate(schedule.submissionDeadline)}. Teams get ${workDays} ${workDays === 1 ? "day" : "days"} for their work, from ${formatDate(schedule.submissionStartAt)}.`
+            ? `${formatDate(schedule.submissionDeadline)}. Teams get ${workDays} ${workDays === 1 ? "day" : "days"} for their work, from the start of ${formatFullDay(schedule.submissionStartAt)}.`
             : undefined
         }
         problem={problems.finalDeadline}
@@ -779,7 +779,7 @@ export function ReviewStep({
             <dt>Ideas due by</dt>
             <dd>{formatDate(schedule.ideaDeadline)}</dd>
             <dt>Submissions open</dt>
-            <dd>{formatDate(schedule.submissionStartAt)}</dd>
+            <dd>From the start of {formatFullDay(schedule.submissionStartAt)}</dd>
             <dt>Final submission deadline</dt>
             <dd>{formatDate(schedule.submissionDeadline)}</dd>
           </>
