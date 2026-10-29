@@ -24,7 +24,7 @@ export function CycleStudentsPage() {
     return (
       <section className="detail-page">
         <button className="back-button" onClick={back}>
-          ← Back to the cycle
+          ← Back to the project
         </button>
         <p className="form-error banner">{error}</p>
       </section>
@@ -47,7 +47,7 @@ export function CycleStudentsPage() {
           <h1>Students</h1>
           <p className="cycle-facts">
             {elective
-              ? "Only the students you enroll see this cycle and can join its teams."
+              ? "Only the students you enroll see this project and can join its teams."
               : `Every student of batch ${cycle.batchYear} takes part. Register those who have not signed in yet, so leaders can add them to teams.`}
           </p>
         </div>

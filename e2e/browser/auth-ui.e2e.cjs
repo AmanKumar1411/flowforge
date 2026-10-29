@@ -191,7 +191,7 @@ const panel = (page, heading) =>
     await check("Faculty creates and publishes a cycle for batch 2023", async () => {
       // The wizard's default plan is valid as it is.
       await createCycleInWizard(staff, { courseName: "Software Design", title: "Browser E2E cycle", batchYear: 2023 });
-      await staff.getByRole("button", { name: "← Back to cycles" }).click();
+      await staff.getByRole("button", { name: "← Back to projects" }).click();
       staff.once("dialog", (dialog) => dialog.accept());
       await staff.locator(".cycle-card", { hasText: "Browser E2E cycle" }).getByRole("button", { name: "Publish" }).click();
       await staff.locator(".cycle-card", { hasText: "Browser E2E cycle" }).locator(".status", { hasText: "Open" }).waitFor();

@@ -37,9 +37,9 @@ const REGISTERED = [`yash.b27csai${DOMAIN}`, `ira.d27csai${DOMAIN}`];
     let cycleId = "";
 
     await run.check("Faculty plan the cycle in the wizard; a deadline out of order is explained, publishing is confirmed", async () => {
-      await faculty.getByRole("button", { name: "+ New cycle" }).click();
+      await faculty.getByRole("button", { name: "+ New project" }).click();
       await faculty.getByLabel("Course name").fill("Product Studio");
-      await faculty.getByLabel("Cycle title").fill(title);
+      await faculty.getByLabel("Project title").fill(title);
       await faculty.getByLabel("Batch year").fill("2027");
       await faculty.getByRole("button", { name: "Next: Teams" }).click();
       await faculty.getByLabel("Allow solo projects").check();
@@ -166,7 +166,7 @@ const REGISTERED = [`yash.b27csai${DOMAIN}`, `ira.d27csai${DOMAIN}`];
       await faculty.getByText("Approved the idea of Nimbus.").waitFor();
       await leader.reload();
       await leader.locator(".idea-status", { hasText: "Approved" }).waitFor();
-      await leader.getByText("This is your team's project for the cycle.").waitFor();
+      await leader.getByText("This is your team's idea for this project.").waitFor();
       assert(await leader.getByRole("button", { name: /Edit idea|Revise/ }).count() === 0, "an approved idea can still change");
       const idea = (await facultyApi.call("GET", `/teams/${teamId}/idea`)).body.idea;
       assert(JSON.stringify(idea.reviews.map((entry) => entry.decision)) === '["APPROVED","REJECTED"]', `reviews ${JSON.stringify(idea.reviews)}`);

@@ -111,7 +111,7 @@ function Field({
   );
 }
 
-const LOCKED = "Fixed once the cycle is published.";
+const LOCKED = "Fixed once the project is published.";
 
 export function BasicsStep({
   state,
@@ -145,7 +145,7 @@ export function BasicsStep({
         <div className="template-picker">
           <Field
             label="Start from"
-            hint="A previous cycle copies its settings and moves its dates to start today."
+            hint="A previous project copies its settings and moves its dates to start today."
           >
             {(props) => (
               <select
@@ -153,7 +153,7 @@ export function BasicsStep({
                 value={templateId}
                 onChange={(event) => onTemplate(event.target.value)}
               >
-                <option value="">A blank cycle</option>
+                <option value="">A blank project</option>
                 {templates.map((cycle) => (
                   <option key={cycle.id} value={cycle.id}>
                     {cycle.courseName} · {cycle.title} (batch {cycle.batchYear})
@@ -183,11 +183,11 @@ export function BasicsStep({
           )}
         </Field>
         <Field
-          label="Cycle title"
+          label="Project title"
           hint={
             locked
               ? LOCKED
-              : "This project round, for example “Mid-semester project”. A course can run several cycles."
+              : "For example “Mid-semester project”. A course can run several projects."
           }
           problem={problems.title}
         >
@@ -300,7 +300,7 @@ export function BasicsStep({
             />
             <span>
               <strong>Elective</strong>: only the students you enroll take part (you
-              add them on the cycle page).
+              add them on the project page).
             </span>
           </label>
           {locked && <p className="field-hint">{LOCKED}</p>}
@@ -517,7 +517,7 @@ export function TimelineStep({
   return (
     <>
       <p className="field-hint">
-        Set when the cycle starts and how long each phase lasts; the dates follow.
+        Set when the project starts and how long each phase lasts; the dates follow.
         Phases end at 11:59 PM on their last day.
       </p>
       <Field
@@ -634,7 +634,7 @@ function PublishedTimeline({
   return (
     <>
       <PhaseTimeline
-        label="The cycle's phases"
+        label="The project's phases"
         now={now.getTime()}
         phases={cyclePhases(
           {
@@ -645,7 +645,7 @@ function PublishedTimeline({
         )}
       />
       <p className="field-hint">
-        Students already see this cycle. A deadline can move while its phase is
+        Students already see this project. A deadline can move while its phase is
         still running, and only to a time in the future.
       </p>
       <div className="form-grid">
@@ -662,7 +662,7 @@ function PublishedTimeline({
                     ? formatDate(isoDate(value))
                     : undefined
                   : field === "submissionStartAt"
-                    ? `${formatDate(cycle.submissionStartAt)}. Fixed once the cycle is published.`
+                    ? `${formatDate(cycle.submissionStartAt)}. Fixed once the project is published.`
                     : `${formatDate(cycle[field])}. This phase has ended.`
               }
               problem={problems[field]}
@@ -724,7 +724,7 @@ export function SummaryPanel({
       )}
       <p className="field-hint">
         {mode === "published"
-          ? "Students already see this cycle."
+          ? "Students already see this project."
           : "Students can't see this until you publish it."}
       </p>
     </aside>
@@ -778,7 +778,7 @@ export function ReviewStep({
       <ReviewSection title="Basics" onEdit={() => onEdit(0)} editLabel="Edit the basics">
         <dt>Course</dt>
         <dd>{state.courseName || "—"}</dd>
-        <dt>Cycle title</dt>
+        <dt>Project title</dt>
         <dd>{state.title || "—"}</dd>
         <dt>Batch</dt>
         <dd>
@@ -865,7 +865,7 @@ export function PublishDialog({
       >
         <h2 id="publish-title">Publish to students?</h2>
         <div id="publish-body">
-          <p>{audience} will see this cycle and can start forming teams.</p>
+          <p>{audience} will see this project and can start forming teams.</p>
           <p>After publishing, these can no longer change:</p>
           <ul>
             {LOCKED_AFTER_PUBLISH.map((item) => (

@@ -36,7 +36,7 @@ import { currentSemester } from "../semester";
 import type { Cycle } from "../types";
 
 const STEP_HEADINGS = [
-  "What is this cycle?",
+  "What is this project?",
   "How do students team up?",
   "When does each phase happen?",
   "Check and save",
@@ -107,7 +107,7 @@ export function CycleWizardPage() {
     return (
       <section className="form-page">
         <button className="back-button" onClick={() => navigate("/faculty/cycles")}>
-          ← Back to cycles
+          ← Back to projects
         </button>
         <p className="form-error banner">{loadError}</p>
       </section>
@@ -118,9 +118,9 @@ export function CycleWizardPage() {
     return (
       <section className="form-page">
         <button className="back-button" onClick={() => navigate(`/faculty/cycles/${cycle.id}`)}>
-          ← Back to the cycle
+          ← Back to the project
         </button>
-        <p className="notice">This cycle is closed, so it can no longer change.</p>
+        <p className="notice">This project is closed, so it can no longer change.</p>
       </section>
     );
   }
@@ -222,12 +222,12 @@ export function CycleWizardPage() {
         className="back-button"
         onClick={() => navigate(cycle ? `/faculty/cycles/${cycle.id}` : "/faculty/cycles")}
       >
-        ← {cycle ? "Back to the cycle" : "Back to cycles"}
+        ← {cycle ? "Back to the project" : "Back to projects"}
       </button>
       <p className="eyebrow">
-        {mode === "create" ? "New course cycle" : mode === "draft" ? "Edit draft" : "Edit published cycle"}
+        {mode === "create" ? "New course project" : mode === "draft" ? "Edit draft" : "Edit published project"}
       </p>
-      <h1>{mode === "create" ? "Set up a cycle" : cycle?.title}</h1>
+      <h1>{mode === "create" ? "Set up a project" : cycle?.title}</h1>
       <StepIndicator current={step} reachable={reachable} onSelect={goTo} />
       <div className="wizard-layout">
         <form className="cycle-form wizard-form" onSubmit={submit} noValidate>

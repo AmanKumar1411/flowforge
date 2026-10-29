@@ -64,7 +64,7 @@ export type Problems = Partial<Record<string, string>>;
 
 /** What can no longer change once a cycle is published (CycleWorkflow's editable fields). */
 export const LOCKED_AFTER_PUBLISH = [
-  "the course name and cycle title",
+  "the course name and project title",
   "the batch, semester and academic year",
   "whether it is a core course or an elective",
   "the team sizes, and whether you keep extra time to place students",

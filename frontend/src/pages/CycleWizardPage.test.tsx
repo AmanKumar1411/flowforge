@@ -53,7 +53,7 @@ function renderWizard() {
 
 async function fillBasics(user: ReturnType<typeof userEvent.setup>) {
   await user.type(await screen.findByLabelText("Course name"), "Software Design");
-  await user.type(screen.getByLabelText("Cycle title"), "Mid-semester project");
+  await user.type(screen.getByLabelText("Project title"), "Mid-semester project");
 }
 
 describe("CycleWizardPage", () => {
@@ -79,12 +79,12 @@ describe("CycleWizardPage", () => {
 
   it("checks a step before moving on, explains what to fix, and moves focus to the next step", async () => {
     const user = renderWizard();
-    await screen.findByRole("heading", { name: /What is this cycle\?/ });
+    await screen.findByRole("heading", { name: /What is this project\?/ });
     await user.click(screen.getByRole("button", { name: "Next: Teams" }));
     expect(screen.getByRole("status")).toHaveTextContent("2 things need fixing on this step.");
     expect(screen.getByText(/Enter the course name/)).toBeVisible();
     expect(screen.getByLabelText("Course name")).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByRole("heading", { name: /What is this cycle\?/ })).toBeVisible();
+    expect(screen.getByRole("heading", { name: /What is this project\?/ })).toBeVisible();
 
     await fillBasics(user);
     await user.click(screen.getByRole("button", { name: "Next: Teams" }));
@@ -104,7 +104,7 @@ describe("CycleWizardPage", () => {
 
     await user.click(screen.getByRole("button", { name: "← Back" }));
     expect(screen.getByLabelText("Course name")).toHaveValue("Software Design");
-    expect(screen.getByLabelText("Cycle title")).toHaveValue("Mid-semester project");
+    expect(screen.getByLabelText("Project title")).toHaveValue("Mid-semester project");
   });
 
   it("starts from a previous cycle: its settings, with its phases moved to start today", async () => {

@@ -106,7 +106,7 @@ export function teamsEmpty(
   phase: CyclePhase,
   counts: CycleCounts,
 ): { text: string; action?: { label: string; target: PageTarget } } {
-  if (phase === "draft") return { text: "No teams yet. Students form teams once you publish the cycle." };
+  if (phase === "draft") return { text: "No teams yet. Students form teams once you publish the project." };
   if (phase === "closed") return { text: "No teams were formed." };
   if (counts.roster?.total === 0) {
     return cycle.kind === "ELECTIVE"
@@ -163,7 +163,7 @@ export function primaryAction(
       target: "review",
     };
   }
-  if (phase === "ended") return { kind: "close", label: "Close the cycle" };
+  if (phase === "ended") return { kind: "close", label: "Close the project" };
   if (phase === "ideas") return { kind: "go", label: "See the ideas", target: "teams" };
   if (phase === "work") return { kind: "go", label: "See the submissions", target: "teams" };
   return { kind: "go", label: "See the teams", target: "teams" };

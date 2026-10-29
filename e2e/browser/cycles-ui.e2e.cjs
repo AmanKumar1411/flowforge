@@ -64,7 +64,7 @@ const PARTNER = `neha.s20csai${DOMAIN}`;
       await faculty.getByRole("button", { name: "Next: Review" }).click();
       await faculty.getByRole("button", { name: "Publish to students" }).click();
       const dialog = faculty.getByRole("dialog", { name: "Publish to students?" });
-      await dialog.getByText("Students of batch 2020 will see this cycle").waitFor();
+      await dialog.getByText("Students of batch 2020 will see this project").waitFor();
       await dialog.getByText(/the date submissions open/).waitFor();
       await dialog.getByRole("button", { name: "Publish to students" }).click();
       await faculty.waitForURL(new RegExp(`/faculty/cycles/${cycleId}$`));
@@ -82,11 +82,11 @@ const PARTNER = `neha.s20csai${DOMAIN}`;
 
     await run.check("A new cycle starts from a previous one: its settings, with its phases moved to today", async () => {
       await faculty.goto(`${FRONTEND}/faculty/cycles`);
-      await faculty.getByRole("button", { name: "+ New cycle" }).click();
+      await faculty.getByRole("button", { name: "+ New project" }).click();
       const template = await faculty.getByLabel("Start from").locator("option", { hasText: title }).getAttribute("value");
       await faculty.getByLabel("Start from").selectOption(template);
       assert((await faculty.getByLabel("Course name").inputValue()) === "Data Systems", "course name not copied");
-      await faculty.getByLabel("Cycle title").fill(`${title} (repeat)`);
+      await faculty.getByLabel("Project title").fill(`${title} (repeat)`);
       await faculty.getByRole("button", { name: "Next: Teams" }).click();
       assert((await faculty.getByLabel("Minimum team size").inputValue()) === "2", "sizes not copied");
       await faculty.getByRole("button", { name: "Next: Timeline" }).click();
@@ -126,7 +126,7 @@ const PARTNER = `neha.s20csai${DOMAIN}`;
     });
     await run.check("The cycle page shows the phases with today, one primary action, and the teams list", async () => {
       await faculty.goto(`${FRONTEND}/faculty/cycles/${cycleId}`);
-      const phases = faculty.getByRole("list", { name: "Where the cycle is" });
+      const phases = faculty.getByRole("list", { name: "Where the project is" });
       const current = phases.locator('[aria-current="step"]');
       await current.getByText("Teams").waitFor();
       await current.getByText("Now").waitFor();
@@ -164,7 +164,7 @@ const PARTNER = `neha.s20csai${DOMAIN}`;
 
     await run.check("A draft's page publishes it through the same confirmation", async () => {
       await faculty.goto(`${FRONTEND}/faculty/cycles/${copyId}`);
-      await faculty.getByText("Students can't see this cycle yet.").waitFor();
+      await faculty.getByText("Students can't see this project yet.").waitFor();
       await faculty.getByRole("button", { name: "Publish to students" }).click();
       const dialog = faculty.getByRole("dialog", { name: "Publish to students?" });
       await dialog.getByText(/the team sizes/).waitFor();
@@ -177,11 +177,11 @@ const PARTNER = `neha.s20csai${DOMAIN}`;
     await run.check("A closed cycle reads in the past tense, with nothing left to do", async () => {
       assert((await facultyApi.call("POST", `/course-cycles/${copyId}/close`)).status === 200, "close");
       await faculty.reload();
-      const current = faculty.getByRole("list", { name: "Where the cycle is" }).locator('[aria-current="step"]');
+      const current = faculty.getByRole("list", { name: "Where the project is" }).locator('[aria-current="step"]');
       await current.getByText("Closed").waitFor();
       await faculty.locator(".teams-empty").getByText("No teams were formed.").waitFor();
       await faculty.locator(".glance", { hasText: "No work was submitted" }).waitFor();
-      assert(await faculty.getByRole("button", { name: "Edit cycle" }).count() === 0, "Edit offered on a closed cycle");
+      assert(await faculty.getByRole("button", { name: "Edit project" }).count() === 0, "Edit offered on a closed cycle");
       assert(await faculty.locator(".cycle-actions .primary-button").count() === 0, "a primary action on a closed cycle");
       assert(await faculty.getByRole("heading", { name: "Needs your attention" }).count() === 0, "attention card on a closed cycle");
     }, faculty);

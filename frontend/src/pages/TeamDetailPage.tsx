@@ -52,7 +52,7 @@ export function TeamDetailPage() {
         getTeamIdea(teamId),
         listTeamSubmissions(teamId),
       ]);
-      if (team.cycleId !== cycle.id) throw new Error("This team belongs to another cycle.");
+      if (team.cycleId !== cycle.id) throw new Error("This team belongs to another project.");
       const overview = cycle.status === "PUBLISHED" ? await getCompletionOverview(cycle.id) : null;
       if (live) setLoaded({ cycle, team, idea, versions, overview });
     })().catch((caught) => live && setError(readableError(caught)));
@@ -66,7 +66,7 @@ export function TeamDetailPage() {
     return (
       <section className="detail-page">
         <button className="back-button" onClick={back}>
-          ← Back to the cycle
+          ← Back to the project
         </button>
         <p className="form-error banner">{error}</p>
       </section>

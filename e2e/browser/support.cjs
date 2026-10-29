@@ -108,10 +108,10 @@ function plannedDates({ teams, placing = 0, ideas, finalDays }) {
  * the confirmation dialog; otherwise it saves a draft.
  */
 async function createCycleInWizard(page, plan) {
-  await page.getByRole("button", { name: "+ New cycle" }).click();
-  await page.getByRole("heading", { name: /What is this cycle\?/ }).waitFor();
+  await page.getByRole("button", { name: "+ New project" }).click();
+  await page.getByRole("heading", { name: /What is this project\?/ }).waitFor();
   await page.getByLabel("Course name").fill(plan.courseName);
-  await page.getByLabel("Cycle title").fill(plan.title);
+  await page.getByLabel("Project title").fill(plan.title);
   await page.getByLabel("Batch year").fill(String(plan.batchYear));
   if (plan.kind === "ELECTIVE") {
     await page.getByText("Advanced: course type").click();

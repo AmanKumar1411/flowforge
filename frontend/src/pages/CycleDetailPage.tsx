@@ -136,7 +136,7 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
         <p className="form-error banner">{error}</p>
       </section>
     );
-  if (!cycle) return <p className="loading">Loading cycle…</p>;
+  if (!cycle) return <p className="loading">Loading project…</p>;
 
   const phase = phaseOf(cycle, now);
   const action = faculty ? primaryAction(cycle, phase, counts) : null;
@@ -159,7 +159,7 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
     if (!action) return;
     if (action.kind === "go") return go(action.target);
     if (action.kind === "publish") return setPublishing(true);
-    if (!window.confirm("Close this cycle? Nothing can change afterwards, and students can no longer submit.")) return;
+    if (!window.confirm("Close this project? Nothing can change afterwards, and students can no longer submit.")) return;
     setBusy(true);
     setActionError("");
     try {
@@ -186,7 +186,7 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
   return (
     <section className="detail-page">
       <button className="back-button" onClick={() => navigate(backTo)}>
-        ← Back to cycles
+        ← Back to projects
       </button>
       <header className="cycle-header">
         <div className="cycle-heading">
@@ -214,7 +214,7 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
                 className="text-button"
                 onClick={() => navigate(`/faculty/cycles/${cycle.id}/edit`)}
               >
-                Edit cycle
+                Edit project
               </button>
             )}
           </div>
@@ -226,13 +226,13 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
         </p>
       )}
       <PhaseTimeline
-        label={cycle.status === "DRAFT" ? "Planned phases" : "Where the cycle is"}
+        label={cycle.status === "DRAFT" ? "Planned phases" : "Where the project is"}
         phases={phases}
         now={cycle.status === "DRAFT" ? undefined : now}
       />
       {cycle.status === "DRAFT" && faculty && (
         <p className="field-hint">
-          Students can't see this cycle yet. Publish it when the plan is ready.
+          Students can't see this project yet. Publish it when the plan is ready.
         </p>
       )}
       <div className="cycle-layout">
@@ -305,7 +305,7 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
           )}
         </div>
         {faculty && (
-          <aside className="cycle-side" aria-label="The cycle at a glance">
+          <aside className="cycle-side" aria-label="The project at a glance">
             <section className="side-card" aria-labelledby="glance-heading">
               <h2 id="glance-heading">At a glance</h2>
               <ul className="glance">

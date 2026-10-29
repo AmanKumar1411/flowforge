@@ -99,9 +99,9 @@ const SUBMISSIONS_OPEN_S = 55;
       const list = leader.getByRole("list", { name: "Ideas from your faculty" });
       await list.getByText("Show which library seats are free right now").waitFor();
       await list.getByRole("button", { name: "Pick Library seat finder" }).click();
-      await list.getByRole("button", { name: "Confirm: make it our project" }).click();
+      await list.getByRole("button", { name: "Confirm: make it our idea" }).click();
       await leader.locator(".idea-status", { hasText: "Picked from the list" }).waitFor();
-      await leader.getByText("Picked from your faculty's list. This is your team's project for the cycle.").waitFor();
+      await leader.getByText("Picked from your faculty's list. This is your team's idea for this project.").waitFor();
     }, leader);
 
     await run.check("Faculty see the pick, and a picked idea can no longer be removed", async () => {

@@ -177,7 +177,7 @@ function ideaNote(
         : "Waiting for your faculty's review.";
     case "REJECTED":
       if (!isIdeaResubmissionOpen(cycle)) {
-        return "Your faculty rejected this idea, and the cycle is closed, so it can no longer change.";
+        return "Your faculty rejected this idea, and the project is closed, so it can no longer change.";
       }
       return `Your faculty asked for a different idea. ${
         isLeader
@@ -186,8 +186,8 @@ function ideaNote(
       }; there is no deadline for these rounds.`;
     case "APPROVED":
       return idea.source === "CATALOG"
-        ? "Picked from your faculty's list. This is your team's project for the cycle."
-        : "Approved. This is your team's project for the cycle.";
+        ? "Picked from your faculty's list. This is your team's idea for this project."
+        : "Approved. This is your team's idea for this project.";
   }
 }
 
@@ -256,7 +256,7 @@ function CatalogList({
                     disabled={busy}
                     onClick={() => confirm(idea)}
                   >
-                    {busy ? "Picking…" : "Confirm: make it our project"}
+                    {busy ? "Picking…" : "Confirm: make it our idea"}
                   </button>
                 </div>
               ) : (

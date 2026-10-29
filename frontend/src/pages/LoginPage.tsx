@@ -18,11 +18,11 @@ export function LoginPage() {
   return (
     <main className="login-layout">
       <section className="login-intro">
-        <p className="eyebrow">FlowForge / Course cycles</p>
+        <p className="eyebrow">FlowForge / Course projects</p>
         <h1>Turn a semester into a clear runway.</h1>
         <p>
           Faculty set the context. Students see the right brief for their batch.
-          Every cycle has one source of truth.
+          Every project has one source of truth.
         </p>
         <div className="intro-rule">
           <span />

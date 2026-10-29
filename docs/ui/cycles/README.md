@@ -1,5 +1,10 @@
 # Cycle wizard and cycle page: before and after
 
+> Since 29 October 2026 the screens call a cycle a **project** ("+ New project", "Project title",
+> "Edit project"), because "cycle" confused faculty. The API, the database, the code and the URLs
+> keep "cycle"; `inScreenWords` in `frontend/src/errors.ts` changes the word in API messages shown
+> on screen. The screenshots below predate the change.
+
 Faculty found the single cycle form and the cycle page hard to follow. The form became a four-step
 wizard, and the page became a timeline of phases with one next action. The API and its rules did not
 change, except that a faculty placing window must now end after the students' team deadline

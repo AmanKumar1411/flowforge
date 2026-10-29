@@ -110,7 +110,7 @@ describe("CycleDetailPage by course type", () => {
       "href",
       "/faculty/cycles/cycle/teams/t1",
     );
-    const glance = screen.getByRole("complementary", { name: "The cycle at a glance" });
+    const glance = screen.getByRole("complementary", { name: "The project at a glance" });
     expect(within(glance).getByText(/Enrolled students \(5\)/)).toBeVisible();
     expect(within(glance).getByRole("link", { name: "Manage" })).toHaveAttribute("href", "/faculty/cycles/cycle/students");
     expect(within(glance).getByText("0 of 2 teams submitted")).toBeVisible();
@@ -120,7 +120,7 @@ describe("CycleDetailPage by course type", () => {
     // One proposal waits: the header's one primary action, and the attention card, say so.
     expect(await screen.findByRole("button", { name: "Review 1 proposal" })).toBeVisible();
     expect(screen.getByText("1 proposal is waiting for your review")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Edit cycle" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Edit project" })).toBeVisible();
     expect(screen.queryByText("Idea list")).toBeNull();
     expect(screen.queryByRole("heading", { name: /Students without a team/ })).toBeNull();
   });
@@ -128,7 +128,7 @@ describe("CycleDetailPage by course type", () => {
   it("shows a core course the same, plus its idea list and the students without a team", async () => {
     renderPage("CORE");
     expect(await screen.findByRole("heading", { name: "Teams (2)" })).toBeVisible();
-    const glance = screen.getByRole("complementary", { name: "The cycle at a glance" });
+    const glance = screen.getByRole("complementary", { name: "The project at a glance" });
     expect(within(glance).getByText(/Batch 2023 students \(5\)/)).toBeVisible();
     expect(screen.getByText("Idea list")).toBeVisible();
     expect(await screen.findByRole("heading", { name: "Students without a team (1)" })).toBeVisible();

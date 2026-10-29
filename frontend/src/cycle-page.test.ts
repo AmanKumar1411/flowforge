@@ -106,7 +106,7 @@ describe("what the page asks of the faculty", () => {
     expect(primaryAction(cycle, "placing", counts)).toMatchObject({ label: "Place 3 students", target: "completion" });
     expect(primaryAction(cycle, "ideas", counts)).toEqual({ kind: "go", label: "Review 2 proposals", target: "review" });
     expect(primaryAction(cycle, "work", quiet)).toMatchObject({ label: "See the submissions" });
-    expect(primaryAction(cycle, "ended", quiet)).toEqual({ kind: "close", label: "Close the cycle" });
+    expect(primaryAction(cycle, "ended", quiet)).toEqual({ kind: "close", label: "Close the project" });
     // A closed cycle has nothing left to do.
     expect(primaryAction(cycle, "closed", counts)).toBeNull();
   });
@@ -143,7 +143,7 @@ describe("team completion and empty states", () => {
     expect(teamsEmpty(cycle, "teams", { roster: { total: 9, notSignedIn: 0 } })).toEqual({
       text: "No teams yet. Students are forming their own teams now.",
     });
-    expect(teamsEmpty(cycle, "draft", {}).text).toBe("No teams yet. Students form teams once you publish the cycle.");
+    expect(teamsEmpty(cycle, "draft", {}).text).toBe("No teams yet. Students form teams once you publish the project.");
     expect(teamsEmpty(cycle, "closed", {}).text).toBe("No teams were formed.");
   });
 });

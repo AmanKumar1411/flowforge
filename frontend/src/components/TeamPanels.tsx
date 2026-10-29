@@ -173,7 +173,7 @@ export function StudentTeamPanel({ cycle }: { cycle: Cycle }) {
             <p className="muted">
               {isCompletionOpen(cycle, now)
                 ? `You are not in a team yet. Your faculty will place you in one by ${formatDate(cycle.teamCompletionDeadline)}.`
-                : "You are not in a team for this cycle. Contact your faculty."}
+                : "You are not in a team for this project. Contact your faculty."}
             </p>
           )
         )}
