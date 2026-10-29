@@ -8,7 +8,6 @@ import {
 import { readableError } from "../errors";
 import {
   describeTeamSize,
-  hasCompletionWindow,
   isFormationOpen,
 } from "../teams";
 import type {
@@ -35,9 +34,8 @@ function CompletionStatus({
     text =
       "Students can no longer change teams. Place everyone still without a team: build a team from selected students, add a student to a team with room, or auto-group the rest at random.";
   } else if (cycle.status === "PUBLISHED" && isFormationOpen(cycle, now)) {
-    text = hasCompletionWindow(cycle)
-      ? "Students are still forming their own teams. When they stop, you place everyone still without a team."
-      : "Students are still forming their own teams; anyone without one is listed here.";
+    text =
+      "Students are still forming their own teams. When they stop, you place everyone still without a team until the idea deadline.";
   } else {
     text = "Teams are final.";
   }

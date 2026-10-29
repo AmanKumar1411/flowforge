@@ -1,5 +1,5 @@
 import { semesterTerm } from "./semester";
-import type { CourseKind, Cycle } from "./types";
+import type { CourseKind, Cycle, Milestone } from "./types";
 
 /**
  * What the faculty's cycle page says about a cycle, free of React: which
@@ -9,35 +9,45 @@ import type { CourseKind, Cycle } from "./types";
  * are stated once, in the phase bar, so nothing here repeats a date.
  */
 
-export type CyclePhase =
-  | "draft"
-  | "teams"
-  | "placing"
-  | "ideas"
-  | "work"
-  | "ended"
-  | "closed";
+export type CyclePhase = "draft" | "teams" | "ideas" | "milestones" | "ended" | "closed";
 
 export type SectionKey = "students" | "catalog" | "teams" | "ideas" | "submissions";
 
-/** The parts of the faculty's cycle page below the header and the phases. */
-export type PagePart =
-  | "teamsList"
-  | "submissionCount"
-  | "studentsLink"
-  | "ideaList"
-  | "teamCompletion";
+/** The tabs of the faculty's cycle page. */
+export const TABS = [
+  { key: "overview", label: "Overview" },
+  { key: "students", label: "Students" },
+  { key: "teams", label: "Teams" },
+  { key: "ideas", label: "Ideas" },
+  { key: "milestones", label: "Milestones" },
+] as const;
+export type TabKey = (typeof TABS)[number]["key"];
+
+/** The parts of the faculty's cycle page that depend on the course type. */
+export type PagePart = "teamCompletion";
 
 /** Which parts each course type shows; the page asks this map, never the course type itself. */
 export const PAGE_PARTS: Record<CourseKind, readonly PagePart[]> = {
-  // Enrolled students form their own teams and propose their own ideas.
-  ELECTIVE: ["teamsList", "submissionCount", "studentsLink"],
-  // The whole batch: the faculty also offer ideas and place students left without a team.
-  CORE: ["teamsList", "submissionCount", "studentsLink", "ideaList", "teamCompletion"],
+  // Enrolled students form their own teams; their teams' pages take anyone left over.
+  ELECTIVE: [],
+  // The whole batch: the faculty also place students left without a team, all on one panel.
+  CORE: ["teamCompletion"],
 };
 
 export function shows(kind: CourseKind, part: PagePart) {
   return PAGE_PARTS[kind].includes(part);
+}
+
+/** Whether teams can pick from a faculty list, so the page shows it. */
+export function showsIdeaList(cycle: Pick<Cycle, "ideaSource">) {
+  return cycle.ideaSource !== "STUDENT_PROPOSALS";
+}
+
+export interface OpenMilestone {
+  milestone: Milestone;
+  /** Teams with at least one version for it. */
+  submitted: number;
+  teams: number;
 }
 
 export interface CycleCounts {
@@ -48,35 +58,42 @@ export interface CycleCounts {
   /** Students without a team, from the team-completion list. */
   unplaced?: number;
   ideas?: { waiting: number; approved: number; rejected: number; none: number };
-  submissions?: { submitted: number };
+  /** Milestones taking submissions now. */
+  openMilestones?: OpenMilestone[];
   /** Parts whose counts could not be loaded. */
   failed?: Partial<Record<SectionKey, true>>;
 }
 
-export function phaseOf(cycle: Cycle, now: number): CyclePhase {
-  if (cycle.status === "DRAFT") return "draft";
-  if (cycle.status === "CLOSED") return "closed";
-  if (now < Date.parse(cycle.teamFormationDeadline)) return "teams";
-  if (now < Date.parse(cycle.teamCompletionDeadline)) return "placing";
-  if (now < Date.parse(cycle.submissionStartAt)) return "ideas";
-  if (now < Date.parse(cycle.submissionDeadline)) return "work";
-  return "ended";
+/** The API's computed stage, as the page's phases. */
+export function phaseOf(cycle: Pick<Cycle, "currentStage">): CyclePhase {
+  switch (cycle.currentStage.kind) {
+    case "DRAFT":
+      return "draft";
+    case "TEAMS":
+      return "teams";
+    case "IDEAS":
+      return "ideas";
+    case "MILESTONE":
+      return "milestones";
+    case "WRAP_UP":
+      return "ended";
+    case "CLOSED":
+      return "closed";
+  }
 }
 
 /**
- * Where an action takes the faculty: the students page, the idea list, the
- * teams list, the teams list showing only proposals waiting for review (or
- * that one team's page), or the students without a team.
+ * Where an action takes the faculty: a tab, the wizard's review step to
+ * publish, the teams with proposals waiting (or that one team's page), or
+ * the students without a team.
  */
-export type PageTarget = "students" | "catalog" | "teams" | "review" | "completion";
-
-/** The idea list starts open while the cycle is a draft, when there is time to fill it. */
-export function sectionFor(phase: CyclePhase): SectionKey | null {
-  return phase === "draft" ? "catalog" : null;
-}
+export type PageTarget = TabKey | "review" | "completion" | "publish";
 
 const plural = (count: number, one: string, many = `${one}s`) =>
   `${count} ${count === 1 ? one : many}`;
+
+const milestoneLabel = (milestone: Pick<Milestone, "position" | "name">) =>
+  `M${milestone.position} · ${milestone.name}`;
 
 /** "Elective · open to enrolled students · Teams of 2–4 · Semester 7 (Aug–Dec 2026)" */
 export function cycleFacts(cycle: Cycle) {
@@ -85,19 +102,14 @@ export function cycleFacts(cycle: Cycle) {
       ? "Elective · open to enrolled students"
       : `Core · open to all of batch ${cycle.batchYear}`;
   const { minTeamSize: min, maxTeamSize: max } = cycle;
-  const size =
-    max === 1 ? "Solo projects" : min === max ? `Teams of ${max}` : `Teams of ${min}–${max}`;
+  const size = max === 1 ? "Solo projects" : min === max ? `Teams of ${max}` : `Teams of ${min}–${max}`;
   const term = semesterTerm(cycle.batchYear, cycle.semester);
   return `${who} · ${size} · Semester ${cycle.semester} (${term.label})`;
 }
 
 /** Whether the students with no team are worth showing: a core course with students, once published. */
 export function showsCompletion(cycle: Cycle, phase: CyclePhase, counts: CycleCounts) {
-  return (
-    shows(cycle.kind, "teamCompletion") &&
-    phase !== "draft" &&
-    (counts.roster?.total ?? 0) > 0
-  );
+  return shows(cycle.kind, "teamCompletion") && phase !== "draft" && (counts.roster?.total ?? 0) > 0;
 }
 
 /** What the teams list says when there is no team: one line, and the next step if the faculty have one. */
@@ -120,7 +132,7 @@ export function teamsEmpty(
         };
   }
   if (phase === "teams") return { text: "No teams yet. Students are forming their own teams now." };
-  if (phase === "placing" && showsCompletion(cycle, phase, counts)) {
+  if (phase === "ideas" && showsCompletion(cycle, phase, counts)) {
     return {
       text: "No team was formed. Build teams from the students without one.",
       action: { label: "Place students", target: "completion" },
@@ -130,17 +142,12 @@ export function teamsEmpty(
 }
 
 export type PageAction =
-  | { kind: "publish"; label: string }
   | { kind: "close"; label: string }
   | { kind: "go"; label: string; target: PageTarget };
 
 /** The single most useful thing to do now; a closed cycle has none. */
-export function primaryAction(
-  cycle: Cycle,
-  phase: CyclePhase,
-  counts: CycleCounts,
-): PageAction | null {
-  if (phase === "draft") return { kind: "publish", label: "Publish to students" };
+export function primaryAction(cycle: Cycle, phase: CyclePhase, counts: CycleCounts): PageAction | null {
+  if (phase === "draft") return { kind: "go", label: "Review and publish", target: "publish" };
   if (phase === "closed") return null;
   if (counts.roster?.total === 0) {
     return {
@@ -149,23 +156,17 @@ export function primaryAction(
       target: "students",
     };
   }
-  if (phase === "placing" && counts.unplaced) {
-    return {
-      kind: "go",
-      label: `Place ${plural(counts.unplaced, "student")}`,
-      target: "completion",
-    };
+  if (phase === "ideas" && counts.unplaced) {
+    return { kind: "go", label: `Place ${plural(counts.unplaced, "student")}`, target: "completion" };
   }
   if (counts.ideas?.waiting) {
-    return {
-      kind: "go",
-      label: `Review ${plural(counts.ideas.waiting, "proposal")}`,
-      target: "review",
-    };
+    return { kind: "go", label: `Review ${plural(counts.ideas.waiting, "proposal")}`, target: "review" };
   }
   if (phase === "ended") return { kind: "close", label: "Close the project" };
-  if (phase === "ideas") return { kind: "go", label: "See the ideas", target: "teams" };
-  if (phase === "work") return { kind: "go", label: "See the submissions", target: "teams" };
+  const open = counts.openMilestones?.[0];
+  if (open) return { kind: "go", label: `See ${milestoneLabel(open.milestone)} work`, target: "milestones" };
+  if (phase === "ideas") return { kind: "go", label: "See the ideas", target: "ideas" };
+  if (phase === "milestones") return { kind: "go", label: "See the milestones", target: "milestones" };
   return { kind: "go", label: "See the teams", target: "teams" };
 }
 
@@ -177,22 +178,13 @@ export interface AttentionItem {
 }
 
 /** Only things the faculty can act on now; empty when there is nothing, and for a closed cycle. */
-export function attentionItems(
-  cycle: Cycle,
-  phase: CyclePhase,
-  counts: CycleCounts,
-): AttentionItem[] {
+export function attentionItems(cycle: Cycle, phase: CyclePhase, counts: CycleCounts): AttentionItem[] {
   if (phase === "closed") return [];
   const items: AttentionItem[] = [];
   if (counts.roster?.total === 0) {
     items.push(
       cycle.kind === "ELECTIVE"
-        ? {
-            key: "students",
-            text: "No students are enrolled yet",
-            action: "Enroll students",
-            target: "students",
-          }
+        ? { key: "students", text: "No students are enrolled yet", action: "Enroll students", target: "students" }
         : {
             key: "students",
             text: `No student of batch ${cycle.batchYear} has signed in or been added yet`,
@@ -201,7 +193,8 @@ export function attentionItems(
           },
     );
   }
-  if (phase === "placing" && counts.unplaced) {
+  // A1: the faculty place students left without a team until the idea deadline.
+  if (phase === "ideas" && counts.unplaced) {
     items.push({
       key: "place",
       text: `${plural(counts.unplaced, "student has", "students have")} no team`,
@@ -217,6 +210,17 @@ export function attentionItems(
       target: "review",
     });
   }
+  for (const open of counts.openMilestones ?? []) {
+    const missing = open.teams - open.submitted;
+    if (missing > 0) {
+      items.push({
+        key: `work-${open.milestone.id}`,
+        text: `${plural(missing, "team has", "teams have")} not submitted ${milestoneLabel(open.milestone)} yet`,
+        action: "See the work",
+        target: "milestones",
+      });
+    }
+  }
   return items;
 }
 
@@ -226,9 +230,7 @@ export function catalogSummary(phase: CyclePhase, counts: CycleCounts): string {
   if (counts.failed?.catalog) return "Couldn't load this summary; open it for details";
   const catalog = counts.catalog;
   if (!catalog) return "Loading…";
-  if (catalog.offered === 0) {
-    return closed ? "No ideas were listed" : "No ideas listed · teams propose their own";
-  }
+  if (catalog.offered === 0) return closed ? "No ideas were listed" : "No ideas listed yet";
   const offered = closed
     ? `${plural(catalog.offered, "idea was", "ideas were")} offered`
     : `${plural(catalog.offered, "idea")} offered`;
@@ -236,10 +238,15 @@ export function catalogSummary(phase: CyclePhase, counts: CycleCounts): string {
   return `${offered} · ${closed ? "none was picked" : "not picked yet"}`;
 }
 
-/** "12 of 15 teams submitted", or why there is nothing to count. */
+/** "M1 · Design review: 12 of 15 teams submitted", or why there is nothing to count. */
 export function submissionSummary(phase: CyclePhase, counts: CycleCounts): string {
   if (counts.failed?.submissions || counts.failed?.teams) return "Couldn't load the submissions";
-  if (counts.teams === undefined || !counts.submissions) return "Loading…";
+  if (counts.teams === undefined) return "Loading…";
   if (counts.teams === 0) return phase === "closed" ? "No work was submitted" : "No teams yet";
-  return `${counts.submissions.submitted} of ${plural(counts.teams, "team")} submitted`;
+  const open = counts.openMilestones;
+  if (!open) return "Loading…";
+  if (open.length === 0) return "No milestone is open now";
+  return open
+    .map((entry) => `${milestoneLabel(entry.milestone)}: ${entry.submitted} of ${plural(entry.teams, "team")} submitted`)
+    .join(" · ");
 }

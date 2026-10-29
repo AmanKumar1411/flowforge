@@ -5,6 +5,9 @@ import type {
   CyclePayload,
   EnrolledStudent,
   EnrollmentResult,
+  ErrorDetail,
+  PublishChecks,
+  UpcomingEvent,
 } from "../types";
 import { apiRequest } from "./client";
 
@@ -34,8 +37,22 @@ export function updateCycle(id: string, input: Partial<CyclePayload>) {
   });
 }
 
+/** Publishes, or fails with PUBLISH_BLOCKED listing every problem in `details`. */
 export function publishCycle(id: string) {
-  return apiRequest<Cycle>(`/course-cycles/${id}/publish`, { method: "POST" });
+  return apiRequest<Cycle & { warnings: ErrorDetail[] }>(
+    `/course-cycles/${id}/publish`,
+    { method: "POST" },
+  );
+}
+
+/** What publishing would report now, without publishing. */
+export function getPublishChecks(id: string) {
+  return apiRequest<PublishChecks>(`/course-cycles/${id}/publish-checks`);
+}
+
+/** The student's next events across their projects, soonest first. */
+export function listUpcoming() {
+  return apiRequest<UpcomingEvent[]>("/me/upcoming");
 }
 
 export function closeCycle(id: string) {

@@ -8,6 +8,8 @@ const {
   devSignIn,
   apiSession,
   createCycleInWizard,
+  cycleBody,
+  openTab,
   plannedDates,
 } = require("./support.cjs");
 const [chromePath, FRONTEND, API, OUT] = process.argv.slice(2);
@@ -55,9 +57,9 @@ const teamRow = (page, name) => page.locator(".team-row", { hasText: name });
     let electiveId = "";
 
     // --- Electives ---
-    await run.check("Faculty creates an elective with extra time to place students in the wizard", async () => {
-      // The faculty's own window appears only when they ask for it, under "Advanced".
-      const plan = { teams: 1, placing: 1, ideas: 1, finalDays: 30 };
+    await run.check("Faculty creates an elective in the wizard; they place students between the team and idea deadlines", async () => {
+      // Phase 8 (A1): the placement window runs from the team deadline to the idea deadline.
+      const plan = { teams: 1, ideas: 1, finalDays: 30 };
       electiveId = await createCycleInWizard(faculty, {
         courseName: "Machine Learning",
         title: electiveTitle,
@@ -67,14 +69,14 @@ const teamRow = (page, name) => page.locator(".team-row", { hasText: name });
         maxTeamSize: 3,
         ...plan,
       });
-      const completion = plannedDates(plan).teamCompletionDeadline;
+      const ideas = plannedDates(plan).ideaDeadline.toISOString();
       await faculty.getByText(/^Elective · open to enrolled students · Teams of 2–3 · Semester /).waitFor();
-      // An elective's page links to its students; enrolling happens there.
-      await faculty.getByRole("link", { name: "Manage" }).click();
+      // An elective's students are on their own tab; enrolling happens there.
+      await openTab(faculty, "Students");
       await faculty.getByRole("heading", { name: /Enrolled students/ }).waitFor();
       const saved = (await facultyApi.call("GET", `/course-cycles/${electiveId}`)).body;
       assert(saved.kind === "ELECTIVE", `kind ${saved.kind}`);
-      assert(saved.teamCompletionDeadline === completion, `completion ${saved.teamCompletionDeadline}, expected ${completion}`);
+      assert(saved.ideaDeadline === ideas, `ideas ${saved.ideaDeadline}, expected ${ideas}`);
       return `elective ${electiveId}`;
     }, faculty);
 
@@ -114,19 +116,20 @@ const teamRow = (page, name) => page.locator(".team-row", { hasText: name });
     // --- A core cycle: students form teams for 45 seconds, then the faculty complete them ---
     const now = Date.now();
     const formationDeadline = new Date(now + FORMATION_SECONDS * 1000);
-    const created = await facultyApi.call("POST", "/course-cycles", {
-      courseName: "Software Design",
-      title: `Completion ${now}`,
-      batchYear: 2024,
-      semester: 7,
-      academicYear: "2026-27",
-      submissionStartAt: new Date(now + 3 * 24 * 3600 * 1000).toISOString(),
-      submissionDeadline: new Date(now + 30 * 24 * 3600 * 1000).toISOString(),
-      minTeamSize: 2,
-      maxTeamSize: 3,
-      teamFormationDeadline: formationDeadline.toISOString(),
-      teamCompletionDeadline: new Date(now + 3600 * 1000).toISOString(),
-    });
+    const created = await facultyApi.call(
+      "POST",
+      "/course-cycles",
+      cycleBody(
+        { courseName: "Software Design", title: `Completion ${now}`, batchYear: 2024, minTeamSize: 2, maxTeamSize: 3 },
+        {
+          teamDeadline: formationDeadline,
+          // The faculty place students until the idea deadline, an hour away.
+          ideaDeadline: new Date(now + 3600 * 1000),
+          opensAt: new Date(now + 3 * 24 * 3600 * 1000),
+          dueAt: new Date(now + 30 * 24 * 3600 * 1000),
+        },
+      ),
+    );
     assert(created.status === 201, `cycle: ${created.status} ${JSON.stringify(created.body)}`);
     const cycleId = created.body.id;
     await facultyApi.call("POST", `/course-cycles/${cycleId}/publish`);
@@ -161,7 +164,7 @@ const teamRow = (page, name) => page.locator(".team-row", { hasText: name });
       assert(await farah.getByRole("button", { name: "Create a team" }).count() === 0, "Create a team is still offered");
     }, farah);
 
-    await faculty.goto(`${FRONTEND}/faculty/cycles/${cycleId}`);
+    await faculty.goto(`${FRONTEND}/faculty/cycles/${cycleId}?tab=teams`);
     const completion = faculty.locator(".team-panel", { has: faculty.getByRole("heading", { name: /Students without a team/ }) });
 
     await run.check("Faculty sees the students without a team, with the 'Looking' tag", async () => {

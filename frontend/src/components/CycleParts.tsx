@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { formatDate } from "../dates";
+import { eventLabel, stageLabel } from "../timeline";
 import type { Cycle } from "../types";
 
 export function CycleListShell({
@@ -67,8 +68,12 @@ export function CycleCard({
         </p>
         {tag && <p className="card-tag">{tag}</p>}
         <div className="card-footer">
-          <span>{cycle.academicYear}</span>
-          <span>Due {formatDate(cycle.submissionDeadline)}</span>
+          <span>{stageLabel(cycle.currentStage)}</span>
+          <span>
+            {cycle.nextEvents[0]
+              ? `Next: ${eventLabel(cycle.nextEvents[0])} · ${formatDate(cycle.nextEvents[0].at)}`
+              : cycle.academicYear}
+          </span>
         </div>
       </button>
       {faculty && (

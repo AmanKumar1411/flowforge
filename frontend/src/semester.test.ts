@@ -33,8 +33,10 @@ describe("currentSemester", () => {
     expect(currentSemester(2023, new Date(2026, 4, 31))).toBe(6);
   });
 
-  it("gives the next odd semester in June and July, and stays from 1 to 8", () => {
-    expect(currentSemester(2023, new Date(2026, 5, 15))).toBe(7);
+  // Phase 8: January–June is the even semester, July–December the odd one (June was the next odd one).
+  it("gives the even semester until June, the odd one from July, and stays from 1 to 8", () => {
+    expect(currentSemester(2023, new Date(2026, 5, 15))).toBe(6);
+    expect(currentSemester(2023, new Date(2026, 6, 1))).toBe(7);
     expect(currentSemester(2026, new Date(2026, 6, 20))).toBe(1);
     expect(currentSemester(2027, new Date(2026, 9, 29))).toBe(1);
     expect(currentSemester(2019, new Date(2026, 9, 29))).toBe(8);

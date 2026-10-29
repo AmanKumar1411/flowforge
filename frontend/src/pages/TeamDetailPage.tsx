@@ -10,7 +10,6 @@ import { MemberList } from "../components/TeamPanels";
 import { formatDay } from "../dates";
 import { readableError } from "../errors";
 import { submissionWindow } from "../ideas";
-import { hasCompletionWindow } from "../teams";
 import type { CompletionOverview, Cycle, Idea, Submission, Team, TeamOrigin } from "../types";
 
 const FORMED_BY: Record<TeamOrigin, string> = {
@@ -23,7 +22,8 @@ interface Loaded {
   cycle: Cycle;
   team: Team;
   idea: Idea | null;
-  versions: Submission[];
+  /** Each milestone's versions, in milestone order. */
+  versions: Submission[][];
   /** Only while the cycle is published. */
   overview: CompletionOverview | null;
 }
@@ -46,13 +46,15 @@ export function TeamDetailPage() {
   useEffect(() => {
     let live = true;
     (async () => {
-      const [cycle, team, idea, versions] = await Promise.all([
+      const [cycle, team, idea] = await Promise.all([
         getCycle(cycleId),
         getTeam(teamId),
         getTeamIdea(teamId),
-        listTeamSubmissions(teamId),
       ]);
       if (team.cycleId !== cycle.id) throw new Error("This team belongs to another project.");
+      const versions = await Promise.all(
+        cycle.milestones.map((milestone) => listTeamSubmissions(teamId, milestone.id)),
+      );
       const overview = cycle.status === "PUBLISHED" ? await getCompletionOverview(cycle.id) : null;
       if (live) setLoaded({ cycle, team, idea, versions, overview });
     })().catch((caught) => live && setError(readableError(caught)));
@@ -81,7 +83,6 @@ export function TeamDetailPage() {
     setActionError(failed ? message : "");
     setVersion((current) => current + 1);
   };
-  const closed = submissionWindow(cycle, now) === "CLOSED";
 
   return (
     <section className="detail-page">
@@ -139,29 +140,37 @@ export function TeamDetailPage() {
               </p>
             )}
           </section>
-          <section className="team-panel" aria-labelledby="team-work-heading">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Submissions</p>
-                <h2 id="team-work-heading">
-                  {versions.length === 0
-                    ? "Nothing submitted yet"
-                    : `${versions.length} ${versions.length === 1 ? "version" : "versions"}`}
-                </h2>
-              </div>
-            </div>
-            {versions.length === 0 ? (
-              <p className="muted">
-                {closed
-                  ? "The team submitted no work."
-                  : idea?.status === "APPROVED"
-                    ? "Any member can submit while submissions are open; every submission is a new version."
-                    : "The team can submit work once its idea is approved or picked from your list."}
-              </p>
-            ) : (
-              <SubmissionHistory versions={versions} latestLabel={closed ? "Final" : "Latest"} />
-            )}
-          </section>
+          {cycle.milestones.map((milestone, index) => {
+            const history = versions[index] ?? [];
+            const closed = submissionWindow(cycle, milestone, now) === "CLOSED";
+            const headingId = `team-work-heading-${milestone.id}`;
+            return (
+              <section key={milestone.id} className="team-panel" aria-labelledby={headingId}>
+                <div className="panel-heading">
+                  <div>
+                    <p className="eyebrow">M{milestone.position} · due {formatDay(milestone.submissionDueAt)}</p>
+                    <h2 id={headingId}>
+                      {milestone.name}:{" "}
+                      {history.length === 0
+                        ? "nothing submitted yet"
+                        : `${history.length} ${history.length === 1 ? "version" : "versions"}`}
+                    </h2>
+                  </div>
+                </div>
+                {history.length === 0 ? (
+                  <p className="muted">
+                    {closed
+                      ? "The team submitted no work for this milestone."
+                      : idea?.status === "APPROVED"
+                        ? "Any member can submit while the milestone is open; every submission is a new version."
+                        : "The team can submit work once its idea is approved or picked from your list."}
+                  </p>
+                ) : (
+                  <SubmissionHistory versions={history} latestLabel={closed ? "Final" : "Latest"} />
+                )}
+              </section>
+            );
+          })}
         </div>
         <aside className="cycle-side" aria-label="Members">
           <section className="side-card" aria-labelledby="members-heading">
@@ -194,8 +203,7 @@ function PlaceStudent({
   if (!overview?.open) {
     const ahead =
       cycle.status === "PUBLISHED" &&
-      hasCompletionWindow(cycle) &&
-      now < Date.parse(cycle.teamFormationDeadline);
+      now < Date.parse(cycle.teamDeadline);
     return ahead ? (
       <p className="field-hint">
         During your time to place students, you can add students without a team here.

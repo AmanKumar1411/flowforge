@@ -6,15 +6,27 @@ import {
   PAGE_PARTS,
   phaseOf,
   primaryAction,
-  sectionFor,
   shows,
   showsCompletion,
+  showsIdeaList,
   submissionSummary,
   teamsEmpty,
   type CycleCounts,
 } from "./cycle-page";
-import type { Cycle } from "./types";
+import type { Cycle, Milestone } from "./types";
 
+const milestone: Milestone = {
+  id: "m1",
+  position: 1,
+  name: "Design review",
+  description: null,
+  submissionOpensAt: "2026-11-13T18:30:00.000Z",
+  submissionDueAt: "2026-11-27T18:29:00.000Z",
+  evaluationAt: "2026-11-28T18:29:00.000Z",
+  linkRequirement: { required: ["GITHUB"], optional: [] },
+};
+
+// Phase 8: team and idea deadlines plus milestones; the stage comes from the API.
 const cycle: Cycle = {
   id: "cycle",
   courseName: "Software Design",
@@ -27,46 +39,41 @@ const cycle: Cycle = {
   maxTeamSize: 4,
   kind: "CORE",
   status: "PUBLISHED",
+  teamDeadline: "2026-11-04T18:29:00.000Z",
+  ideaDeadline: "2026-11-13T18:29:00.000Z",
+  ideaSource: "BOTH",
+  ideaLinkRequirement: { required: [], optional: ["GITHUB", "DRIVE"] },
+  milestones: [milestone],
+  currentStage: { kind: "TEAMS" },
+  nextEvents: [],
   createdAt: "2026-10-27T05:00:00.000Z",
   publishedAt: "2026-10-28T05:00:00.000Z",
   closedAt: null,
   updatedAt: "2026-10-28T05:00:00.000Z",
-  teamFormationDeadline: "2026-11-04T18:29:00.000Z",
-  teamCompletionDeadline: "2026-11-06T18:29:00.000Z",
-  ideaDeadline: "2026-11-13T18:29:00.000Z",
-  submissionStartAt: "2026-11-13T18:30:00.000Z",
-  submissionDeadline: "2026-12-12T18:29:00.000Z",
 };
 const elective: Cycle = { ...cycle, kind: "ELECTIVE" };
-const at = (iso: string) => Date.parse(iso);
 
 describe("phaseOf", () => {
   it.each([
-    ["2026-11-01T00:00:00.000Z", "teams"],
-    ["2026-11-05T00:00:00.000Z", "placing"],
-    ["2026-11-10T00:00:00.000Z", "ideas"],
-    ["2026-11-20T00:00:00.000Z", "work"],
-    ["2026-12-20T00:00:00.000Z", "ended"],
-  ] as const)("on %s is %s", (now, phase) => {
-    expect(phaseOf(cycle, at(now))).toBe(phase);
-  });
-
-  it("follows the status for drafts and closed cycles; a draft opens its idea list", () => {
-    expect(phaseOf({ ...cycle, status: "DRAFT" }, at("2026-11-20T00:00:00.000Z"))).toBe("draft");
-    expect(phaseOf({ ...cycle, status: "CLOSED" }, at("2026-11-01T00:00:00.000Z"))).toBe("closed");
-    expect(sectionFor("draft")).toBe("catalog");
-    expect(sectionFor("placing")).toBeNull();
+    [{ kind: "DRAFT" }, "draft"],
+    [{ kind: "TEAMS" }, "teams"],
+    [{ kind: "IDEAS" }, "ideas"],
+    [{ kind: "MILESTONE", milestone, phase: "OPEN" }, "milestones"],
+    [{ kind: "WRAP_UP" }, "ended"],
+    [{ kind: "CLOSED" }, "closed"],
+  ] as const)("follows the API's stage %o: %s", (currentStage, phase) => {
+    expect(phaseOf({ currentStage })).toBe(phase);
   });
 });
 
-describe("PAGE_PARTS", () => {
-  it("shows an elective only its teams, submissions and students; a core course also its idea list and team completion", () => {
-    expect(PAGE_PARTS.ELECTIVE).toEqual(["teamsList", "submissionCount", "studentsLink"]);
-    expect(shows("ELECTIVE", "ideaList")).toBe(false);
-    expect(shows("ELECTIVE", "teamCompletion")).toBe(false);
-    expect(shows("CORE", "ideaList")).toBe(true);
+describe("parts by course type and idea source", () => {
+  it("shows team completion for a core course only, and the idea list where teams can pick from it", () => {
+    expect(PAGE_PARTS.ELECTIVE).toEqual([]);
     expect(shows("CORE", "teamCompletion")).toBe(true);
-    for (const part of PAGE_PARTS.ELECTIVE) expect(shows("CORE", part)).toBe(true);
+    expect(shows("ELECTIVE", "teamCompletion")).toBe(false);
+    expect(showsIdeaList({ ideaSource: "BOTH" })).toBe(true);
+    expect(showsIdeaList({ ideaSource: "FACULTY_LIST" })).toBe(true);
+    expect(showsIdeaList({ ideaSource: "STUDENT_PROPOSALS" })).toBe(false);
   });
 });
 
@@ -88,12 +95,13 @@ describe("what the page asks of the faculty", () => {
     teams: 6,
     unplaced: 3,
     ideas: { waiting: 2, approved: 3, rejected: 0, none: 1 },
-    submissions: { submitted: 0 },
+    openMilestones: [],
   };
   const quiet: CycleCounts = { ...counts, unplaced: 0, ideas: { waiting: 0, approved: 6, rejected: 0, none: 0 } };
+  const working: CycleCounts = { ...quiet, openMilestones: [{ milestone, submitted: 4, teams: 6 }] };
 
   it("picks one primary action from the cycle's state", () => {
-    expect(primaryAction(cycle, "draft", {})).toEqual({ kind: "publish", label: "Publish to students" });
+    expect(primaryAction(cycle, "draft", {})).toEqual({ kind: "go", label: "Review and publish", target: "publish" });
     expect(primaryAction(elective, "teams", { ...counts, roster: { total: 0, notSignedIn: 0 } })).toEqual({
       kind: "go",
       label: "Enroll students",
@@ -103,21 +111,28 @@ describe("what the page asks of the faculty", () => {
       label: "Add students",
     });
     expect(primaryAction(cycle, "teams", quiet)).toEqual({ kind: "go", label: "See the teams", target: "teams" });
-    expect(primaryAction(cycle, "placing", counts)).toMatchObject({ label: "Place 3 students", target: "completion" });
-    expect(primaryAction(cycle, "ideas", counts)).toEqual({ kind: "go", label: "Review 2 proposals", target: "review" });
-    expect(primaryAction(cycle, "work", quiet)).toMatchObject({ label: "See the submissions" });
+    // A1: students without a team are placed while ideas are due.
+    expect(primaryAction(cycle, "ideas", counts)).toMatchObject({ label: "Place 3 students", target: "completion" });
+    expect(primaryAction(cycle, "milestones", counts)).toEqual({ kind: "go", label: "Review 2 proposals", target: "review" });
+    expect(primaryAction(cycle, "milestones", working)).toMatchObject({
+      label: "See M1 · Design review work",
+      target: "milestones",
+    });
     expect(primaryAction(cycle, "ended", quiet)).toEqual({ kind: "close", label: "Close the project" });
     // A closed cycle has nothing left to do.
     expect(primaryAction(cycle, "closed", counts)).toBeNull();
   });
 
-  it("lists only real actions, pending proposals included, and nothing when there is none", () => {
-    expect(attentionItems(cycle, "placing", counts).map((item) => item.text)).toEqual([
+  it("lists only real actions: placing, proposals, teams missing an open milestone", () => {
+    expect(attentionItems(cycle, "ideas", counts).map((item) => item.text)).toEqual([
       "3 students have no team",
       "2 proposals are waiting for your review",
     ]);
+    expect(attentionItems(cycle, "milestones", working)).toMatchObject([
+      { text: "2 teams have not submitted M1 · Design review yet", target: "milestones" },
+    ]);
     // Teams without an approved idea are not something the faculty can act on.
-    expect(attentionItems(cycle, "work", { ...quiet, ideas: { waiting: 0, approved: 4, rejected: 1, none: 1 } })).toEqual([]);
+    expect(attentionItems(cycle, "milestones", { ...quiet, ideas: { waiting: 0, approved: 4, rejected: 1, none: 1 } })).toEqual([]);
     expect(attentionItems(elective, "draft", { roster: { total: 0, notSignedIn: 0 } })).toMatchObject([
       { text: "No students are enrolled yet", action: "Enroll students", target: "students" },
     ]);
@@ -126,13 +141,12 @@ describe("what the page asks of the faculty", () => {
 });
 
 describe("team completion and empty states", () => {
-  it("shows no team completion at all for a cycle with no students, a draft or an elective", () => {
-    const counts = { roster: { total: 0, notSignedIn: 0 }, unplaced: 0 };
-    expect(showsCompletion(cycle, "teams", counts)).toBe(false);
+  it("shows no team completion for a cycle with no students, a draft or an elective", () => {
+    expect(showsCompletion(cycle, "teams", { roster: { total: 0, notSignedIn: 0 } })).toBe(false);
     expect(showsCompletion(cycle, "teams", {})).toBe(false);
     expect(showsCompletion(cycle, "draft", { roster: { total: 5, notSignedIn: 0 } })).toBe(false);
-    expect(showsCompletion(elective, "placing", { roster: { total: 5, notSignedIn: 0 } })).toBe(false);
-    expect(showsCompletion(cycle, "placing", { roster: { total: 5, notSignedIn: 0 } })).toBe(true);
+    expect(showsCompletion(elective, "ideas", { roster: { total: 5, notSignedIn: 0 } })).toBe(false);
+    expect(showsCompletion(cycle, "ideas", { roster: { total: 5, notSignedIn: 0 } })).toBe(true);
   });
 
   it("says what comes next when there is no team", () => {
@@ -149,18 +163,15 @@ describe("team completion and empty states", () => {
 });
 
 describe("summaries", () => {
-  const counts: CycleCounts = {
-    catalog: { offered: 1, picked: 0 },
-    teams: 0,
-    submissions: { submitted: 0 },
-  };
+  const counts: CycleCounts = { catalog: { offered: 1, picked: 0 }, teams: 0, openMilestones: [] };
 
-  it("counts submissions without repeating any date", () => {
+  it("counts each open milestone's work without repeating a date", () => {
     expect(submissionSummary("teams", counts)).toBe("No teams yet");
-    expect(submissionSummary("work", { ...counts, teams: 15, submissions: { submitted: 12 } })).toBe(
-      "12 of 15 teams submitted",
-    );
-    expect(submissionSummary("work", { ...counts, teams: undefined })).toBe("Loading…");
+    expect(
+      submissionSummary("milestones", { ...counts, teams: 15, openMilestones: [{ milestone, submitted: 12, teams: 15 }] }),
+    ).toBe("M1 · Design review: 12 of 15 teams submitted");
+    expect(submissionSummary("milestones", { ...counts, teams: 15 })).toBe("No milestone is open now");
+    expect(submissionSummary("milestones", { ...counts, teams: undefined })).toBe("Loading…");
   });
 
   it("speaks in the past tense once the cycle is closed", () => {

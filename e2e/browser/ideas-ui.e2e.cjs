@@ -7,7 +7,9 @@ const {
   createRun,
   devSignIn,
   apiSession,
-  dayFromToday,
+  createCycleInWizard,
+  localInput,
+  openTab,
   plannedDates,
   openTeamPage,
 } = require("./support.cjs");
@@ -36,48 +38,44 @@ const REGISTERED = [`yash.b27csai${DOMAIN}`, `ira.d27csai${DOMAIN}`];
     const title = `Ideas ${Date.now()}`;
     let cycleId = "";
 
-    await run.check("Faculty plan the cycle in the wizard; a deadline out of order is explained, publishing is confirmed", async () => {
-      await faculty.getByRole("button", { name: "+ New project" }).click();
-      await faculty.getByLabel("Course name").fill("Product Studio");
-      await faculty.getByLabel("Project title").fill(title);
-      await faculty.getByLabel("Batch year").fill("2027");
-      await faculty.getByRole("button", { name: "Next: Teams" }).click();
-      await faculty.getByLabel("Allow solo projects").check();
-      await faculty.getByLabel("Maximum team size").fill("3");
-      await faculty.getByRole("button", { name: "Next: Timeline" }).click();
+    await run.check("Faculty plan the project in the wizard; a milestone out of order is explained, publishing is confirmed", async () => {
       const plan = { teams: 1, ideas: 1, finalDays: 30 };
-      // Batch 2027's first semester (Aug–Dec 2027) is still ahead, so the plan would start there.
-      await faculty.getByLabel("Start date").fill(dayFromToday(0));
-      await faculty.getByLabel("Days to form teams").fill("1");
-      await faculty.getByLabel("Days for ideas").fill("1");
-      // A final deadline before submissions open stops the step, with the reason in words.
-      await faculty.getByLabel("Final deadline").fill(dayFromToday(2));
-      await faculty.getByRole("button", { name: "Next: Review" }).click();
-      await faculty.getByText(/The final deadline is before submissions open/).waitFor();
-      await faculty.getByText("One thing needs fixing on this step.").waitFor();
-      await faculty.getByLabel("Final deadline").fill(dayFromToday(plan.finalDays));
-      await faculty.getByRole("button", { name: "Next: Review" }).click();
-      await faculty.getByText(/Batch 2027 students work alone or form teams of up to 3 until/).first().waitFor();
+      cycleId = await createCycleInWizard(faculty, {
+        courseName: "Product Studio",
+        title,
+        batchYear: 2027,
+        minTeamSize: 1,
+        maxTeamSize: 3,
+        ...plan,
+      });
+      const expected = plannedDates(plan);
+      // A milestone that opens before the idea deadline stops the step, with the reason in words.
+      await faculty.goto(`${FRONTEND}/faculty/cycles/${cycleId}/edit?step=milestones`);
+      await faculty.getByLabel("Submissions open").first().fill(localInput(expected.teamDeadline));
+      await faculty.getByText(/M1: Opens before the idea deadline/).waitFor();
+      await faculty.getByRole("button", { name: "Save and continue" }).click();
+      await faculty.getByText("Fix the highlighted fields first.").waitFor();
+      await faculty.getByLabel("Submissions open").first().fill(localInput(expected.opensAt));
+      await faculty.getByRole("button", { name: "Save and continue" }).click();
+      await faculty.getByRole("heading", { name: /Which ideas do you offer\?/ }).waitFor();
+      await faculty.goto(`${FRONTEND}/faculty/cycles/${cycleId}/edit?step=review`);
+      await faculty.getByText(/Teams fixed on/).waitFor();
       await faculty.getByRole("button", { name: "Publish to students" }).click();
       const dialog = faculty.getByRole("dialog", { name: "Publish to students?" });
-      await dialog.getByText(/the team sizes, and whether you keep extra time/).waitFor();
+      await dialog.getByText(/the details, team sizes and idea rules are fixed/).waitFor();
       await dialog.getByRole("button", { name: "Publish to students" }).click();
-      await faculty.waitForURL(/\/faculty\/cycles\/[0-9a-f-]{36}$/);
-      cycleId = faculty.url().split("/").pop();
+      await faculty.waitForURL(new RegExp(`/faculty/cycles/${cycleId}$`));
       const saved = (await facultyApi.call("GET", `/course-cycles/${cycleId}`)).body;
-      const expected = plannedDates(plan);
       assert(saved.status === "PUBLISHED", `status ${saved.status}`);
-      // No faculty window: the completion deadline stays with the students' deadline.
-      assert(saved.teamCompletionDeadline === expected.teamFormationDeadline, `completion ${saved.teamCompletionDeadline}`);
-      assert(saved.ideaDeadline === expected.ideaDeadline, `ideas ${saved.ideaDeadline}, expected ${expected.ideaDeadline}`);
+      assert(saved.teamDeadline === expected.teamDeadline.toISOString(), `teams ${saved.teamDeadline}`);
+      assert(saved.ideaDeadline === expected.ideaDeadline.toISOString(), `ideas ${saved.ideaDeadline}`);
       assert(saved.minTeamSize === 1 && saved.maxTeamSize === 3, `sizes ${saved.minTeamSize}-${saved.maxTeamSize}`);
       return `cycle ${cycleId}`;
     }, faculty);
 
     await run.check("Faculty registers batch students who have not signed in yet", async () => {
       await faculty.reload();
-      await faculty.getByRole("link", { name: "Manage" }).click();
-      await faculty.getByRole("heading", { level: 1, name: "Students" }).waitFor();
+      await openTab(faculty, "Students");
       await faculty.getByLabel("Batch student emails").fill([...REGISTERED, `tara.n26csai${DOMAIN}`].join("\n"));
       await faculty.getByRole("button", { name: "Register 3" }).click();
       await faculty.getByText("Registered 2 · already registered 0 · not added 1").waitFor();
@@ -110,7 +108,7 @@ const REGISTERED = [`yash.b27csai${DOMAIN}`, `ira.d27csai${DOMAIN}`];
       await leader.getByLabel("Idea title").fill("Room finder");
       await leader.getByLabel("Problem").fill("Free rooms are hard to find between classes.");
       await leader.getByLabel("Proposed solution").fill("A live map of free rooms from the timetable.");
-      await leader.getByLabel("Link (optional)").fill("https://github.com/nimbus/room-finder");
+      await leader.getByLabel("GitHub repository (optional)").fill("https://github.com/nimbus/room-finder");
       await leader.getByRole("button", { name: "Submit idea" }).click();
       await leader.getByRole("heading", { name: "Room finder" }).waitFor();
       await leader.locator(".idea-status", { hasText: "Waiting for review" }).waitFor();
@@ -134,7 +132,7 @@ const REGISTERED = [`yash.b27csai${DOMAIN}`, `ira.d27csai${DOMAIN}`];
     }, leader);
 
     await run.check("Faculty see the waiting idea and reject it with feedback", async () => {
-      await faculty.goto(`${FRONTEND}/faculty/cycles/${cycleId}`);
+      await faculty.goto(`${FRONTEND}/faculty/cycles/${cycleId}?tab=teams`);
       await faculty.locator(".team-row", { hasText: "Nimbus" }).getByText("Waiting for review").waitFor();
       await openTeamPage(faculty, "Nimbus");
       await faculty.getByText("A live map of free rooms from the timetable.").waitFor();

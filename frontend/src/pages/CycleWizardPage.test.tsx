@@ -1,211 +1,169 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api/cycles";
-import { addDays, buildSchedule, DEFAULT_DURATIONS, localDay } from "../cycle-plan";
+import { ApiError } from "../api/client";
 import type { Cycle } from "../types";
 import { CycleWizardPage } from "./CycleWizardPage";
 
 vi.mock("../api/cycles", () => ({
-  listMyCycles: vi.fn(),
-  getCycle: vi.fn(),
   createCycle: vi.fn(),
-  updateCycle: vi.fn(),
+  getCycle: vi.fn(),
+  getPublishChecks: vi.fn(),
+  listMyCycles: vi.fn(),
   publishCycle: vi.fn(),
+  updateCycle: vi.fn(),
 }));
+// The idea list and the student lists have their own tests and API calls.
+vi.mock("../components/CatalogPanel", () => ({ FacultyCatalogSection: () => <p>The idea list</p> }));
+vi.mock("../components/BatchPanel", () => ({ BatchPanel: () => <p>The batch list</p> }));
+vi.mock("../components/EnrollmentPanel", () => ({ EnrollmentPanel: () => <p>The enrollment list</p> }));
 
-const previous: Cycle = {
-  id: "previous",
+// Phase 8: the draft is saved after step 1 and updated on every step after it.
+const draft: Cycle = {
+  id: "c1",
   courseName: "Software Design",
-  title: "Spring project",
-  description: "Build something useful.",
+  title: "Mid-semester project",
+  description: null,
   batchYear: 2023,
-  semester: 6,
-  academicYear: "2025-26",
-  minTeamSize: 3,
-  maxTeamSize: 5,
-  kind: "CORE",
-  status: "CLOSED",
-  createdAt: "2026-01-04T05:00:00.000Z",
-  publishedAt: "2026-01-05T05:00:00.000Z",
-  closedAt: "2026-03-01T05:00:00.000Z",
-  updatedAt: "2026-03-01T05:00:00.000Z",
-  teamFormationDeadline: "2026-01-15T18:29:00.000Z",
-  teamCompletionDeadline: "2026-01-15T18:29:00.000Z",
-  ideaDeadline: "2026-01-20T18:29:00.000Z",
-  submissionStartAt: "2026-01-20T18:30:00.000Z",
-  submissionDeadline: "2026-02-19T18:29:00.000Z",
+  semester: 7,
+  academicYear: "2026-27",
+  minTeamSize: 2,
+  maxTeamSize: 4,
+  kind: "ELECTIVE",
+  status: "DRAFT",
+  teamDeadline: "2026-11-05T18:29:00.000Z",
+  ideaDeadline: "2026-11-12T18:29:00.000Z",
+  ideaSource: "BOTH",
+  ideaLinkRequirement: { required: [], optional: ["GITHUB", "DRIVE"] },
+  milestones: [
+    {
+      id: "m1",
+      position: 1,
+      name: "Final submission",
+      description: null,
+      submissionOpensAt: "2026-11-12T18:30:00.000Z",
+      submissionDueAt: "2026-11-26T18:29:00.000Z",
+      evaluationAt: "2026-11-28T18:29:00.000Z",
+      linkRequirement: { required: ["GITHUB"], optional: ["DEMO", "REPORT"] },
+    },
+  ],
+  currentStage: { kind: "DRAFT" },
+  nextEvents: [],
+  createdAt: "2026-10-29T05:00:00.000Z",
+  publishedAt: null,
+  closedAt: null,
+  updatedAt: "2026-10-29T05:00:00.000Z",
 };
 
-function renderWizard() {
-  const user = userEvent.setup();
+function renderAt(path: string) {
   render(
-    <MemoryRouter initialEntries={["/faculty/cycles/new"]}>
+    <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/faculty/cycles/new" element={<CycleWizardPage />} />
-        <Route path="/faculty/cycles/:cycleId" element={<p>Cycle page</p>} />
+        <Route path="/faculty/cycles/:cycleId/edit" element={<CycleWizardPage />} />
+        <Route path="/faculty/cycles/:cycleId" element={<p>The project page</p>} />
       </Routes>
     </MemoryRouter>,
   );
-  return user;
-}
-
-async function fillBasics(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(await screen.findByLabelText("Course name"), "Software Design");
-  await user.type(screen.getByLabelText("Project title"), "Mid-semester project");
 }
 
 describe("CycleWizardPage", () => {
   beforeEach(() => {
-    // Today is Thu, 29 Oct 2026: semester 1 of batch 2026, and semester 7 of batch 2023 (both Aug–Dec 2026).
     vi.useFakeTimers({ now: new Date(2026, 9, 29, 10, 0), toFake: ["Date"] });
     vi.clearAllMocks();
     vi.mocked(api.listMyCycles).mockResolvedValue([]);
-    vi.mocked(api.createCycle).mockImplementation(async (input) => ({
-      ...previous,
-      ...input,
-      id: "new-cycle",
-      status: "DRAFT",
-      description: input.description ?? null,
-      teamCompletionDeadline: input.teamCompletionDeadline ?? input.teamFormationDeadline,
-    }));
-    vi.mocked(api.publishCycle).mockResolvedValue({ ...previous, status: "PUBLISHED" });
+    vi.mocked(api.getCycle).mockResolvedValue(draft);
+    vi.mocked(api.createCycle).mockResolvedValue(draft);
+    vi.mocked(api.updateCycle).mockImplementation(async () => draft);
   });
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
   });
 
-  it("checks a step before moving on, explains what to fix, and moves focus to the next step", async () => {
-    const user = renderWizard();
-    await screen.findByRole("heading", { name: /What is this project\?/ });
-    await user.click(screen.getByRole("button", { name: "Next: Teams" }));
-    expect(screen.getByRole("status")).toHaveTextContent("2 things need fixing on this step.");
-    expect(screen.getByText(/Enter the course name/)).toBeVisible();
-    expect(screen.getByLabelText("Course name")).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByRole("heading", { name: /What is this project\?/ })).toBeVisible();
-
-    await fillBasics(user);
-    await user.click(screen.getByRole("button", { name: "Next: Teams" }));
-    const heading = screen.getByRole("heading", { name: /How do students team up\?/ });
-    expect(heading).toHaveFocus();
-  });
-
-  it("keeps the draft when going back, and checks team sizes in words", async () => {
-    const user = renderWizard();
-    await fillBasics(user);
-    await user.click(screen.getByRole("button", { name: "Next: Teams" }));
-    const largest = screen.getByLabelText("Maximum team size");
-    await user.clear(largest);
-    await user.type(largest, "1");
-    await user.click(screen.getByRole("button", { name: "Next: Timeline" }));
-    expect(screen.getByText("The smallest team can't be bigger than the largest.")).toBeVisible();
-
-    await user.click(screen.getByRole("button", { name: "← Back" }));
-    expect(screen.getByLabelText("Course name")).toHaveValue("Software Design");
-    expect(screen.getByLabelText("Project title")).toHaveValue("Mid-semester project");
-  });
-
-  it("starts from a previous cycle: its settings, with its phases moved to start today", async () => {
-    vi.mocked(api.listMyCycles).mockResolvedValue([previous]);
-    const user = renderWizard();
-    await user.selectOptions(await screen.findByLabelText("Start from"), "previous");
-    expect(screen.getByLabelText("Course name")).toHaveValue("Software Design");
-    expect(screen.getByLabelText("Batch year")).toHaveValue(2023);
-    await user.click(screen.getByRole("button", { name: "Next: Teams" }));
-    expect(screen.getByLabelText("Minimum team size")).toHaveValue(3);
-    await user.click(screen.getByRole("button", { name: "Next: Timeline" }));
-    // The previous cycle gave 10 days to form teams (5 → 15 Jan, local) and 5 for ideas.
-    expect(screen.getByLabelText("Start date")).toHaveValue(localDay());
-    expect(screen.getByLabelText("Days to form teams")).toHaveValue(10);
-    expect(screen.getByLabelText("Days for ideas")).toHaveValue(5);
-  });
-
-  it("asks before publishing, lists what will be locked, then creates and publishes once", async () => {
-    const user = renderWizard();
-    await fillBasics(user);
-    for (const next of ["Next: Teams", "Next: Timeline", "Next: Review"]) {
-      await user.click(screen.getByRole("button", { name: next }));
-    }
-    await user.click(screen.getByRole("button", { name: "Publish to students" }));
-    const dialog = screen.getByRole("dialog", { name: "Publish to students?" });
-    expect(within(dialog).getByText(/can no longer change/)).toBeVisible();
-    expect(within(dialog).getByText(/the team sizes/)).toBeVisible();
-    expect(within(dialog).getByText(/the date submissions open/)).toBeVisible();
-
-    await user.click(within(dialog).getByRole("button", { name: "Keep editing" }));
-    expect(screen.queryByRole("dialog")).toBeNull();
+  it("checks the details, then saves the draft with a default plan and moves on to teams and ideas", async () => {
+    const user = userEvent.setup();
+    renderAt("/faculty/cycles/new");
+    await user.click(await screen.findByRole("button", { name: "Save draft and continue" }));
+    expect(screen.getByText("Fix the highlighted fields first.")).toBeVisible();
+    expect(screen.getByLabelText("Course name")).toHaveAccessibleDescription(/Enter the course name/);
     expect(api.createCycle).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: "Publish to students" }));
-    await user.click(
-      within(screen.getByRole("dialog")).getByRole("button", { name: "Publish to students" }),
-    );
-    expect(await screen.findByText("Cycle page")).toBeVisible();
-    const today = localDay();
+    await user.type(screen.getByLabelText("Course name"), "Software Design");
+    await user.type(screen.getByLabelText("Project title"), "Mid-semester project");
+    await user.click(screen.getByRole("radio", { name: /Elective/ }));
+    await user.click(screen.getByRole("button", { name: "Save draft and continue" }));
     expect(api.createCycle).toHaveBeenCalledTimes(1);
-    expect(api.createCycle).toHaveBeenCalledWith({
-      courseName: "Software Design",
-      title: "Mid-semester project",
-      description: "",
-      kind: "CORE",
-      batchYear: 2026,
-      semester: 1,
-      academicYear: "2026-27",
-      minTeamSize: 2,
-      maxTeamSize: 4,
-      ...buildSchedule(today, DEFAULT_DURATIONS, {
-        finalDeadline: addDays(today, 45),
-        placingWindow: false,
-      }),
+    const payload = vi.mocked(api.createCycle).mock.calls[0][0];
+    expect(payload).toMatchObject({ courseName: "Software Design", kind: "ELECTIVE", ideaSource: "BOTH" });
+    expect(Date.parse(payload.ideaDeadline)).toBeGreaterThan(Date.parse(payload.teamDeadline));
+    expect(payload.milestones).toHaveLength(1);
+    expect(await screen.findByRole("heading", { name: /When do teams and ideas settle\?/ })).toBeVisible();
+    expect(screen.getByText("Draft · saved as you go")).toBeVisible();
+  });
+
+  it("flags overlapping milestones as they are typed, and saves the list with the draft", async () => {
+    const user = userEvent.setup();
+    renderAt("/faculty/cycles/c1/edit?step=milestones");
+    expect(await screen.findByText("The milestones follow each other without overlapping.")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "+ Add milestone M2" }));
+    const opens = screen.getAllByLabelText("Submissions open");
+    // jsdom types into datetime-local fields poorly; set the value as the picker would.
+    fireEvent.change(opens[1], { target: { value: "2026-11-20T10:00" } });
+    expect(screen.getByText(/M2: Overlaps M1/)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Save and continue" }));
+    expect(api.updateCycle).not.toHaveBeenCalled();
+
+    fireEvent.change(opens[1], { target: { value: "2026-11-27T10:00" } });
+    expect(screen.queryByText(/Overlaps M1/)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Save and continue" }));
+    const [, changes] = vi.mocked(api.updateCycle).mock.calls[0];
+    expect(changes.milestones?.map((m) => m.id ?? "new")).toEqual(["m1", "new"]);
+    // The next step for a project with an idea list is the list itself.
+    expect(await screen.findByText("The idea list")).toBeVisible();
+  });
+
+  it("shows what blocks publishing, links each problem to its step, then publishes once nothing does", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.getPublishChecks).mockResolvedValueOnce({
+      blocking: [{ code: "ROSTER_EMPTY", message: "Enroll the elective's students first: only they can see it" }],
+      warnings: [],
     });
-    expect(api.publishCycle).toHaveBeenCalledWith("new-cycle");
+    renderAt("/faculty/cycles/c1/edit?step=review");
+    const blocked = await screen.findByRole("heading", { name: "Before you can publish" });
+    const list = blocked.parentElement!;
+    expect(within(list).getByText(/Enroll the elective's students first/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Publish to students" })).toBeDisabled();
+    await user.click(within(list).getByRole("button", { name: "Go to Students" }));
+    expect(await screen.findByText("The enrollment list")).toBeVisible();
+
+    vi.mocked(api.getPublishChecks).mockResolvedValue({ blocking: [], warnings: [] });
+    vi.mocked(api.publishCycle).mockResolvedValue({ ...draft, status: "PUBLISHED", warnings: [] });
+    await user.click(screen.getByRole("button", { name: "Save and continue" }));
+    expect(await screen.findByText("Everything students need is in place.")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Publish to students" }));
+    const dialog = screen.getByRole("dialog", { name: "Publish to students?" });
+    await user.click(within(dialog).getByRole("button", { name: "Publish to students" }));
+    expect(api.publishCycle).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("The project page")).toBeVisible();
   });
 
-  it("shows the semester's term next to the picker, plans inside it, and only warns outside it", async () => {
-    const user = renderWizard();
-    await fillBasics(user);
-    const batch = screen.getByLabelText("Batch year");
-    await user.clear(batch);
-    await user.type(batch, "2023");
-    const semester = screen.getByLabelText("Semester");
-    expect(semester).toHaveValue("7");
-    expect(semester).toHaveAccessibleDescription(/Semester 7 · Aug–Dec 2026 Academic year 2026-27/);
-
-    // The plan has not been touched, so it moves into the term the faculty choose.
-    await user.selectOptions(semester, "8");
-    expect(screen.getByText("Semester 8 · Jan–May 2027")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Next: Teams" }));
-    await user.click(screen.getByRole("button", { name: "Next: Timeline" }));
-    expect(screen.getByLabelText("Start date")).toHaveValue("2027-01-01");
-    expect(screen.queryByText("Outside the semester.")).toBeNull();
-
-    // Dates the faculty pick outside the term are allowed, with a warning.
-    const start = screen.getByLabelText("Start date");
-    await user.clear(start);
-    await user.type(start, "2026-11-02");
-    expect(screen.getByText(/before semester 8 \(Jan–May 2027\) begins/)).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Next: Review" }));
-    expect(screen.getByRole("heading", { name: /Check and save/ })).toBeVisible();
-    expect(screen.getByText(/before semester 8 \(Jan–May 2027\) begins/)).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Save as draft" }));
-    expect(await screen.findByText("Cycle page")).toBeVisible();
-    expect(api.createCycle).toHaveBeenCalledWith(
-      expect.objectContaining({ batchYear: 2023, semester: 8, academicYear: "2026-27" }),
+  it("lists every problem when publishing is refused anyway", async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.getPublishChecks).mockResolvedValue({ blocking: [], warnings: [] });
+    vi.mocked(api.publishCycle).mockRejectedValue(
+      new ApiError("The project cannot be published yet: 2 things need fixing", "PUBLISH_BLOCKED", 409, [
+        { code: "NO_MILESTONES", message: "Add at least one milestone before publishing" },
+        { code: "IDEA_LIST_EMPTY", message: "Your idea list is empty" },
+      ]),
     );
-  });
-
-  it("saves a draft without publishing it", async () => {
-    const user = renderWizard();
-    await fillBasics(user);
-    for (const next of ["Next: Teams", "Next: Timeline", "Next: Review"]) {
-      await user.click(screen.getByRole("button", { name: next }));
-    }
-    expect(screen.getByText("Students can't see it yet.")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Save as draft" }));
-    expect(await screen.findByText("Cycle page")).toBeVisible();
-    expect(api.createCycle).toHaveBeenCalledTimes(1);
-    expect(api.publishCycle).not.toHaveBeenCalled();
+    renderAt("/faculty/cycles/c1/edit?step=review");
+    await user.click(await screen.findByRole("button", { name: "Publish to students" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Publish to students" }));
+    expect(await screen.findByText("Add at least one milestone before publishing")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Go to Milestones" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Go to Idea list" })).toBeVisible();
   });
 });

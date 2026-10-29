@@ -12,45 +12,38 @@ export interface Phase {
 
 export type PhaseState = "done" | "current" | "upcoming";
 
-/** The phases of a planned or running cycle; the faculty's window appears only when there is one. */
+export interface PhaseSchedule {
+  teamDeadline: string;
+  ideaDeadline: string;
+  milestones: { position: number; name: string; submissionOpensAt: string; submissionDueAt: string }[];
+}
+
+/**
+ * Teams, then ideas (while the faculty place students left without a team),
+ * then each milestone's submission window, then "Closed".
+ */
 export function cyclePhases(
-  schedule: {
-    teamFormationDeadline: string;
-    teamCompletionDeadline: string | null;
-    ideaDeadline: string;
-    submissionStartAt: string;
-    submissionDeadline: string;
-  },
+  schedule: PhaseSchedule,
   start: string,
   closedAt?: string | null,
-  placingLabel = "You place students",
+  ideasLabel = "Ideas · you place students",
 ): Phase[] {
-  const settled = schedule.teamCompletionDeadline ?? schedule.teamFormationDeadline;
   const phases: Phase[] = [
-    { key: "teams", label: "Teams", start, end: schedule.teamFormationDeadline },
+    { key: "teams", label: "Teams", start, end: schedule.teamDeadline },
+    { key: "ideas", label: ideasLabel, start: schedule.teamDeadline, end: schedule.ideaDeadline },
+    ...schedule.milestones.map((milestone) => ({
+      key: `m${milestone.position}`,
+      label: `M${milestone.position} · ${milestone.name}`,
+      start: milestone.submissionOpensAt,
+      end: milestone.submissionDueAt,
+    })),
   ];
-  if (schedule.teamCompletionDeadline) {
-    phases.push({
-      key: "placing",
-      label: placingLabel,
-      start: schedule.teamFormationDeadline,
-      end: schedule.teamCompletionDeadline,
-    });
-  }
-  phases.push(
-    { key: "ideas", label: "Ideas", start: settled, end: schedule.ideaDeadline },
-    {
-      key: "work",
-      label: "Work",
-      start: schedule.submissionStartAt,
-      end: schedule.submissionDeadline,
-    },
-  );
+  const last = schedule.milestones.at(-1)?.submissionDueAt ?? schedule.ideaDeadline;
   if (closedAt === undefined) return phases;
   if (closedAt === null) {
     return [
       ...phases,
-      { key: "closed", label: "Closed", start: schedule.submissionDeadline, end: null, state: "upcoming" },
+      { key: "closed", label: "Closed", start: last, end: null, state: "upcoming" },
     ];
   }
   // A closed cycle is over, whatever its dates said.
