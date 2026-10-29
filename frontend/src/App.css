@@ -88,8 +88,7 @@
   text-transform: uppercase;
 }
 
-.section-heading,
-.detail-header {
+.section-heading {
   display: flex;
   justify-content: space-between;
   align-items: end;
@@ -113,8 +112,7 @@ h2 {
   font-weight: 400;
 }
 
-.page-lead,
-.detail-header p {
+.page-lead {
   max-width: 620px;
   color: var(--muted);
   font-size: 1.1rem;
@@ -426,55 +424,6 @@ h2 {
   max-width: 920px;
 }
 
-.detail-header {
-  align-items: start;
-  margin-top: 54px;
-}
-
-.detail-header h1 {
-  margin: 14px 0;
-}
-
-.detail-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-
-.detail-grid .info-block:nth-child(4n) {
-  border-right: 0;
-}
-
-.detail-grid .info-block:nth-child(n + 5) {
-  border-top: 1px solid var(--line);
-}
-
-.info-block {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 22px 18px;
-  border-right: 1px solid var(--line);
-}
-
-.info-block:last-child {
-  border-right: 0;
-}
-
-.info-block span {
-  color: var(--muted);
-  font-size: .75rem;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.info-block strong {
-  font-family: Georgia, serif;
-  font-size: 1.05rem;
-  font-weight: 400;
-}
-
 .loading {
   color: var(--muted);
 }
@@ -496,11 +445,6 @@ h2 {
   }
 
   .section-heading,
-  .detail-header {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
   .cycle-grid,
   .form-grid {
     grid-template-columns: 1fr;
@@ -508,14 +452,6 @@ h2 {
 
   .form-grid .wide {
     grid-column: auto;
-  }
-
-  .detail-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .info-block:nth-child(2) {
-    border-right: 0;
   }
 
   .login-layout {
@@ -862,17 +798,6 @@ td.row-actions {
 }
 
 @media (max-width: 760px) {
-  .detail-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .detail-grid .info-block {
-    border-right: 0;
-  }
-
-  .detail-grid .info-block + .info-block {
-    border-top: 1px solid var(--line);
-  }
 }
 
 /* Team completion and electives */
@@ -1658,3 +1583,129 @@ ul.catalog-list {
   }
 }
 
+/* The cycle page: header, phases, what needs attention, collapsible sections. */
+.cycle-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.cycle-header h1 {
+  margin: 4px 0 8px;
+}
+
+.cycle-description {
+  max-width: 720px;
+  margin: 0 0 8px;
+}
+
+.cycle-facts {
+  margin: 0;
+  color: var(--muted);
+  font-size: .92rem;
+}
+
+.cycle-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding-top: 26px;
+}
+
+.attention-card {
+  margin: 22px 0 6px;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--coral);
+  background: white;
+}
+
+.attention-card h2 {
+  margin: 0 0 8px;
+  font-family: Georgia, serif;
+  font-size: 1.15rem;
+}
+
+.attention-card ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.attention-card li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px 16px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.cycle-section {
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.cycle-section > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  padding: 16px 20px;
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.cycle-section > summary:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: -2px;
+}
+
+.cycle-section-title {
+  font-family: Georgia, serif;
+  font-size: 1.2rem;
+}
+
+.cycle-section-summary {
+  color: var(--muted);
+  font-size: .92rem;
+}
+
+.cycle-section-body {
+  padding: 0 20px 18px;
+}
+
+.cycle-section-body > .team-panel,
+.cycle-section-body > section.team-panel {
+  margin-top: 0;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  background: none;
+}
+
+.cycle-section-body > .team-panel + .team-panel {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--line);
+}
+
+
+/* Inside a section, its summary already names it: the first panel keeps its title for screen readers only. */
+.cycle-section-body > .team-panel:first-child > .panel-heading > div:first-child {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.cycle-section-body > .team-panel:first-child > .panel-heading {
+  justify-content: flex-end;
+}

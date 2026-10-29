@@ -9,6 +9,7 @@ const {
   apiSession,
   dayFromToday,
   plannedDates,
+  openSection,
 } = require("./support.cjs");
 const [chromePath, FRONTEND, API, OUT] = process.argv.slice(2);
 
@@ -73,6 +74,7 @@ const REGISTERED = [`yash.b27csai${DOMAIN}`, `ira.d27csai${DOMAIN}`];
 
     await run.check("Faculty registers batch students who have not signed in yet", async () => {
       await faculty.reload();
+      await openSection(faculty, "Students");
       await faculty.getByLabel("Batch student emails").fill([...REGISTERED, `tara.n26csai${DOMAIN}`].join("\n"));
       await faculty.getByRole("button", { name: "Register 3" }).click();
       await faculty.getByText("Registered 2 · already registered 0 · not added 1").waitFor();
@@ -130,6 +132,7 @@ const REGISTERED = [`yash.b27csai${DOMAIN}`, `ira.d27csai${DOMAIN}`];
 
     await run.check("Faculty see the waiting idea and reject it with feedback", async () => {
       await faculty.reload();
+      await openSection(faculty, "Ideas");
       const ideas = faculty.locator(".team-panel", { has: faculty.getByRole("heading", { name: "1 waiting for review" }) });
       await ideas.getByRole("button", { name: "Open the idea of Nimbus" }).click();
       const review = faculty.getByLabel("Idea of Nimbus");
@@ -154,6 +157,7 @@ const REGISTERED = [`yash.b27csai${DOMAIN}`, `ira.d27csai${DOMAIN}`];
 
     await run.check("Faculty approve the new version; the team sees it approved and final", async () => {
       await faculty.reload();
+      await openSection(faculty, "Ideas");
       await faculty.getByRole("button", { name: "Open the idea of Nimbus" }).click();
       const review = faculty.getByLabel("Idea of Nimbus");
       await review.getByText("Decision on version 3").waitFor();

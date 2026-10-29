@@ -465,9 +465,9 @@ export function FacultyIdeasSection({
         </div>
       </div>
       <p className="field-hint">
-        Ideas are due {formatDate(cycle.ideaDeadline)}. After a rejection the
-        team revises and resubmits, or picks from your list, for as many rounds
-        as it takes while the cycle is open.
+        {cycle.status === "CLOSED"
+          ? `Ideas were due ${formatDate(cycle.ideaDeadline)}.`
+          : `Ideas are due ${formatDate(cycle.ideaDeadline)}. After a rejection the team revises and resubmits, or picks from your list, for as many rounds as it takes while the cycle is open.`}
         {rows &&
           ` ${count("APPROVED")} approved · ${count("REJECTED")} rejected · ${count(null)} without an idea.`}
       </p>

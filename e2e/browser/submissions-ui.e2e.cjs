@@ -1,7 +1,14 @@
 // Browser end-to-end check of the Phase 7 UI (the faculty's idea list, picks, rounds after a rejection, submissions). See README.md.
 // Usage: node submissions-ui.e2e.cjs <chrome path> <frontend url> <api url> <out dir>
 const { chromium } = require("playwright-core");
-const { DOMAIN, assert, createRun, devSignIn, apiSession } = require("./support.cjs");
+const {
+  DOMAIN,
+  assert,
+  createRun,
+  devSignIn,
+  apiSession,
+  openSection,
+} = require("./support.cjs");
 const [chromePath, FRONTEND, API, OUT] = process.argv.slice(2);
 
 // Batch 2021 belongs to this script alone.
@@ -68,6 +75,7 @@ const SUBMISSIONS_OPEN_S = 55;
     const catalog = faculty.locator("section", { has: faculty.locator("#catalog-heading") });
 
     await run.check("Faculty add ideas to the cycle's list, and remove one nobody picked", async () => {
+      await openSection(faculty, "Idea list");
       for (const [title, description] of [
         ["Library seat finder", "Show which library seats are free right now"],
         ["Bus tracker", "Live campus bus positions"],
@@ -97,7 +105,8 @@ const SUBMISSIONS_OPEN_S = 55;
 
     await run.check("Faculty see the pick, and a picked idea can no longer be removed", async () => {
       await faculty.reload();
-      await catalog.getByText("Picked by 1 team").waitFor();
+      await openSection(faculty, "Idea list");
+      await catalog.getByText("Picked by 1 team", { exact: true }).waitFor();
       assert(await catalog.getByRole("button", { name: "Remove Library seat finder" }).count() === 0, "a picked idea can be removed");
     }, faculty);
 

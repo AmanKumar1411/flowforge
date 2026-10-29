@@ -60,7 +60,11 @@ export function PhaseTimeline({
             {todayAt !== null && (
               <span
                 className="today-marker"
-                style={{ left: `${Math.min(Math.max(todayAt, 0), 1) * 100}%` }}
+                style={{
+                  left: `${Math.min(Math.max(todayAt, 0), 1) * 100}%`,
+                  // Near either end the label stays inside the bar.
+                  transform: `translateX(${todayAt < 0.1 ? 0 : todayAt > 0.9 ? -100 : -50}%)`,
+                }}
               >
                 Today
               </span>

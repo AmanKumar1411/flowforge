@@ -1,4 +1,4 @@
-// Browser end-to-end check of the cycle wizard (create, draft, edit, publish, start from a previous cycle). See README.md.
+// Browser end-to-end check of the cycle wizard and the cycle page (phases, primary action, attention, sections). See README.md.
 // Usage: node cycles-ui.e2e.cjs <chrome path> <frontend url> <api url> <out dir>
 const { chromium } = require("playwright-core");
 const {
@@ -15,6 +15,7 @@ const [chromePath, FRONTEND, API, OUT] = process.argv.slice(2);
 // Batch 2020 belongs to this script alone.
 const FACULTY = `kavita.n${DOMAIN}`;
 const STUDENT = `ravi.k20csai${DOMAIN}`;
+const PARTNER = `neha.s20csai${DOMAIN}`;
 
 (async () => {
   const run = createRun(OUT, "cycles-browser-e2e");
@@ -34,6 +35,7 @@ const STUDENT = `ravi.k20csai${DOMAIN}`;
     const faculty = await devSignIn(await browser.newContext(), FRONTEND, FACULTY, "Kavita N");
     const title = `Data Systems ${Date.now()}`;
     let cycleId = "";
+    let copyId = "";
 
     await run.check("A first-time faculty member sets up a cycle from blank and saves a draft; students can't see it", async () => {
       cycleId = await createCycleInWizard(faculty, {
@@ -92,7 +94,7 @@ const STUDENT = `ravi.k20csai${DOMAIN}`;
       await faculty.getByRole("button", { name: "Next: Review" }).click();
       await faculty.getByRole("button", { name: "Save as draft" }).click();
       await faculty.waitForURL(/\/faculty\/cycles\/[0-9a-f-]{36}$/);
-      const copyId = faculty.url().split("/").pop();
+      copyId = faculty.url().split("/").pop();
       const saved = (await facultyApi.call("GET", `/course-cycles/${copyId}`)).body;
       const expected = plannedDates({ teams: 7, ideas: 10, finalDays: 45 });
       assert(copyId !== cycleId && saved.status === "DRAFT", "not a new draft");
@@ -122,6 +124,62 @@ const STUDENT = `ravi.k20csai${DOMAIN}`;
       }
       assert((await focused()).includes("Check and save"), `focus is on: ${await focused()}`);
     });
+    await run.check("The cycle page shows the phases with today, one primary action, and only the current section open", async () => {
+      await faculty.goto(`${FRONTEND}/faculty/cycles/${cycleId}`);
+      const phases = faculty.getByRole("list", { name: "Where the cycle is" });
+      const current = phases.locator('[aria-current="step"]');
+      await current.getByText("Teams").waitFor();
+      await current.getByText("Now").waitFor();
+      await current.getByText("Today").waitFor();
+      await faculty.getByRole("button", { name: "See the teams" }).waitFor();
+      assert(await faculty.getByRole("heading", { name: "Needs your attention" }).count() === 0, "attention card with nothing to do");
+      const openSections = await faculty.locator("details.cycle-section[open] .cycle-section-title").allTextContents();
+      assert(JSON.stringify(openSections) === '["Teams"]', `open sections ${JSON.stringify(openSections)}`);
+      await faculty.locator(".cycle-section-summary", { hasText: "Ideas come once teams form" }).waitFor();
+      await faculty.locator(".cycle-section-summary", { hasText: /in batch 2020/ }).waitFor();
+    }, faculty);
+
+    await run.check("'Needs your attention' lists a waiting idea, and its link opens the Ideas section", async () => {
+      const partnerApi = await session(PARTNER, "Neha S");
+      const partnerId = (await partnerApi.call("GET", "/auth/me")).body.id;
+      const team = await studentApi.call("POST", `/course-cycles/${cycleId}/teams`, { name: "Indexers", memberIds: [partnerId] });
+      assert(team.status === 201, `team: ${team.status}`);
+      const idea = await studentApi.call("PUT", `/teams/${team.body.id}/idea`, {
+        title: "Query planner visualiser",
+        problem: "Query plans are hard to read",
+        solution: "Draw them as trees",
+      });
+      assert(idea.status === 200, `idea: ${idea.status}`);
+      await faculty.reload();
+      const card = faculty.locator(".attention-card");
+      await card.getByText("1 idea is waiting for your review").waitFor();
+      await faculty.getByRole("button", { name: "Review 1 idea" }).waitFor();
+      await card.getByRole("button", { name: "Review", exact: true }).click();
+      await faculty.getByRole("button", { name: "Open the idea of Indexers" }).waitFor();
+    }, faculty);
+
+    await run.check("A draft's page publishes it through the same confirmation", async () => {
+      await faculty.goto(`${FRONTEND}/faculty/cycles/${copyId}`);
+      await faculty.getByText("Students can't see this cycle yet.").waitFor();
+      await faculty.getByRole("button", { name: "Publish to students" }).click();
+      const dialog = faculty.getByRole("dialog", { name: "Publish to students?" });
+      await dialog.getByText(/the team sizes/).waitFor();
+      await dialog.getByRole("button", { name: "Publish to students" }).click();
+      await faculty.locator(".status", { hasText: "Open" }).waitFor();
+      const saved = (await facultyApi.call("GET", `/course-cycles/${copyId}`)).body;
+      assert(saved.status === "PUBLISHED", `status ${saved.status}`);
+    }, faculty);
+
+    await run.check("A closed cycle reads in the past tense, with nothing left to do", async () => {
+      assert((await facultyApi.call("POST", `/course-cycles/${copyId}/close`)).status === 200, "close");
+      await faculty.reload();
+      const current = faculty.getByRole("list", { name: "Where the cycle is" }).locator('[aria-current="step"]');
+      await current.getByText("Closed").waitFor();
+      await faculty.locator(".cycle-section-summary", { hasText: "No teams were formed" }).waitFor();
+      await faculty.locator(".cycle-section-summary", { hasText: "No work was submitted" }).waitFor();
+      assert(await faculty.getByRole("button", { name: "Edit cycle" }).count() === 0, "Edit offered on a closed cycle");
+      assert(await faculty.getByRole("heading", { name: "Needs your attention" }).count() === 0, "attention card on a closed cycle");
+    }, faculty);
   } finally {
     await Promise.all(sessions.map((created) => created.dispose()));
     await browser.close();

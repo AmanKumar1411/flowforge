@@ -36,10 +36,14 @@ Six scripts drive the real React app in headless Chrome against the real API:
   - a member submitting version 1, the leader version 2 (links carried over), and the faculty
     seeing each team's latest version and its history.
   It waits about 55 seconds for the idea deadline to pass and submissions to open.
-- `cycles-ui.e2e.cjs` runs 5 checks of the cycle wizard: setting up a cycle from blank and saving
-  a draft that students cannot see; editing the draft in the same wizard and publishing it after
-  the confirmation; a student of the batch seeing it; starting a new cycle from a previous one;
-  and the wizard with the keyboard alone at 375px wide.
+- `cycles-ui.e2e.cjs` runs 9 checks of the cycle wizard and the cycle page:
+  - setting up a cycle from blank and saving a draft that students cannot see; editing the draft
+    in the same wizard and publishing it after the confirmation; a student of the batch seeing it;
+    starting a new cycle from a previous one; the wizard with the keyboard alone at 375px wide;
+  - the page's phase timeline with "Today", its one primary action and only the current phase's
+    section open; "Needs your attention" for a waiting idea, whose link opens the Ideas section;
+    publishing a draft from its page; a closed cycle in the past tense with nothing left to do.
+  Sections other than the current phase's start closed; `openSection` in `support.cjs` opens one.
 
 The Phase 4 to 7 scripts and `cycles-ui` set up their faculty member and students through the
 API, so all six run one after another on the same database. Each owns a batch, so their counts never mix:

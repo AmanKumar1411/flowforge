@@ -66,9 +66,9 @@ export function FacultyCatalogSection({ cycle }: { cycle: Cycle }) {
         )}
       </div>
       <p className="field-hint">
-        Teams pick one of these ideas or propose their own. A pick is approved
-        at once, and any number of teams can pick the same idea. Teams keep
-        what they picked, so a picked idea cannot be removed.
+        {closed
+          ? "Teams could pick one of these ideas or propose their own."
+          : "Teams pick one of these ideas or propose their own. A pick is approved at once, and any number of teams can pick the same idea. Teams keep what they picked, so a picked idea cannot be removed."}
       </p>
       {error && <p className="form-error">{error}</p>}
       {editingId === "new" && (

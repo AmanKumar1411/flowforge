@@ -278,9 +278,9 @@ export function FacultySubmissionsSection({ cycle }: { cycle: Cycle }) {
         </div>
       </div>
       <p className="field-hint">
-        Open from {formatDate(cycle.submissionStartAt)} until{" "}
-        {formatDate(cycle.submissionDeadline)}. Teams with an approved or picked
-        idea submit links; every submission is a new version.
+        {cycle.status === "CLOSED"
+          ? `Submissions were open from ${formatDate(cycle.submissionStartAt)} until ${formatDate(cycle.submissionDeadline)}.`
+          : `Open from ${formatDate(cycle.submissionStartAt)} until ${formatDate(cycle.submissionDeadline)}. Teams with an approved or picked idea submit links; every submission is a new version.`}
       </p>
       {error && <p className="form-error">{error}</p>}
       {rows && rows.length === 0 && (

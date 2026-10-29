@@ -23,6 +23,7 @@ export function cyclePhases(
   },
   start: string,
   closedAt?: string | null,
+  placingLabel = "You place students",
 ): Phase[] {
   const settled = schedule.teamCompletionDeadline ?? schedule.teamFormationDeadline;
   const phases: Phase[] = [
@@ -31,7 +32,7 @@ export function cyclePhases(
   if (schedule.teamCompletionDeadline) {
     phases.push({
       key: "placing",
-      label: "You place students",
+      label: placingLabel,
       start: schedule.teamFormationDeadline,
       end: schedule.teamCompletionDeadline,
     });

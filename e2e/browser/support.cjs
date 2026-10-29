@@ -141,6 +141,20 @@ async function createCycleInWizard(page, plan) {
   return page.url().split("/").pop();
 }
 
+/**
+ * Opens a section of the faculty's cycle page ("Students", "Idea list", "Teams", "Ideas",
+ * "Submissions") if it is closed. Only the current phase's section starts open.
+ */
+async function openSection(page, title) {
+  const section = page.locator("details.cycle-section", {
+    has: page.locator(".cycle-section-title", { hasText: new RegExp(`^${title}$`) }),
+  });
+  await section.waitFor();
+  if (!(await section.evaluate((element) => element.open))) {
+    await section.locator("summary").click();
+  }
+}
+
 module.exports = {
   DOMAIN,
   MINUTE_MS,
@@ -153,4 +167,5 @@ module.exports = {
   dayFromToday,
   plannedDates,
   createCycleInWizard,
+  openSection,
 };
