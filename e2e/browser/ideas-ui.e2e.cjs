@@ -7,8 +7,8 @@ const {
   createRun,
   devSignIn,
   apiSession,
-  localInput,
-  minuteFromNow,
+  dayFromToday,
+  plannedDates,
 } = require("./support.cjs");
 const [chromePath, FRONTEND, API, OUT] = process.argv.slice(2);
 
@@ -35,34 +35,39 @@ const REGISTERED = [`yash.b27csai${DOMAIN}`, `ira.d27csai${DOMAIN}`];
     const title = `Ideas ${Date.now()}`;
     let cycleId = "";
 
-    await run.check("Faculty set the schedule step by step; a date out of order is explained before saving", async () => {
+    await run.check("Faculty plan the cycle in the wizard; a deadline out of order is explained, publishing is confirmed", async () => {
       await faculty.getByRole("button", { name: "+ New cycle" }).click();
       await faculty.getByLabel("Course name").fill("Product Studio");
       await faculty.getByLabel("Cycle title").fill(title);
       await faculty.getByLabel("Batch year").fill("2027");
-      await faculty.getByLabel("Academic year").fill("2026-27");
-      await faculty.getByLabel("Minimum team size").fill("1");
+      await faculty.getByRole("button", { name: "Next: Teams" }).click();
+      await faculty.getByLabel("Allow solo projects").check();
       await faculty.getByLabel("Maximum team size").fill("3");
-      const formation = minuteFromNow(24 * 60);
-      const ideas = minuteFromNow(2 * 24 * 60);
-      // No faculty window: the completion deadline stays with the formation deadline.
-      await faculty.getByLabel("Students form teams until").fill(localInput(formation));
-      // Submissions opening before the default idea deadline (two weeks out) is flagged at once.
-      await faculty.getByLabel("Submissions open").fill(localInput(minuteFromNow(3 * 24 * 60)));
-      await faculty.getByText(/Must be on or after the idea deadline/).waitFor();
-      assert(await faculty.getByRole("button", { name: "Create draft" }).isDisabled(), "create is enabled with a date out of order");
-      await faculty.getByLabel("Ideas due by").fill(localInput(ideas));
-      assert(await faculty.getByText(/Must be on or after/).count() === 0, "the problem did not clear");
-      await faculty.getByLabel("Final submission deadline").fill(localInput(minuteFromNow(30 * 24 * 60)));
-      await faculty.getByText(/Students form teams until .*, and teams get \d+ days to submit their work/).waitFor();
-      await faculty.getByRole("button", { name: "Create draft" }).click();
+      await faculty.getByRole("button", { name: "Next: Timeline" }).click();
+      const plan = { teams: 1, ideas: 1, finalDays: 30 };
+      await faculty.getByLabel("Days to form teams").fill("1");
+      await faculty.getByLabel("Days for ideas").fill("1");
+      // A final deadline before submissions open stops the step, with the reason in words.
+      await faculty.getByLabel("Final deadline").fill(dayFromToday(2));
+      await faculty.getByRole("button", { name: "Next: Review" }).click();
+      await faculty.getByText(/The final deadline is before submissions open/).waitFor();
+      await faculty.getByText("One thing needs fixing on this step.").waitFor();
+      await faculty.getByLabel("Final deadline").fill(dayFromToday(plan.finalDays));
+      await faculty.getByRole("button", { name: "Next: Review" }).click();
+      await faculty.getByText(/Batch 2027 students work alone or form teams of up to 3 until/).first().waitFor();
+      await faculty.getByRole("button", { name: "Publish to students" }).click();
+      const dialog = faculty.getByRole("dialog", { name: "Publish to students?" });
+      await dialog.getByText(/the team sizes, and whether you keep extra time/).waitFor();
+      await dialog.getByRole("button", { name: "Publish to students" }).click();
       await faculty.waitForURL(/\/faculty\/cycles\/[0-9a-f-]{36}$/);
       cycleId = faculty.url().split("/").pop();
-      await faculty.locator(".info-block", { hasText: "Ideas due" }).waitFor();
       const saved = (await facultyApi.call("GET", `/course-cycles/${cycleId}`)).body;
-      assert(saved.teamCompletionDeadline === formation.toISOString(), `completion ${saved.teamCompletionDeadline}`);
-      assert(saved.ideaDeadline === ideas.toISOString(), `ideas ${saved.ideaDeadline}`);
-      assert((await facultyApi.call("POST", `/course-cycles/${cycleId}/publish`)).status === 200, "publish");
+      const expected = plannedDates(plan);
+      assert(saved.status === "PUBLISHED", `status ${saved.status}`);
+      // No faculty window: the completion deadline stays with the students' deadline.
+      assert(saved.teamCompletionDeadline === expected.teamFormationDeadline, `completion ${saved.teamCompletionDeadline}`);
+      assert(saved.ideaDeadline === expected.ideaDeadline, `ideas ${saved.ideaDeadline}, expected ${expected.ideaDeadline}`);
+      assert(saved.minTeamSize === 1 && saved.maxTeamSize === 3, `sizes ${saved.minTeamSize}-${saved.maxTeamSize}`);
       return `cycle ${cycleId}`;
     }, faculty);
 

@@ -33,6 +33,12 @@ export function formatDate(value: string | null) {
   return `${weekday}, ${day} ${month} ${year} · ${TIME.format(date)}`;
 }
 
+/** "Tue, 4 Nov 2026", for a day without a time. */
+export function formatFullDay(value: string | Date) {
+  const { weekday, day, month, year } = dayParts(new Date(value));
+  return `${weekday}, ${day} ${month} ${year}`;
+}
+
 /** "Tue, 4 Nov", with the year only when it is not this year: for summaries and timelines. */
 export function formatDay(value: string) {
   const date = new Date(value);

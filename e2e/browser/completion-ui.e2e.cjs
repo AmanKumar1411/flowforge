@@ -7,8 +7,8 @@ const {
   createRun,
   devSignIn,
   apiSession,
-  localInput,
-  minuteFromNow,
+  createCycleInWizard,
+  plannedDates,
 } = require("./support.cjs");
 const [chromePath, FRONTEND, API, OUT] = process.argv.slice(2);
 
@@ -55,32 +55,24 @@ const teamsTable = (page) => page.locator('section[aria-labelledby="teams-headin
     let electiveId = "";
 
     // --- Electives ---
-    await run.check("Faculty creates an elective with a team completion deadline in the editor", async () => {
-      await faculty.getByRole("button", { name: "+ New cycle" }).click();
-      await faculty.getByLabel("Course name").fill("Machine Learning");
-      await faculty.getByLabel("Cycle title").fill(electiveTitle);
-      await faculty.getByLabel("Course type").selectOption("ELECTIVE");
-      await faculty.getByLabel("Batch year").fill("2024");
-      await faculty.getByLabel("Academic year").fill("2026-27");
-      await faculty.getByLabel("Minimum team size").fill("2");
-      await faculty.getByLabel("Maximum team size").fill("3");
-      const formation = minuteFromNow(24 * 60);
-      const completion = minuteFromNow(2 * 24 * 60);
-      await faculty.getByLabel("Students form teams until").fill(localInput(formation));
-      // The faculty's own window appears only when they ask for it.
-      await faculty.getByLabel("Give me time after that").check();
-      await faculty.getByLabel("You place students without a team until").fill(localInput(completion));
-      await faculty.getByLabel("Ideas due by").fill(localInput(completion));
-      await faculty.getByLabel("Submissions open").fill(localInput(minuteFromNow(3 * 24 * 60)));
-      await faculty.getByLabel("Final submission deadline").fill(localInput(minuteFromNow(30 * 24 * 60)));
-      await faculty.getByRole("button", { name: "Create draft" }).click();
-      await faculty.waitForURL(/\/faculty\/cycles\/[0-9a-f-]{36}$/);
-      electiveId = faculty.url().split("/").pop();
+    await run.check("Faculty creates an elective with extra time to place students in the wizard", async () => {
+      // The faculty's own window appears only when they ask for it, under "Advanced".
+      const plan = { teams: 1, placing: 1, ideas: 1, finalDays: 30 };
+      electiveId = await createCycleInWizard(faculty, {
+        courseName: "Machine Learning",
+        title: electiveTitle,
+        kind: "ELECTIVE",
+        batchYear: 2024,
+        minTeamSize: 2,
+        maxTeamSize: 3,
+        ...plan,
+      });
+      const completion = plannedDates(plan).teamCompletionDeadline;
       await faculty.getByText(/ \/ Elective/).waitFor();
       await faculty.getByRole("heading", { name: /Enrolled students/ }).waitFor();
       const saved = (await facultyApi.call("GET", `/course-cycles/${electiveId}`)).body;
       assert(saved.kind === "ELECTIVE", `kind ${saved.kind}`);
-      assert(saved.teamCompletionDeadline === completion.toISOString(), `completion ${saved.teamCompletionDeadline}`);
+      assert(saved.teamCompletionDeadline === completion, `completion ${saved.teamCompletionDeadline}, expected ${completion}`);
       return `elective ${electiveId}`;
     }, faculty);
 

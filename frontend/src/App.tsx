@@ -5,7 +5,7 @@ import { AppShell } from "./components/AppShell";
 import { AdminPage } from "./pages/AdminPage";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { CycleDetailPage } from "./pages/CycleDetailPage";
-import { CycleEditorPage } from "./pages/CycleEditorPage";
+import { CycleWizardPage } from "./pages/CycleWizardPage";
 import { FacultyCyclesPage } from "./pages/FacultyCyclesPage";
 import { LoginPage } from "./pages/LoginPage";
 import { PendingPage } from "./pages/PendingPage";
@@ -61,9 +61,9 @@ function App() {
               <Routes>
                 <Route index element={<Navigate to="cycles" replace />} />
                 <Route path="cycles" element={<FacultyCyclesPage />} />
-                <Route path="cycles/new" element={<CycleEditorPage />} />
+                <Route path="cycles/new" element={<CycleWizardPage />} />
                 <Route path="cycles/:cycleId" element={<CycleDetailPage faculty />} />
-                <Route path="cycles/:cycleId/edit" element={<CycleEditorPage />} />
+                <Route path="cycles/:cycleId/edit" element={<CycleWizardPage />} />
               </Routes>
             </RequireRole>
           }

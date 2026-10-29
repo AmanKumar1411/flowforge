@@ -78,4 +78,79 @@ const minuteFromNow = (minutes) => {
   return date;
 };
 
-module.exports = { DOMAIN, MINUTE_MS, assert, createRun, devSignIn, apiSession, localInput, minuteFromNow };
+/** A local day `days` from today at a local time, as the wizard builds it (phases end at 11:59 PM). */
+function localDayAt(days, hours, minutes) {
+  const today = new Date();
+  return new Date(today.getFullYear(), today.getMonth(), today.getDate() + days, hours, minutes);
+}
+
+/** "YYYY-MM-DD" for a date input, `days` from today. */
+function dayFromToday(days) {
+  return localInput(localDayAt(days, 12, 0)).slice(0, 10);
+}
+
+/** The ISO dates the wizard stores for a plan starting today; the same rule as `buildSchedule`. */
+function plannedDates({ teams, placing = 0, ideas, finalDays }) {
+  const settled = teams + placing;
+  return {
+    teamFormationDeadline: localDayAt(teams, 23, 59).toISOString(),
+    teamCompletionDeadline: localDayAt(settled, 23, 59).toISOString(),
+    ideaDeadline: localDayAt(settled + ideas, 23, 59).toISOString(),
+    submissionStartAt: localDayAt(settled + ideas + 1, 0, 0).toISOString(),
+    submissionDeadline: localDayAt(finalDays, 23, 59).toISOString(),
+  };
+}
+
+/**
+ * Creates a cycle through the four-step wizard, starting from the faculty's
+ * cycle list, and returns its id. `plan` sets the wizard's fields; anything
+ * left out keeps the wizard's default. With `publish`, it publishes through
+ * the confirmation dialog; otherwise it saves a draft.
+ */
+async function createCycleInWizard(page, plan) {
+  await page.getByRole("button", { name: "+ New cycle" }).click();
+  await page.getByRole("heading", { name: /What is this cycle\?/ }).waitFor();
+  await page.getByLabel("Course name").fill(plan.courseName);
+  await page.getByLabel("Cycle title").fill(plan.title);
+  await page.getByLabel("Batch year").fill(String(plan.batchYear));
+  if (plan.kind === "ELECTIVE") {
+    await page.getByText("Advanced: course type").click();
+    await page.getByRole("radio", { name: /^Elective/ }).check();
+  }
+  await page.getByRole("button", { name: "Next: Teams" }).click();
+  if (plan.minTeamSize !== undefined) await page.getByLabel("Minimum team size").fill(String(plan.minTeamSize));
+  if (plan.maxTeamSize !== undefined) await page.getByLabel("Maximum team size").fill(String(plan.maxTeamSize));
+  if (plan.solo) await page.getByLabel("Allow solo projects").check();
+  if (plan.placing) {
+    await page.getByText("Advanced: extra time to place students").click();
+    await page.getByLabel("Give me extra time to place students without a team").check();
+    await page.getByLabel("Extra days for placing students").fill(String(plan.placing));
+  }
+  await page.getByRole("button", { name: "Next: Timeline" }).click();
+  if (plan.teams !== undefined) await page.getByLabel("Days to form teams").fill(String(plan.teams));
+  if (plan.ideas !== undefined) await page.getByLabel("Days for ideas").fill(String(plan.ideas));
+  if (plan.finalDays !== undefined) await page.getByLabel("Final deadline").fill(dayFromToday(plan.finalDays));
+  await page.getByRole("button", { name: "Next: Review" }).click();
+  if (plan.publish) {
+    await page.getByRole("button", { name: "Publish to students" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Publish to students" }).click();
+  } else {
+    await page.getByRole("button", { name: "Save as draft" }).click();
+  }
+  await page.waitForURL(/\/faculty\/cycles\/[0-9a-f-]{36}$/);
+  return page.url().split("/").pop();
+}
+
+module.exports = {
+  DOMAIN,
+  MINUTE_MS,
+  assert,
+  createRun,
+  devSignIn,
+  apiSession,
+  localInput,
+  minuteFromNow,
+  dayFromToday,
+  plannedDates,
+  createCycleInWizard,
+};
