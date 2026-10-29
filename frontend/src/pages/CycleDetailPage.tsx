@@ -11,19 +11,21 @@ import { TeamsList } from "../components/TeamsList";
 import { countsOf, useCycleData } from "../cycle-data";
 import {
   attentionItems,
+  catalogSummary,
+  cycleFacts,
   phaseOf,
   primaryAction,
   sectionFor,
-  sectionSummary,
   shows,
+  showsCompletion,
+  submissionSummary,
+  teamsEmpty,
   type PageTarget,
   type SectionKey,
 } from "../cycle-page";
-import { formatDay } from "../dates";
 import { readableError } from "../errors";
 import { cyclePhases } from "../phases";
 import { teamRows, type TeamFilter } from "../team-rows";
-import { describeTeamSize } from "../teams";
 import type { Cycle } from "../types";
 
 function openSectionsKey(cycleId: string) {
@@ -137,7 +139,8 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
   if (!cycle) return <p className="loading">Loading cycle…</p>;
 
   const phase = phaseOf(cycle, now);
-  const action = primaryAction(phase, counts);
+  const action = faculty ? primaryAction(cycle, phase, counts) : null;
+  const empty = teamsEmpty(cycle, phase, counts);
   const attention = faculty ? attentionItems(cycle, phase, counts) : [];
   const phases = cyclePhases(
     {
@@ -153,6 +156,7 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
   );
 
   const runAction = async () => {
+    if (!action) return;
     if (action.kind === "go") return go(action.target);
     if (action.kind === "publish") return setPublishing(true);
     if (!window.confirm("Close this cycle? Nothing can change afterwards, and students can no longer submit.")) return;
@@ -192,21 +196,19 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
             </span>
             <span className="eyebrow">
               {cycle.courseName} / Batch {cycle.batchYear}
-              {cycle.kind === "ELECTIVE" && " / Elective"}
             </span>
           </p>
           <h1>{cycle.title}</h1>
           {cycle.description && <p className="cycle-description">{cycle.description}</p>}
-          <p className="cycle-facts">
-            {cycle.kind === "ELECTIVE" ? "Elective: enrolled students" : "Core course: the whole batch"} ·
-            Teams of {describeTeamSize(cycle)} members · Semester {cycle.semester}, {cycle.academicYear}
-          </p>
+          <p className="cycle-facts">{cycleFacts(cycle)}</p>
         </div>
         {faculty && (
           <div className="cycle-actions">
-            <button className="primary-button" disabled={busy} onClick={() => void runAction()}>
-              {action.label}
-            </button>
+            {action && (
+              <button className="primary-button" disabled={busy} onClick={() => void runAction()}>
+                {action.label}
+              </button>
+            )}
             {cycle.status !== "CLOSED" && (
               <button
                 className="text-button"
@@ -230,8 +232,7 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
       />
       {cycle.status === "DRAFT" && faculty && (
         <p className="field-hint">
-          Students can't see this cycle yet. Publish it when the plan is ready; students
-          can then form teams until {formatDay(cycle.teamFormationDeadline)}.
+          Students can't see this cycle yet. Publish it when the plan is ready.
         </p>
       )}
       <div className="cycle-layout">
@@ -263,15 +264,20 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
                 onFilter={setFilter}
                 empty={
                   <p className="muted">
-                    {phase === "draft"
-                      ? "Students form teams once you publish the cycle."
-                      : phase === "closed"
-                        ? "No teams were formed."
-                        : "No teams yet. Students form their own teams now."}
+                    {empty.text}
+                    {/* Not twice: the header's button may already be this step. */}
+                    {empty.action && empty.action.label !== action?.label && (
+                      <>
+                        {" "}
+                        <button className="text-button" onClick={() => go(empty.action!.target)}>
+                          {empty.action.label}
+                        </button>
+                      </>
+                    )}
                   </p>
                 }
               />
-              {shows(cycle.kind, "teamCompletion") && data.teams && data.overview && (
+              {showsCompletion(cycle, phase, counts) && data.teams && data.overview && (
                 <div id="completion">
                   <CompletionPanel
                     cycle={cycle}
@@ -286,7 +292,7 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
                 <CycleSection
                   id="section-catalog"
                   title="Idea list"
-                  summary={sectionSummary("catalog", cycle, phase, counts)}
+                  summary={catalogSummary(phase, counts)}
                   open={open.has("catalog")}
                   onToggle={(isOpen) => toggle("catalog", isOpen)}
                 >
@@ -313,7 +319,7 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
                   </li>
                 )}
                 {shows(cycle.kind, "submissionCount") && (
-                  <li>{sectionSummary("submissions", cycle, phase, counts)}</li>
+                  <li>{submissionSummary(phase, counts)}</li>
                 )}
               </ul>
             </section>

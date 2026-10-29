@@ -5,7 +5,6 @@ import {
   createFacultyTeam,
   previewAutoGroup,
 } from "../api/teams";
-import { formatDate } from "../dates";
 import { readableError } from "../errors";
 import {
   describeTeamSize,
@@ -21,6 +20,7 @@ import type {
 } from "../types";
 import { NotSignedInTag } from "./TeamPanels";
 
+/** Where team completion stands, without dates: the phase bar states them. */
 function CompletionStatus({
   cycle,
   open,
@@ -30,15 +30,14 @@ function CompletionStatus({
   open: boolean;
   now: number;
 }) {
-  const formationEnds = formatDate(cycle.teamFormationDeadline);
-  const completionEnds = formatDate(cycle.teamCompletionDeadline);
   let text: string;
   if (open) {
-    text = `Students can no longer change teams. Place everyone still without a team by ${completionEnds}: build a team from selected students, add a student to a team with room, or auto-group the rest at random.`;
+    text =
+      "Students can no longer change teams. Place everyone still without a team: build a team from selected students, add a student to a team with room, or auto-group the rest at random.";
   } else if (cycle.status === "PUBLISHED" && isFormationOpen(cycle, now)) {
     text = hasCompletionWindow(cycle)
-      ? `Students are forming their own teams until ${formationEnds}. From then until ${completionEnds} you can place everyone still without a team.`
-      : `Students are forming their own teams until ${formationEnds}. To place students left without a team afterwards, set a team completion deadline later than that.`;
+      ? "Students are still forming their own teams. When they stop, you place everyone still without a team."
+      : "Students are still forming their own teams; anyone without one is listed here.";
   } else {
     text = "Teams are final.";
   }

@@ -98,7 +98,7 @@ const teamPanel = (page) => page.locator(".team-panel");
         teams: 1,
         ideas: 1,
       });
-      await faculty.getByText("2 to 3 members").waitFor();
+      await faculty.getByText(/· Teams of 2–3 ·/).waitFor();
       await faculty.getByRole("button", { name: "← Back to cycles" }).click();
       faculty.once("dialog", (dialog) => dialog.accept());
       const card = faculty.locator(".cycle-card", { hasText: cycleTitle });

@@ -140,7 +140,7 @@ const PARTNER = `neha.s20csai${DOMAIN}`;
       await faculty.locator(".glance", { hasText: /Batch 2020 students \(\d+\) · Manage/ }).waitFor();
     }, faculty);
 
-    await run.check("'Needs your attention' lists a waiting idea, and its link opens that team's page to review it", async () => {
+    await run.check("'Needs your attention' lists a waiting proposal, and its link opens that team's page to review it", async () => {
       const partnerApi = await session(PARTNER, "Neha S");
       const partnerId = (await partnerApi.call("GET", "/auth/me")).body.id;
       const team = await studentApi.call("POST", `/course-cycles/${cycleId}/teams`, { name: "Indexers", memberIds: [partnerId] });
@@ -153,8 +153,8 @@ const PARTNER = `neha.s20csai${DOMAIN}`;
       assert(idea.status === 200, `idea: ${idea.status}`);
       await faculty.reload();
       const card = faculty.locator(".attention-card");
-      await card.getByText("1 idea is waiting for your review").waitFor();
-      await faculty.getByRole("button", { name: "Review 1 idea" }).waitFor();
+      await card.getByText("1 proposal is waiting for your review").waitFor();
+      await faculty.getByRole("button", { name: "Review 1 proposal" }).waitFor();
       await faculty.locator(".team-row", { hasText: "Indexers" }).getByText("Waiting for review").waitFor();
       await card.getByRole("button", { name: "Review", exact: true }).click();
       await faculty.getByRole("heading", { level: 1, name: "Indexers" }).waitFor();
@@ -182,6 +182,7 @@ const PARTNER = `neha.s20csai${DOMAIN}`;
       await faculty.locator(".teams-empty").getByText("No teams were formed.").waitFor();
       await faculty.locator(".glance", { hasText: "No work was submitted" }).waitFor();
       assert(await faculty.getByRole("button", { name: "Edit cycle" }).count() === 0, "Edit offered on a closed cycle");
+      assert(await faculty.locator(".cycle-actions .primary-button").count() === 0, "a primary action on a closed cycle");
       assert(await faculty.getByRole("heading", { name: "Needs your attention" }).count() === 0, "attention card on a closed cycle");
     }, faculty);
   } finally {

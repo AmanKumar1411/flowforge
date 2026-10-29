@@ -159,7 +159,7 @@ const REGISTERED = [`yash.b27csai${DOMAIN}`, `ira.d27csai${DOMAIN}`];
     await run.check("Faculty approve the new version; the team sees it approved and final", async () => {
       // The one waiting proposal: the header's button opens its team.
       await faculty.goto(`${FRONTEND}/faculty/cycles/${cycleId}`);
-      await faculty.getByRole("button", { name: "Review 1 idea" }).click();
+      await faculty.getByRole("button", { name: "Review 1 proposal" }).click();
       await faculty.getByRole("heading", { level: 1, name: "Nimbus" }).waitFor();
       await faculty.getByText("Decision on version 3").waitFor();
       await faculty.getByRole("button", { name: "Approve idea" }).click();

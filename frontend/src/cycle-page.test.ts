@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   attentionItems,
+  catalogSummary,
+  cycleFacts,
   PAGE_PARTS,
   phaseOf,
   primaryAction,
   sectionFor,
-  sectionSummary,
   shows,
+  showsCompletion,
+  submissionSummary,
+  teamsEmpty,
   type CycleCounts,
 } from "./cycle-page";
 import type { Cycle } from "./types";
@@ -33,6 +37,7 @@ const cycle: Cycle = {
   submissionStartAt: "2026-11-13T18:30:00.000Z",
   submissionDeadline: "2026-12-12T18:29:00.000Z",
 };
+const elective: Cycle = { ...cycle, kind: "ELECTIVE" };
 const at = (iso: string) => Date.parse(iso);
 
 describe("phaseOf", () => {
@@ -46,48 +51,11 @@ describe("phaseOf", () => {
     expect(phaseOf(cycle, at(now))).toBe(phase);
   });
 
-  it("follows the status for drafts and closed cycles", () => {
+  it("follows the status for drafts and closed cycles; a draft opens its idea list", () => {
     expect(phaseOf({ ...cycle, status: "DRAFT" }, at("2026-11-20T00:00:00.000Z"))).toBe("draft");
     expect(phaseOf({ ...cycle, status: "CLOSED" }, at("2026-11-01T00:00:00.000Z"))).toBe("closed");
     expect(sectionFor("draft")).toBe("catalog");
     expect(sectionFor("placing")).toBeNull();
-  });
-});
-
-describe("what the page asks of the faculty", () => {
-  const counts: CycleCounts = {
-    roster: { total: 30, notSignedIn: 3 },
-    teams: 6,
-    unplaced: 3,
-    ideas: { waiting: 2, approved: 3, rejected: 0, none: 1 },
-    submissions: { submitted: 0 },
-  };
-
-  it("offers one primary action that fits the phase", () => {
-    expect(primaryAction("draft", {})).toEqual({ kind: "publish", label: "Publish to students" });
-    expect(primaryAction("placing", counts)).toMatchObject({ label: "Place 3 students", target: "completion" });
-    expect(primaryAction("ideas", counts)).toMatchObject({ label: "Review 2 ideas", target: "review" });
-    expect(primaryAction("work", { ...counts, ideas: undefined })).toMatchObject({
-      label: "View submissions",
-    });
-    expect(primaryAction("ended", {})).toEqual({ kind: "close", label: "Close the cycle" });
-  });
-
-  it("lists only real action items, and nothing for a closed cycle", () => {
-    expect(attentionItems(cycle, "placing", counts).map((item) => item.text)).toEqual([
-      "3 students have no team",
-      "2 ideas are waiting for your review",
-    ]);
-    expect(
-      attentionItems(cycle, "work", { ...counts, ideas: { waiting: 0, approved: 4, rejected: 1, none: 1 } }).map(
-        (item) => item.text,
-      ),
-    ).toEqual(["2 teams have no approved idea, so they can't submit work"]);
-    expect(attentionItems(cycle, "teams", { ...counts, ideas: { waiting: 0, approved: 0, rejected: 0, none: 6 } })).toEqual([]);
-    expect(attentionItems({ ...cycle, kind: "ELECTIVE" }, "draft", { roster: { total: 0, notSignedIn: 0 } })).toMatchObject([
-      { text: "No students are enrolled yet", action: "Enroll students" },
-    ]);
-    expect(attentionItems(cycle, "closed", counts)).toEqual([]);
   });
 });
 
@@ -102,36 +70,102 @@ describe("PAGE_PARTS", () => {
   });
 });
 
-describe("sectionSummary", () => {
+describe("cycleFacts", () => {
+  it("says who takes part, the team size and the semester's term in one line", () => {
+    expect(cycleFacts(elective)).toBe(
+      "Elective · open to enrolled students · Teams of 2–4 · Semester 7 (Aug–Dec 2026)",
+    );
+    expect(cycleFacts({ ...cycle, semester: 8, minTeamSize: 3, maxTeamSize: 3 })).toBe(
+      "Core · open to all of batch 2023 · Teams of 3 · Semester 8 (Jan–May 2027)",
+    );
+    expect(cycleFacts({ ...cycle, minTeamSize: 1, maxTeamSize: 1 })).toMatch(/· Solo projects ·/);
+  });
+});
+
+describe("what the page asks of the faculty", () => {
   const counts: CycleCounts = {
-    roster: { total: 3, notSignedIn: 1 },
+    roster: { total: 30, notSignedIn: 3 },
+    teams: 6,
+    unplaced: 3,
+    ideas: { waiting: 2, approved: 3, rejected: 0, none: 1 },
+    submissions: { submitted: 0 },
+  };
+  const quiet: CycleCounts = { ...counts, unplaced: 0, ideas: { waiting: 0, approved: 6, rejected: 0, none: 0 } };
+
+  it("picks one primary action from the cycle's state", () => {
+    expect(primaryAction(cycle, "draft", {})).toEqual({ kind: "publish", label: "Publish to students" });
+    expect(primaryAction(elective, "teams", { ...counts, roster: { total: 0, notSignedIn: 0 } })).toEqual({
+      kind: "go",
+      label: "Enroll students",
+      target: "students",
+    });
+    expect(primaryAction(cycle, "teams", { ...quiet, roster: { total: 0, notSignedIn: 0 } })).toMatchObject({
+      label: "Add students",
+    });
+    expect(primaryAction(cycle, "teams", quiet)).toEqual({ kind: "go", label: "See the teams", target: "teams" });
+    expect(primaryAction(cycle, "placing", counts)).toMatchObject({ label: "Place 3 students", target: "completion" });
+    expect(primaryAction(cycle, "ideas", counts)).toEqual({ kind: "go", label: "Review 2 proposals", target: "review" });
+    expect(primaryAction(cycle, "work", quiet)).toMatchObject({ label: "See the submissions" });
+    expect(primaryAction(cycle, "ended", quiet)).toEqual({ kind: "close", label: "Close the cycle" });
+    // A closed cycle has nothing left to do.
+    expect(primaryAction(cycle, "closed", counts)).toBeNull();
+  });
+
+  it("lists only real actions, pending proposals included, and nothing when there is none", () => {
+    expect(attentionItems(cycle, "placing", counts).map((item) => item.text)).toEqual([
+      "3 students have no team",
+      "2 proposals are waiting for your review",
+    ]);
+    // Teams without an approved idea are not something the faculty can act on.
+    expect(attentionItems(cycle, "work", { ...quiet, ideas: { waiting: 0, approved: 4, rejected: 1, none: 1 } })).toEqual([]);
+    expect(attentionItems(elective, "draft", { roster: { total: 0, notSignedIn: 0 } })).toMatchObject([
+      { text: "No students are enrolled yet", action: "Enroll students", target: "students" },
+    ]);
+    expect(attentionItems(cycle, "closed", counts)).toEqual([]);
+  });
+});
+
+describe("team completion and empty states", () => {
+  it("shows no team completion at all for a cycle with no students, a draft or an elective", () => {
+    const counts = { roster: { total: 0, notSignedIn: 0 }, unplaced: 0 };
+    expect(showsCompletion(cycle, "teams", counts)).toBe(false);
+    expect(showsCompletion(cycle, "teams", {})).toBe(false);
+    expect(showsCompletion(cycle, "draft", { roster: { total: 5, notSignedIn: 0 } })).toBe(false);
+    expect(showsCompletion(elective, "placing", { roster: { total: 5, notSignedIn: 0 } })).toBe(false);
+    expect(showsCompletion(cycle, "placing", { roster: { total: 5, notSignedIn: 0 } })).toBe(true);
+  });
+
+  it("says what comes next when there is no team", () => {
+    expect(teamsEmpty(elective, "teams", { roster: { total: 0, notSignedIn: 0 } })).toEqual({
+      text: "No teams yet. Enroll students so they can form teams.",
+      action: { label: "Enroll students", target: "students" },
+    });
+    expect(teamsEmpty(cycle, "teams", { roster: { total: 9, notSignedIn: 0 } })).toEqual({
+      text: "No teams yet. Students are forming their own teams now.",
+    });
+    expect(teamsEmpty(cycle, "draft", {}).text).toBe("No teams yet. Students form teams once you publish the cycle.");
+    expect(teamsEmpty(cycle, "closed", {}).text).toBe("No teams were formed.");
+  });
+});
+
+describe("summaries", () => {
+  const counts: CycleCounts = {
     catalog: { offered: 1, picked: 0 },
     teams: 0,
-    unplaced: 3,
-    ideas: { waiting: 0, approved: 0, rejected: 0, none: 0 },
     submissions: { submitted: 0 },
   };
 
-  it("gives one helpful line instead of repeated empty tables", () => {
-    expect(sectionSummary("students", cycle, "teams", counts)).toBe(
-      "3 students in batch 2023 · 1 not signed in yet",
+  it("counts submissions without repeating any date", () => {
+    expect(submissionSummary("teams", counts)).toBe("No teams yet");
+    expect(submissionSummary("work", { ...counts, teams: 15, submissions: { submitted: 12 } })).toBe(
+      "12 of 15 teams submitted",
     );
-    expect(sectionSummary("catalog", cycle, "teams", counts)).toBe("1 idea offered · not picked yet");
-    expect(sectionSummary("teams", cycle, "teams", counts)).toBe(
-      "No teams yet · students form teams until Wed, 4 Nov",
-    );
-    expect(sectionSummary("ideas", cycle, "teams", counts)).toBe("Ideas come once teams form");
-    expect(sectionSummary("submissions", cycle, "teams", counts)).toBe(
-      "Submissions come once teams form",
-    );
+    expect(submissionSummary("work", { ...counts, teams: undefined })).toBe("Loading…");
   });
 
   it("speaks in the past tense once the cycle is closed", () => {
-    expect(sectionSummary("catalog", cycle, "closed", counts)).toBe("1 idea was offered · none was picked");
-    expect(sectionSummary("teams", cycle, "closed", counts)).toBe("No teams were formed");
-    expect(sectionSummary("submissions", cycle, "closed", counts)).toBe("No work was submitted");
-    expect(
-      sectionSummary("submissions", cycle, "closed", { ...counts, teams: 4, submissions: { submitted: 3 } }),
-    ).toBe("3 of 4 teams submitted work");
+    expect(catalogSummary("teams", counts)).toBe("1 idea offered · not picked yet");
+    expect(catalogSummary("closed", counts)).toBe("1 idea was offered · none was picked");
+    expect(submissionSummary("closed", counts)).toBe("No work was submitted");
   });
 });

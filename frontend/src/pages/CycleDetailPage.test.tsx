@@ -113,7 +113,14 @@ describe("CycleDetailPage by course type", () => {
     const glance = screen.getByRole("complementary", { name: "The cycle at a glance" });
     expect(within(glance).getByText(/Enrolled students \(5\)/)).toBeVisible();
     expect(within(glance).getByRole("link", { name: "Manage" })).toHaveAttribute("href", "/faculty/cycles/cycle/students");
-    expect(within(glance).getByText("Open Thu, 12 Nov – Sat, 12 Dec")).toBeVisible();
+    expect(within(glance).getByText("0 of 2 teams submitted")).toBeVisible();
+    expect(
+      screen.getByText("Elective · open to enrolled students · Teams of 2–4 · Semester 7 (Aug–Dec 2026)"),
+    ).toBeVisible();
+    // One proposal waits: the header's one primary action, and the attention card, say so.
+    expect(await screen.findByRole("button", { name: "Review 1 proposal" })).toBeVisible();
+    expect(screen.getByText("1 proposal is waiting for your review")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Edit cycle" })).toBeVisible();
     expect(screen.queryByText("Idea list")).toBeNull();
     expect(screen.queryByRole("heading", { name: /Students without a team/ })).toBeNull();
   });
@@ -125,5 +132,25 @@ describe("CycleDetailPage by course type", () => {
     expect(within(glance).getByText(/Batch 2023 students \(5\)/)).toBeVisible();
     expect(screen.getByText("Idea list")).toBeVisible();
     expect(await screen.findByRole("heading", { name: "Students without a team (1)" })).toBeVisible();
+  });
+
+  it("says nothing about team completion while no student takes part, and offers to add them", async () => {
+    vi.mocked(cycles.listBatchStudents).mockResolvedValue([]);
+    vi.mocked(cycles.listEnrollments).mockResolvedValue([]);
+    vi.mocked(teams.listCycleTeams).mockResolvedValue([]);
+    vi.mocked(ideas.listCycleIdeas).mockResolvedValue([]);
+    vi.mocked(submissions.listCycleSubmissions).mockResolvedValue([]);
+    vi.mocked(teams.getCompletionOverview).mockResolvedValue({ open: false, unassigned: [], notSignedIn: [] });
+    renderPage("ELECTIVE");
+    // The header's primary action and the attention card; the empty list doesn't repeat it.
+    expect(await screen.findAllByRole("button", { name: "Enroll students" })).toHaveLength(2);
+    expect(screen.getByText("No students are enrolled yet")).toBeVisible();
+    expect(screen.getByText(/No teams yet\. Enroll students so they can form teams\./)).toBeVisible();
+    cleanup();
+
+    renderPage("CORE");
+    expect(await screen.findAllByRole("button", { name: "Add students" })).toHaveLength(2);
+    expect(screen.queryByRole("heading", { name: /Students without a team/ })).toBeNull();
+    expect(screen.queryByText("Every student is in a team.")).toBeNull();
   });
 });
