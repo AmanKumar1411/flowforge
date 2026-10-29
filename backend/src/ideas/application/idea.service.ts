@@ -74,7 +74,8 @@ export class IdeaService {
   ): Promise<Idea> {
     const { team, cycle } = await this.teams.getVisible(actor, teamId);
     this.rules.assertLeader(actor, team);
-    const clean = this.rules.clean(content);
+    this.rules.assertProposalsAllowed(cycle);
+    const clean = this.rules.clean(content, cycle);
     return this.transactions.run(async (tx) => {
       const current = await this.lock(team.id, tx);
       const now = this.clock.now();
@@ -108,6 +109,7 @@ export class IdeaService {
   ): Promise<Idea> {
     const { team, cycle } = await this.teams.getVisible(actor, teamId);
     this.rules.assertLeader(actor, team);
+    this.rules.assertCatalogAllowed(cycle);
     return this.transactions.run(async (tx) => {
       const current = await this.lock(team.id, tx);
       const now = this.clock.now();

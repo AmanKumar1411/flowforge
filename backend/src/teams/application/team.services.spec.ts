@@ -1,10 +1,11 @@
 import { AuditEvent } from "../../audit/domain/audit-event";
 import { FixedClock } from "../../common/testing/fixed-clock";
-import { CourseCycleService } from "../../course-cycles/course-cycle.service";
+import { CourseCycleService } from "../../course-cycles/application/course-cycle.service";
 import {
   actor,
   admin,
   createTeamKit,
+  COMPLETION_DEADLINE,
   FORMATION_DEADLINE,
   NOW,
   otherFaculty,
@@ -15,6 +16,8 @@ import { TeamFormationService } from "./team-formation.service";
 import { TeamQueryService } from "./team-query.service";
 
 // Jest cannot load NestJS 12's ES modules on Node 22; stub the decorators the classes use.
+// Nested DTOs use class-transformer's @Type, which needs reflect-metadata at load time.
+jest.mock("class-transformer", () => ({ Type: () => () => undefined }));
 jest.mock("@nestjs/common", () => ({
   Injectable: () => (target: unknown) => target,
 }));
@@ -56,9 +59,17 @@ describe("Team services", () => {
       batchYear,
       semester: 7,
       academicYear: "2026-27",
-      submissionStartAt: "2026-11-01T09:00:00.000Z",
-      submissionDeadline: "2026-12-01T17:00:00.000Z",
-      teamFormationDeadline: FORMATION_DEADLINE,
+      teamDeadline: FORMATION_DEADLINE,
+      // Phase 8: the cycle needs a milestone to publish; it opens at the idea deadline.
+      ideaDeadline: COMPLETION_DEADLINE,
+      milestones: [
+        {
+          name: "Final",
+          submissionOpensAt: COMPLETION_DEADLINE,
+          submissionDueAt: "2026-12-01T17:00:00.000Z",
+          evaluationAt: "2026-12-01T17:00:00.000Z",
+        },
+      ],
       ...rules,
     });
     await cycles.publish(owner, created.id);
@@ -324,7 +335,7 @@ describe("Team services", () => {
 
     it("keeps formation open longer when the faculty extends the deadline in time", async () => {
       await cycles.update(owner, cycleId, {
-        teamFormationDeadline: "2026-10-31T12:00:00.000Z",
+        teamDeadline: "2026-10-31T12:00:00.000Z",
       });
       clock.advance(4 * 24 * 60 * 60 * 1000 - 60_000); // 2026-10-31T08:59
       await expect(

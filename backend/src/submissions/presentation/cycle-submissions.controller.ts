@@ -7,24 +7,26 @@ import { SubmissionService } from "../application/submission.service";
 import { CycleSubmissionDto } from "./dto/submission-responses.dto";
 
 @ApiTags("submissions")
-@Controller("course-cycles/:cycleId/submissions")
+@Controller("course-cycles/:cycleId/milestones/:milestoneId/submissions")
 export class CycleSubmissionsController {
   constructor(private readonly submissions: SubmissionService) {}
 
   @Get()
   @Roles("FACULTY", "ADMIN")
   @ApiOperation({
-    summary: "Every team of the cycle with its idea and latest submission",
+    summary:
+      "Every team of the cycle with its idea and its work for a milestone",
     description:
-      "The owning faculty and admins. Teams without work are listed with `latest: null`.",
+      "The owning faculty and admins. Teams without work are listed with `latest: null` and no versions.",
   })
   @ApiOkResponse({ type: CycleSubmissionDto, isArray: true })
   async list(
     @CurrentUser() user: AuthenticatedUser,
     @Param("cycleId", new ParseUUIDPipe()) cycleId: string,
+    @Param("milestoneId", new ParseUUIDPipe()) milestoneId: string,
   ): Promise<CycleSubmissionDto[]> {
-    return (await this.submissions.listForCycle(user, cycleId)).map((row) =>
-      CycleSubmissionDto.from(row),
-    );
+    return (
+      await this.submissions.listForCycle(user, cycleId, milestoneId)
+    ).map((row) => CycleSubmissionDto.from(row));
   }
 }

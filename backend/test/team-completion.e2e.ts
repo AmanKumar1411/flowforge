@@ -8,6 +8,7 @@ import {
   startTestApp,
   TestApp,
 } from "./support/test-app";
+import { milestone } from "./support/schedule";
 import { TestBrowser } from "./support/test-browser";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -54,6 +55,7 @@ describe("Team completion and electives", () => {
   let otherFaculty: TestBrowser;
   const students = {} as Record<Student, TestBrowser>;
   const ids = {} as Record<Student, string>;
+  let ownerId: string;
 
   before(async () => {
     app = await startTestApp({ clock });
@@ -63,6 +65,7 @@ describe("Team completion and electives", () => {
       await admin.post("/admin/faculty-allowlist", { body: { email } });
     }
     owner = await app.browser().signIn(`vatsala.s${DOMAIN}`);
+    ownerId = String((await owner.get("/auth/me")).body.id);
     otherFaculty = await app.browser().signIn(`anil.kr${DOMAIN}`);
     for (const [key, email] of Object.entries(EMAILS)) {
       const name = key[0].toUpperCase() + key.slice(1);
@@ -85,21 +88,32 @@ describe("Team completion and electives", () => {
         batchYear: 2026,
         semester: 7,
         academicYear: "2026-27",
-        submissionStartAt: at(2 * DAY_MS),
-        submissionDeadline: at(30 * DAY_MS),
         minTeamSize: 2,
         maxTeamSize: 3,
-        teamFormationDeadline: at(HOUR_MS),
-        teamCompletionDeadline: at(2 * HOUR_MS),
+        teamDeadline: at(HOUR_MS),
+        // Phase 8 (A1): the faculty place students until the idea deadline (was a completion deadline).
+        ideaDeadline: at(2 * HOUR_MS),
+        milestones: [milestone("Final", at(2 * DAY_MS), at(30 * DAY_MS))],
         ...overrides,
       },
     });
     assert.equal(created.status, 201, JSON.stringify(created.body));
     const cycleId = String(created.body.id);
-    assert.equal(
-      (await owner.post(`/course-cycles/${cycleId}/publish`)).status,
-      200,
-    );
+    // Phase 8: an elective with nobody enrolled cannot be published. These tests start from an
+    // empty roster, so a placeholder row stands in for the publish check and is removed again.
+    const placeholder = { cycleId, email: `placeholder.z26csai${DOMAIN}` };
+    if (overrides.kind === "ELECTIVE") {
+      await app.prisma.cycleEnrollment.create({
+        data: { ...placeholder, addedById: ownerId },
+      });
+    }
+    const published = await owner.post(`/course-cycles/${cycleId}/publish`);
+    assert.equal(published.status, 200, JSON.stringify(published.body));
+    if (overrides.kind === "ELECTIVE") {
+      await app.prisma.cycleEnrollment.delete({
+        where: { cycleId_email: placeholder },
+      });
+    }
     return cycleId;
   }
 
@@ -315,68 +329,42 @@ describe("Team completion and electives", () => {
     });
   });
 
-  describe("the two team deadlines", () => {
-    it("are validated, default to one, and move together while there is no faculty window", async () => {
+  describe("the placement window (A1)", () => {
+    it("runs from the team deadline to the idea deadline, which must come after it", async () => {
       const base = {
         courseName: "Software Design",
         title: "Deadlines",
         batchYear: 2026,
         semester: 7,
         academicYear: "2026-27",
-        submissionStartAt: at(2 * DAY_MS),
-        submissionDeadline: at(10 * DAY_MS),
-        teamFormationDeadline: at(DAY_MS),
+        teamDeadline: at(DAY_MS),
+        ideaDeadline: at(DAY_MS),
+        milestones: [milestone("Final", at(2 * DAY_MS), at(10 * DAY_MS))],
       };
-      const backwards = await owner.post("/course-cycles", {
-        body: { ...base, teamCompletionDeadline: at(HOUR_MS) },
-      });
-      assert.equal(backwards.status, 400);
-      assert.equal(backwards.body.code, "INVALID_TEAM_COMPLETION_DEADLINE");
-
-      // A window must have length: an end equal to the students' deadline is refused.
-      const empty = await owner.post("/course-cycles", {
-        body: { ...base, teamCompletionDeadline: at(DAY_MS) },
-      });
-      assert.equal(empty.status, 400);
-      assert.equal(empty.body.code, "INVALID_TEAM_COMPLETION_DEADLINE");
-
-      // Left out or null: no faculty window.
-      const created = await owner.post("/course-cycles", {
-        body: { ...base, teamCompletionDeadline: null },
-      });
-      assert.equal(created.status, 201, JSON.stringify(created.body));
-      assert.equal(created.body.teamCompletionDeadline, at(DAY_MS));
-      const cycleId = String(created.body.id);
-      await owner.post(`/course-cycles/${cycleId}/publish`);
-      const extended = await owner.patch(`/course-cycles/${cycleId}`, {
-        body: { teamFormationDeadline: at(2 * DAY_MS) },
-      });
-      assert.equal(extended.status, 200, JSON.stringify(extended.body));
-      assert.equal(extended.body.teamCompletionDeadline, at(2 * DAY_MS));
-
-      // On a published cycle the window can be switched on while formation is open, and off again.
-      const windowOn = await owner.patch(`/course-cycles/${cycleId}`, {
-        body: { teamCompletionDeadline: at(2 * DAY_MS) },
-      });
-      assert.equal(windowOn.status, 400);
-      assert.equal(windowOn.body.code, "INVALID_TEAM_COMPLETION_DEADLINE");
-      const opened = await owner.patch(`/course-cycles/${cycleId}`, {
+      // Equal deadlines would leave the faculty no time to place anyone.
+      const equal = await owner.post("/course-cycles", { body: base });
+      assert.equal(equal.status, 400);
+      assert.equal(equal.body.code, "INVALID_IDEA_DEADLINE");
+      // The separate completion deadline is gone (Phase 8).
+      const removed = await owner.post("/course-cycles", {
         body: {
-          teamFormationDeadline: at(DAY_MS),
+          ...base,
+          ideaDeadline: at(2 * DAY_MS),
           teamCompletionDeadline: at(2 * DAY_MS),
         },
       });
-      assert.equal(opened.status, 200, JSON.stringify(opened.body));
-      const closedAgain = await owner.patch(`/course-cycles/${cycleId}`, {
-        body: { teamCompletionDeadline: null },
-      });
-      assert.equal(closedAgain.status, 200, JSON.stringify(closedAgain.body));
-      assert.equal(closedAgain.body.teamCompletionDeadline, at(DAY_MS));
+      assert.equal(removed.status, 400);
+      assert.equal(removed.body.code, "VALIDATION_FAILED");
 
+      const created = await owner.post("/course-cycles", {
+        body: { ...base, ideaDeadline: at(2 * DAY_MS) },
+      });
+      assert.equal(created.status, 201, JSON.stringify(created.body));
+      const cycleId = String(created.body.id);
       await assert.rejects(
         app.prisma
-          .$executeRaw`UPDATE "CourseProjectCycle" SET "teamCompletionDeadline" = "teamFormationDeadline" - interval '1 hour' WHERE "id" = ${cycleId}`,
-        /CourseProjectCycle_team_deadlines_check|check constraint/i,
+          .$executeRaw`UPDATE "CourseProjectCycle" SET "teamDeadline" = "ideaDeadline" + interval '1 hour' WHERE "id" = ${cycleId}`,
+        /CourseProjectCycle_team_idea_deadline_check|check constraint/i,
       );
     });
   });
@@ -425,7 +413,7 @@ describe("Team completion and electives", () => {
   });
 
   describe("faculty completing teams", () => {
-    it("is possible only between the two deadlines, when students can no longer act", async () => {
+    it("is possible only from the team deadline until the idea deadline, when students can no longer act", async () => {
       const cycleId = await openCycle();
       const overview = () =>
         owner.get<{ open: boolean }>(

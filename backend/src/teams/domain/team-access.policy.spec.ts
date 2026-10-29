@@ -13,8 +13,8 @@ const cycle: TeamCycle = {
   createdByFacultyId: "owner",
   minTeamSize: 1,
   maxTeamSize: 4,
-  teamFormationDeadline: new Date("2026-11-01T12:00:00.000Z"),
-  teamCompletionDeadline: new Date("2026-11-05T12:00:00.000Z"),
+  teamDeadline: new Date("2026-11-01T12:00:00.000Z"),
+  ideaDeadline: new Date("2026-11-05T12:00:00.000Z"),
 };
 
 const team: Team = {

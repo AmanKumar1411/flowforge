@@ -59,7 +59,7 @@ export class IdeasController {
         title: dto.title,
         problem: dto.problem,
         solution: dto.solution,
-        link: dto.link ?? null,
+        links: dto.links ?? [],
       }),
     );
   }

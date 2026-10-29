@@ -7,6 +7,7 @@ import {
   startTestApp,
   TestApp,
 } from "./support/test-app";
+import { milestone } from "./support/schedule";
 import { TestBrowser } from "./support/test-browser";
 
 type Actor =
@@ -43,21 +44,23 @@ const MISSING_ID = "00000000-0000-4000-8000-000000000000";
 const inDays = (days: number) =>
   new Date(Date.now() + days * DAY_MS).toISOString();
 
-// Relative dates: team formation (default: until submissions open) must still be open.
+// Relative dates: team formation must still be open. Phase 8: one milestone after the idea deadline.
 const cycleInput = {
   courseName: "Software Design",
   title: "RBAC matrix",
   batchYear: 2026,
   semester: 7,
   academicYear: "2026-27",
-  submissionStartAt: inDays(7),
-  submissionDeadline: inDays(30),
+  teamDeadline: inDays(7),
+  ideaDeadline: inDays(10),
+  milestones: [milestone("Final", inDays(10), inDays(30))],
 };
 
 describe("RBAC matrix", () => {
   let app: TestApp;
   const browsers = new Map<Actor, TestBrowser>();
   let published = "";
+  let publishedMilestone = "";
   let draft = "";
   // An elective with only the "student" actor enrolled.
   let elective = "";
@@ -97,9 +100,12 @@ describe("RBAC matrix", () => {
     browsers.set("anonymous", app.browser());
 
     const owner = browsers.get("facultyOwner")!;
-    published = String(
-      (await owner.post("/course-cycles", { body: cycleInput })).body.id,
-    );
+    const created = await owner.post<{
+      id: string;
+      milestones: { id: string }[];
+    }>("/course-cycles", { body: cycleInput });
+    published = created.body.id;
+    publishedMilestone = created.body.milestones[0].id;
     await owner.post(`/course-cycles/${published}/publish`);
     draft = String(
       (await owner.post("/course-cycles", { body: cycleInput })).body.id,
@@ -111,10 +117,11 @@ describe("RBAC matrix", () => {
         })
       ).body.id,
     );
-    await owner.post(`/course-cycles/${elective}/publish`);
+    // Phase 8: an elective is published once someone is enrolled.
     await owner.post(`/course-cycles/${elective}/enrollments`, {
       body: { emails: [`neha.t26csai${DOMAIN}`] },
     });
+    await owner.post(`/course-cycles/${elective}/publish`);
     const bystander = await app.browser().signIn(`ravi.b26csai${DOMAIN}`);
     bystanderId = String((await bystander.get("/auth/me")).body.id);
     bystanderTeam = String(
@@ -375,7 +382,8 @@ describe("RBAC matrix", () => {
     },
     {
       method: "GET",
-      path: () => `/teams/${bystanderTeam}/submissions`,
+      path: () =>
+        `/teams/${bystanderTeam}/milestones/${publishedMilestone}/submissions`,
       allowed: {
         admin: 200,
         facultyOwner: 200,
@@ -386,13 +394,17 @@ describe("RBAC matrix", () => {
     },
     {
       method: "POST",
-      path: () => `/teams/${bystanderTeam}/submissions`,
-      body: () => ({ repositoryUrl: "https://github.com/matrix/app" }),
+      path: () =>
+        `/teams/${bystanderTeam}/milestones/${publishedMilestone}/submissions`,
+      body: () => ({
+        links: [{ type: "GITHUB", url: "https://github.com/matrix/app" }],
+      }),
       allowed: { student: 404, otherBatchStudent: 404 },
     },
     {
       method: "GET",
-      path: () => `/course-cycles/${published}/submissions`,
+      path: () =>
+        `/course-cycles/${published}/milestones/${publishedMilestone}/submissions`,
       allowed: { admin: 200, facultyOwner: 200, otherFaculty: 404 },
     },
 
@@ -453,9 +465,19 @@ describe("RBAC matrix", () => {
       allowed: { facultyOwner: 200, otherFaculty: 404 },
     },
     {
+      method: "GET",
+      path: () => `/course-cycles/${draft}/publish-checks`,
+      allowed: { facultyOwner: 200, otherFaculty: 404 },
+    },
+    {
       method: "POST",
       path: () => `/course-cycles/${draft}/publish`,
       allowed: { facultyOwner: 200, otherFaculty: 404 },
+    },
+    {
+      method: "GET",
+      path: () => "/me/upcoming",
+      allowed: { student: 200, otherBatchStudent: 200 },
     },
     {
       method: "POST",

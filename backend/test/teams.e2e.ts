@@ -9,6 +9,7 @@ import {
   startTestApp,
   TestApp,
 } from "./support/test-app";
+import { milestone } from "./support/schedule";
 import { TestBrowser } from "./support/test-browser";
 
 const MINUTE_MS = 60 * 1000;
@@ -89,11 +90,12 @@ describe("Teams", () => {
         batchYear: 2026,
         semester: 7,
         academicYear: "2026-27",
-        submissionStartAt: at(2 * DAY_MS),
-        submissionDeadline: at(30 * DAY_MS),
         minTeamSize: 2,
         maxTeamSize: 3,
-        teamFormationDeadline: at(HOUR_MS),
+        teamDeadline: at(HOUR_MS),
+        // Phase 8: an idea deadline and a milestone replace the submission window.
+        ideaDeadline: at(2 * DAY_MS),
+        milestones: [milestone("Final", at(2 * DAY_MS), at(30 * DAY_MS))],
         ...overrides,
       },
     });
@@ -133,7 +135,7 @@ describe("Teams", () => {
       assert.equal(cycle.status, 200);
       assert.equal(cycle.body.minTeamSize, 2);
       assert.equal(cycle.body.maxTeamSize, 3);
-      assert.equal(cycle.body.teamFormationDeadline, at(HOUR_MS));
+      assert.equal(cycle.body.teamDeadline, at(HOUR_MS));
     });
 
     it("are validated when the cycle is created", async () => {
@@ -143,17 +145,15 @@ describe("Teams", () => {
         batchYear: 2026,
         semester: 7,
         academicYear: "2026-27",
-        submissionStartAt: at(DAY_MS),
-        submissionDeadline: at(10 * DAY_MS),
+        teamDeadline: at(HOUR_MS),
+        ideaDeadline: at(DAY_MS),
       };
       const cases: [Record<string, unknown>, string][] = [
         [{ minTeamSize: 3, maxTeamSize: 2 }, "INVALID_TEAM_SIZE"],
         [{ maxTeamSize: 11 }, "VALIDATION_FAILED"],
         [{ minTeamSize: 0 }, "VALIDATION_FAILED"],
-        [
-          { teamFormationDeadline: at(10 * DAY_MS) },
-          "INVALID_TEAM_FORMATION_DEADLINE",
-        ],
+        // Phase 8: the team deadline must come before the idea deadline.
+        [{ teamDeadline: at(10 * DAY_MS) }, "INVALID_IDEA_DEADLINE"],
       ];
       for (const [rules, code] of cases) {
         const result = await owner.post("/course-cycles", {
@@ -172,12 +172,12 @@ describe("Teams", () => {
       const size = await patch({ maxTeamSize: 4 });
       assert.equal(size.status, 409);
       assert.equal(size.body.code, "CYCLE_FIELD_LOCKED");
-      const past = await patch({ teamFormationDeadline: at(-MINUTE_MS) });
+      const past = await patch({ teamDeadline: at(-MINUTE_MS) });
       assert.equal(past.status, 400);
-      assert.equal(past.body.code, "INVALID_TEAM_FORMATION_DEADLINE");
-      const extended = await patch({ teamFormationDeadline: at(3 * HOUR_MS) });
+      assert.equal(past.body.code, "INVALID_TEAM_DEADLINE");
+      const extended = await patch({ teamDeadline: at(3 * HOUR_MS) });
       assert.equal(extended.status, 200);
-      assert.equal(extended.body.teamFormationDeadline, at(3 * HOUR_MS));
+      assert.equal(extended.body.teamDeadline, at(3 * HOUR_MS));
     });
   });
 
@@ -460,7 +460,7 @@ describe("Teams", () => {
         200,
       );
       const reopen = await owner.patch(`/course-cycles/${cycleId}`, {
-        body: { teamFormationDeadline: at(DAY_MS) },
+        body: { teamDeadline: at(DAY_MS) },
       });
       assert.equal(reopen.status, 409);
       assert.equal(reopen.body.code, "CYCLE_FIELD_LOCKED");

@@ -1,7 +1,7 @@
 import { AuditEvent } from "../../audit/domain/audit-event";
 import { FixedClock } from "../../common/testing/fixed-clock";
-import { CourseCycleService } from "../../course-cycles/course-cycle.service";
-import { CycleEnrollmentService } from "../../course-cycles/cycle-enrollment.service";
+import { CourseCycleService } from "../../course-cycles/application/course-cycle.service";
+import { CycleEnrollmentService } from "../../course-cycles/application/cycle-enrollment.service";
 import { DirectoryUser } from "../domain/team";
 import {
   actor,
@@ -19,6 +19,8 @@ import { TeamFormationService } from "./team-formation.service";
 import { TeamQueryService } from "./team-query.service";
 
 // Jest cannot load NestJS 12's ES modules on Node 22; stub the decorators the classes use.
+// Nested DTOs use class-transformer's @Type, which needs reflect-metadata at load time.
+jest.mock("class-transformer", () => ({ Type: () => () => undefined }));
 jest.mock("@nestjs/common", () => ({
   Injectable: () => (target: unknown) => target,
 }));
@@ -62,12 +64,19 @@ describe("Team completion and electives", () => {
       batchYear: 2026,
       semester: 7,
       academicYear: "2026-27",
-      submissionStartAt: "2026-11-05T09:00:00.000Z",
-      submissionDeadline: "2026-12-01T17:00:00.000Z",
       minTeamSize: 2,
       maxTeamSize: 3,
-      teamFormationDeadline: FORMATION_DEADLINE,
-      teamCompletionDeadline: COMPLETION_DEADLINE,
+      teamDeadline: FORMATION_DEADLINE,
+      // Phase 8: the cycle needs a milestone to publish; it opens at the idea deadline.
+      ideaDeadline: COMPLETION_DEADLINE,
+      milestones: [
+        {
+          name: "Final",
+          submissionOpensAt: COMPLETION_DEADLINE,
+          submissionDueAt: "2026-12-01T17:00:00.000Z",
+          evaluationAt: "2026-12-01T17:00:00.000Z",
+        },
+      ],
       ...overrides,
     });
     await cycles.publish(owner, created.id);
@@ -82,7 +91,7 @@ describe("Team completion and electives", () => {
   });
 
   describe("the completion window", () => {
-    it("is closed while students are still forming teams, and after the completion deadline", async () => {
+    it("is closed while students are still forming teams, and after the idea deadline (A1)", async () => {
       await expect(
         completion.previewAutoGroup(owner, cycleId),
       ).rejects.toMatchObject({ code: "TEAM_COMPLETION_CLOSED" });
@@ -98,7 +107,9 @@ describe("Team completion and electives", () => {
           leaderId: aman.id,
           memberIds: [neha.id],
         }),
-      ).rejects.toThrow("Team completion for this cycle has ended");
+      ).rejects.toThrow(
+        "The time to place students ended at the idea deadline",
+      );
     });
 
     it("lists who still needs a team, with their 'looking' note", async () => {

@@ -15,8 +15,8 @@ const cycleInput = {
   batchYear: 2026,
   semester: 7,
   academicYear: "2026-27",
-  submissionStartAt: "2026-10-01T09:00:00.000Z",
-  submissionDeadline: "2026-12-01T17:00:00.000Z",
+  teamDeadline: "2026-11-04T18:29:00.000Z",
+  ideaDeadline: "2026-11-11T18:29:00.000Z",
 };
 
 describe("Faculty access", () => {

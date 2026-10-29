@@ -8,12 +8,14 @@ import {
 } from "@nestjs/common";
 import { ThrottlerException } from "@nestjs/throttler";
 import { Response } from "express";
-import { DomainError } from "./domain-error";
+import { DomainError, ErrorDetail } from "./domain-error";
 import { statusForCode } from "./error-status";
 
 export interface ApiErrorBody {
   code: string;
   message: string;
+  /** Present when the error reports several problems at once. */
+  details?: readonly ErrorDetail[];
 }
 
 const codeByHttpStatus: Partial<Record<number, string>> = {
@@ -24,7 +26,7 @@ const codeByHttpStatus: Partial<Record<number, string>> = {
   [HttpStatus.TOO_MANY_REQUESTS]: "TOO_MANY_REQUESTS",
 };
 
-/** Turns every error into the single `{ code, message }` shape. */
+/** Turns every error into the single `{ code, message }` shape (plus `details` for a list of problems). */
 @Catch()
 export class ApiExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(ApiExceptionFilter.name);
@@ -46,7 +48,11 @@ export class ApiExceptionFilter implements ExceptionFilter {
     if (exception instanceof DomainError) {
       return {
         status: statusForCode(exception.code),
-        body: { code: exception.code, message: exception.message },
+        body: {
+          code: exception.code,
+          message: exception.message,
+          ...(exception.details ? { details: exception.details } : {}),
+        },
       };
     }
     if (exception instanceof ThrottlerException) {

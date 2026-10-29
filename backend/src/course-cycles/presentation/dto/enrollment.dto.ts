@@ -11,7 +11,7 @@ import {
   BatchStudent,
   EnrolledStudent,
   EnrollmentResult,
-} from "../cycle-enrollment.service";
+} from "../../application/cycle-enrollment.service";
 
 export const ENROLLMENT_IMPORT_LIMIT = 500;
 

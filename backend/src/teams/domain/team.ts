@@ -59,8 +59,8 @@ export type TeamCycle = Pick<
   | "createdByFacultyId"
   | "minTeamSize"
   | "maxTeamSize"
-  | "teamFormationDeadline"
-  | "teamCompletionDeadline"
+  | "teamDeadline"
+  | "ideaDeadline"
 >;
 
 /** A user as the team rules see them: enough to decide whether they may join. */

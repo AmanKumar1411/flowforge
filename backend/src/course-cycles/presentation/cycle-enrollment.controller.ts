@@ -16,10 +16,10 @@ import {
   ApiOperation,
   ApiTags,
 } from "@nestjs/swagger";
-import { AuthenticatedUser } from "../auth/application/authenticated-user";
-import { CurrentUser } from "../auth/presentation/decorators/current-user.decorator";
-import { Roles } from "../auth/presentation/decorators/roles.decorator";
-import { CycleEnrollmentService } from "./cycle-enrollment.service";
+import { AuthenticatedUser } from "../../auth/application/authenticated-user";
+import { CurrentUser } from "../../auth/presentation/decorators/current-user.decorator";
+import { Roles } from "../../auth/presentation/decorators/roles.decorator";
+import { CycleEnrollmentService } from "../application/cycle-enrollment.service";
 import {
   AddEnrollmentsDto,
   EnrolledStudentDto,

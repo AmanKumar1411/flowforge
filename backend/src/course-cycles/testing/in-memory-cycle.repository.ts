@@ -5,18 +5,24 @@ import {
   CyclePatch,
   CycleStatus,
   Enrollment,
-} from "./cycle.types";
-import { CycleRepository } from "./cycle-repository";
+} from "../domain/cycle.types";
+import { Milestone, MilestonePlan, PlacedMilestone } from "../domain/milestone";
+import { CycleRepository } from "../application/ports/cycle.repository";
 
 export class InMemoryCycleRepository extends CycleRepository {
   private readonly cycles = new Map<string, Cycle>();
   private readonly enrollments = new Map<string, Map<string, Enrollment>>();
 
-  async create(data: CycleCreateData): Promise<Cycle> {
+  async create(
+    data: CycleCreateData,
+    milestones: readonly PlacedMilestone[],
+  ): Promise<Cycle> {
     const now = new Date();
+    const id = randomUUID();
     const cycle: Cycle = {
       ...data,
-      id: randomUUID(),
+      id,
+      milestones: milestones.map((milestone) => this.milestone(id, milestone)),
       status: "DRAFT",
       publishedAt: null,
       closedAt: null,
@@ -29,6 +35,10 @@ export class InMemoryCycleRepository extends CycleRepository {
 
   async findById(id: string): Promise<Cycle | null> {
     return this.cycles.get(id) ?? null;
+  }
+
+  async lockById(id: string): Promise<Cycle | null> {
+    return this.findById(id);
   }
 
   async listByOwner(ownerId: string): Promise<Cycle[]> {
@@ -64,16 +74,29 @@ export class InMemoryCycleRepository extends CycleRepository {
       );
   }
 
-  async updateFields(
+  async update(
     id: string,
     expectedStatus: CycleStatus,
     fields: CyclePatch,
+    plan: MilestonePlan | null,
   ): Promise<Cycle | null> {
     const cycle = this.cycles.get(id);
     if (!cycle || cycle.status !== expectedStatus) {
       return null;
     }
-    const updated = { ...cycle, ...fields, updatedAt: new Date() };
+    let milestones = cycle.milestones;
+    if (plan) {
+      const byId = new Map(cycle.milestones.map((m) => [m.id, m]));
+      milestones = [
+        ...plan.update.map((m) => ({
+          ...byId.get(m.id)!,
+          ...m,
+          updatedAt: new Date(),
+        })),
+        ...plan.create.map((m) => this.milestone(id, m)),
+      ].sort((a, b) => a.position - b.position);
+    }
+    const updated = { ...cycle, ...fields, milestones, updatedAt: new Date() };
     this.cycles.set(id, updated);
     return updated;
   }
@@ -122,6 +145,17 @@ export class InMemoryCycleRepository extends CycleRepository {
 
   async removeEnrollment(cycleId: string, email: string): Promise<boolean> {
     return this.roster(cycleId).delete(email);
+  }
+
+  private milestone(cycleId: string, placed: PlacedMilestone): Milestone {
+    const now = new Date();
+    return {
+      ...placed,
+      id: randomUUID(),
+      cycleId,
+      createdAt: now,
+      updatedAt: now,
+    };
   }
 
   private roster(cycleId: string): Map<string, Enrollment> {

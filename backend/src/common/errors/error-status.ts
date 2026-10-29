@@ -5,6 +5,7 @@ import type { CycleErrorCode } from "../../course-cycles/domain/cycle.errors";
 import type { IdeaErrorCode } from "../../ideas/domain/idea.errors";
 import type { SubmissionErrorCode } from "../../submissions/domain/submission.errors";
 import type { TeamErrorCode } from "../../teams/domain/team.errors";
+import type { LinkErrorCode } from "../links/link.errors";
 import type { CommonErrorCode } from "./domain-error";
 
 type DomainErrorCode =
@@ -14,7 +15,8 @@ type DomainErrorCode =
   | AdminErrorCode
   | TeamErrorCode
   | IdeaErrorCode
-  | SubmissionErrorCode;
+  | SubmissionErrorCode
+  | LinkErrorCode;
 
 // `satisfies` makes the build fail when a new error code has no HTTP status.
 const statusByCode = {
@@ -57,12 +59,20 @@ const statusByCode = {
   INVALID_DEADLINE: HttpStatus.BAD_REQUEST,
   INVALID_ACADEMIC_YEAR: HttpStatus.BAD_REQUEST,
   INVALID_TEAM_SIZE: HttpStatus.BAD_REQUEST,
-  INVALID_TEAM_FORMATION_DEADLINE: HttpStatus.BAD_REQUEST,
-  INVALID_TEAM_COMPLETION_DEADLINE: HttpStatus.BAD_REQUEST,
+  INVALID_TEAM_DEADLINE: HttpStatus.BAD_REQUEST,
   INVALID_IDEA_DEADLINE: HttpStatus.BAD_REQUEST,
   CYCLE_NOT_ELECTIVE: HttpStatus.CONFLICT,
   CYCLE_NOT_CORE: HttpStatus.CONFLICT,
   ENROLLMENT_NOT_FOUND: HttpStatus.NOT_FOUND,
+  NO_MILESTONES: HttpStatus.CONFLICT,
+  INVALID_MILESTONE_COUNT: HttpStatus.BAD_REQUEST,
+  INVALID_MILESTONE: HttpStatus.BAD_REQUEST,
+  DUPLICATE_MILESTONE_NAME: HttpStatus.BAD_REQUEST,
+  INVALID_MILESTONE_SCHEDULE: HttpStatus.BAD_REQUEST,
+  MILESTONES_LOCKED: HttpStatus.CONFLICT,
+  MILESTONE_LOCKED: HttpStatus.CONFLICT,
+  MILESTONE_NOT_FOUND: HttpStatus.NOT_FOUND,
+  PUBLISH_BLOCKED: HttpStatus.CONFLICT,
 
   TEAM_NOT_FOUND: HttpStatus.NOT_FOUND,
   NOT_TEAM_LEADER: HttpStatus.FORBIDDEN,
@@ -85,11 +95,18 @@ const statusByCode = {
   CATALOG_IDEA_NOT_FOUND: HttpStatus.NOT_FOUND,
   CATALOG_IDEA_PICKED: HttpStatus.CONFLICT,
   CATALOG_CLOSED: HttpStatus.CONFLICT,
+  PROPOSALS_NOT_ALLOWED: HttpStatus.CONFLICT,
+  CATALOG_NOT_ALLOWED: HttpStatus.CONFLICT,
 
   SUBMISSION_NOT_OPEN: HttpStatus.CONFLICT,
   SUBMISSION_CLOSED: HttpStatus.CONFLICT,
   IDEA_NOT_APPROVED: HttpStatus.CONFLICT,
   SUBMISSION_CHANGED: HttpStatus.CONFLICT,
+
+  MISSING_REQUIRED_LINK: HttpStatus.BAD_REQUEST,
+  LINK_NOT_ALLOWED: HttpStatus.BAD_REQUEST,
+  INVALID_LINK: HttpStatus.BAD_REQUEST,
+  INVALID_LINK_REQUIREMENT: HttpStatus.BAD_REQUEST,
 } satisfies Record<DomainErrorCode, HttpStatus>;
 
 export const statusForCode = (code: string): HttpStatus =>

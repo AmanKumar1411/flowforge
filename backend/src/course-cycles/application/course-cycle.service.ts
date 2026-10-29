@@ -1,29 +1,59 @@
 import { Injectable } from "@nestjs/common";
-import { Clock } from "../common/clock";
+import { AuditService } from "../../audit/audit.service";
+import { Clock } from "../../common/clock";
+import { LinkRequirement } from "../../common/links/link-requirement";
+import { Transaction, TransactionRunner } from "../../common/transaction";
 import {
   CycleAuthorizationPolicy,
   CycleActor,
-} from "./domain/cycle-authorization-policy";
-import { CycleDomainError } from "./domain/cycle.errors";
-import { CycleRepository } from "./domain/cycle-repository";
+} from "../domain/cycle-authorization-policy";
+import { CycleDomainError } from "../domain/cycle.errors";
+import { byTime, CycleTimeline } from "../domain/cycle-timeline";
 import {
   Cycle,
   CycleCreateData,
   CyclePatch,
   DEFAULT_TEAM_SIZE,
+  EditableField,
   STAGE_DEADLINES,
-} from "./domain/cycle.types";
-import { CycleWorkflow } from "./domain/cycle-workflow";
-import { CreateCycleDto } from "./dto/create-cycle.dto";
-import { CycleResponseDto } from "./dto/cycle-response.dto";
-import { UpdateCycleDto } from "./dto/update-cycle.dto";
+} from "../domain/cycle.types";
+import { CycleWorkflow } from "../domain/cycle-workflow";
+import {
+  cleanMilestone,
+  Milestone,
+  MilestoneInput,
+  planMilestones,
+  unknownIds,
+} from "../domain/milestone";
+import { CreateCycleDto } from "../presentation/dto/create-cycle.dto";
+import {
+  CycleResponseDto,
+  PublishChecksDto,
+  PublishResponseDto,
+  UpcomingEventDto,
+} from "../presentation/dto/cycle-response.dto";
+import { MilestoneDto } from "../presentation/dto/milestone.dto";
+import { UpdateCycleDto } from "../presentation/dto/update-cycle.dto";
+import { CycleRepository } from "./ports/cycle.repository";
+import { PublishChecks } from "./publish-checks";
 
+/** How many events `GET /me/upcoming` returns. */
+const UPCOMING_LIMIT = 10;
+
+/**
+ * The cycle aggregate's use cases. Every change locks the cycle row, saves the
+ * cycle and its milestones together, and audits in the same transaction.
+ */
 @Injectable()
 export class CourseCycleService {
   constructor(
     private readonly repository: CycleRepository,
     private readonly workflow: CycleWorkflow,
     private readonly policy: CycleAuthorizationPolicy,
+    private readonly publishChecks: PublishChecks,
+    private readonly timeline: CycleTimeline,
+    private readonly audit: AuditService,
+    private readonly transactions: TransactionRunner,
     private readonly clock: Clock,
   ) {}
 
@@ -32,18 +62,6 @@ export class CourseCycleService {
     dto: CreateCycleDto,
   ): Promise<CycleResponseDto> {
     this.policy.assertFaculty(actor);
-    const dates = this.parseDates(
-      dto.submissionStartAt,
-      dto.submissionDeadline,
-    );
-    // By default teams must be formed by the time submissions open.
-    const formationDeadline = dto.teamFormationDeadline
-      ? new Date(dto.teamFormationDeadline)
-      : dates.start;
-    // Left out or null: no faculty completion window. Ideas are due when teams are settled by default.
-    const completionDeadline = dto.teamCompletionDeadline
-      ? new Date(dto.teamCompletionDeadline)
-      : formationDeadline;
     const data: CycleCreateData = {
       courseName: dto.courseName.trim(),
       title: dto.title.trim(),
@@ -51,29 +69,33 @@ export class CourseCycleService {
       batchYear: dto.batchYear,
       semester: dto.semester,
       academicYear: dto.academicYear,
-      submissionStartAt: dates.start,
-      submissionDeadline: dates.deadline,
       minTeamSize: dto.minTeamSize ?? DEFAULT_TEAM_SIZE.min,
       maxTeamSize: dto.maxTeamSize ?? DEFAULT_TEAM_SIZE.max,
-      teamFormationDeadline: formationDeadline,
-      teamCompletionDeadline: completionDeadline,
-      ideaDeadline: dto.ideaDeadline
-        ? new Date(dto.ideaDeadline)
-        : completionDeadline,
+      teamDeadline: parseDate(dto.teamDeadline),
+      ideaDeadline: parseDate(dto.ideaDeadline),
+      ideaSource: dto.ideaSource ?? "BOTH",
+      ideaLinkRequirement: dto.ideaLinkRequirement
+        ? LinkRequirement.from(dto.ideaLinkRequirement)
+        : LinkRequirement.IDEA_DEFAULT,
       kind: dto.kind ?? "CORE",
       createdByFacultyId: actor.id,
     };
-    this.workflow.assertValidSchedule(data);
-    // Checked after the order of stages, so a stage out of order is reported first.
-    if (dto.teamCompletionDeadline) {
-      this.workflow.assertCompletionWindow(
-        formationDeadline,
-        completionDeadline,
-      );
-    }
+    const milestones = this.milestoneInputs(dto.milestones ?? [], []);
+    this.workflow.assertValidSchedule({ ...data, milestones });
     this.assertAcademicYear(dto.academicYear);
-    const cycle = await this.repository.create(data);
-    return CycleResponseDto.fromCycle(cycle);
+    const cycle = await this.transactions.run(async (tx) => {
+      const created = await this.repository.create(
+        data,
+        planMilestones([], milestones).create,
+        tx,
+      );
+      await this.record("CYCLE_CREATED", actor, created, tx, {
+        kind: created.kind,
+        milestones: created.milestones.length,
+      });
+      return created;
+    });
+    return this.toResponse(cycle);
   }
 
   /**
@@ -81,26 +103,34 @@ export class CourseCycleService {
    * they are enrolled in; admins see every cycle that has been published.
    */
   async listVisible(actor: CycleActor): Promise<CycleResponseDto[]> {
-    let cycles: Cycle[] = [];
-    if (actor.role === "STUDENT") {
-      cycles = await this.repository.listPublishedForStudent(
-        actor.batchYear,
-        actor.email,
-      );
-    } else if (actor.role === "ADMIN") {
-      cycles = await this.repository.listPublishedOrClosed();
-    }
-    return cycles.map(CycleResponseDto.fromCycle);
+    return (await this.visibleCycles(actor)).map((cycle) =>
+      this.toResponse(cycle),
+    );
+  }
+
+  /** What comes next across the student's visible cycles, soonest first (computed, ADR 017). */
+  async upcomingFor(actor: CycleActor): Promise<UpcomingEventDto[]> {
+    if (actor.role !== "STUDENT") return [];
+    const cycles = await this.visibleCycles(actor);
+    return cycles
+      .flatMap((cycle) =>
+        this.timeline
+          .upcomingEvents(cycle, UPCOMING_LIMIT)
+          .map((event) => ({ event, cycle })),
+      )
+      .sort((a, b) => byTime(a.event, b.event))
+      .slice(0, UPCOMING_LIMIT)
+      .map(({ event, cycle }) => UpcomingEventDto.fromEvent(event, cycle));
   }
 
   async listMine(actor: CycleActor): Promise<CycleResponseDto[]> {
     this.policy.assertFaculty(actor);
     const cycles = await this.repository.listByOwner(actor.id);
-    return cycles.map(CycleResponseDto.fromCycle);
+    return cycles.map((cycle) => this.toResponse(cycle));
   }
 
   async findById(actor: CycleActor, id: string): Promise<CycleResponseDto> {
-    return CycleResponseDto.fromCycle(await this.getVisibleCycle(actor, id));
+    return this.toResponse(await this.getVisibleCycle(actor, id));
   }
 
   /** For modules that build on cycles (teams): the cycle, or CYCLE_NOT_FOUND when the actor may not see it. */
@@ -119,97 +149,104 @@ export class CourseCycleService {
     id: string,
     dto: UpdateCycleDto,
   ): Promise<CycleResponseDto> {
-    const cycle = await this.getById(id);
-    this.policy.assertOwner(actor, cycle);
     const patch = this.toPatch(dto);
-    // null switches the faculty window off: it ends with the students' deadline again.
-    if (dto.teamCompletionDeadline === null) {
-      patch.teamCompletionDeadline =
-        patch.teamFormationDeadline ?? cycle.teamFormationDeadline;
-    }
-    this.workflow.assertEditable(
-      cycle.status,
-      Object.keys(patch) as (keyof CyclePatch)[],
-    );
-    if (cycle.status === "PUBLISHED") {
-      for (const deadline of STAGE_DEADLINES) {
-        const next = patch[deadline];
-        if (next !== undefined) {
-          this.workflow.assertStageDeadlineChange(
-            deadline,
-            cycle[deadline],
-            next,
-            this.clock.now(),
+    const fields: EditableField[] = [
+      ...(Object.keys(patch) as (keyof CyclePatch)[]),
+      ...(dto.milestones ? (["milestones"] as const) : []),
+    ];
+    const updated = await this.transactions.run(async (tx) => {
+      const cycle = await this.lockOwned(actor, id, tx);
+      this.workflow.assertEditable(cycle.status, fields);
+      const milestones = dto.milestones
+        ? this.milestoneInputs(dto.milestones, cycle.milestones)
+        : null;
+      if (cycle.status === "PUBLISHED") {
+        const now = this.clock.now();
+        for (const deadline of STAGE_DEADLINES) {
+          const next = patch[deadline];
+          if (next && next.getTime() !== cycle[deadline].getTime()) {
+            this.workflow.assertStageDeadlineChange(
+              deadline,
+              cycle[deadline],
+              next,
+              now,
+            );
+          }
+        }
+        if (milestones) {
+          this.workflow.assertPublishedMilestones(
+            cycle.milestones,
+            milestones,
+            now,
           );
         }
       }
-    }
-    this.followMovedStages(cycle, patch);
-    const merged = {
-      ...cycle,
-      ...patch,
-    };
-    this.assertAcademicYear(merged.academicYear);
-    this.workflow.assertValidSchedule(merged);
-    // A window that is named in the request, or that the cycle already had, keeps its length.
-    const hadWindow =
-      cycle.teamCompletionDeadline > cycle.teamFormationDeadline;
-    if (
-      dto.teamCompletionDeadline !== null &&
-      (dto.teamCompletionDeadline !== undefined || hadWindow)
-    ) {
-      this.workflow.assertCompletionWindow(
-        merged.teamFormationDeadline,
-        merged.teamCompletionDeadline,
+      const merged = { ...cycle, ...patch };
+      this.assertAcademicYear(merged.academicYear);
+      this.workflow.assertValidSchedule({
+        ...merged,
+        milestones: milestones ?? cycle.milestones,
+      });
+      const saved = await this.repository.update(
+        id,
+        cycle.status,
+        patch,
+        milestones ? planMilestones(cycle.milestones, milestones) : null,
+        tx,
       );
-    }
-    const updated = await this.repository.updateFields(id, cycle.status, patch);
-    if (!updated) {
-      throw new CycleDomainError(
-        "INVALID_STATUS_TRANSITION",
-        "The cycle changed while it was being edited",
-      );
-    }
-    return CycleResponseDto.fromCycle(updated);
+      if (!saved) {
+        throw new CycleDomainError(
+          "INVALID_STATUS_TRANSITION",
+          "The cycle changed while it was being edited",
+        );
+      }
+      await this.record("CYCLE_UPDATED", actor, saved, tx, { fields });
+      return saved;
+    });
+    return this.toResponse(updated);
   }
 
-  async publish(actor: CycleActor, id: string): Promise<CycleResponseDto> {
-    const cycle = await this.getById(id);
-    this.policy.assertOwner(actor, cycle);
-    const nextStatus = this.workflow.transition(cycle.status, "PUBLISH");
-    this.workflow.validatePublishRules(cycle);
-    const published = await this.repository.transitionStatus(
-      id,
-      cycle.status,
-      nextStatus,
-      this.clock.now(),
-    );
-    if (!published) {
-      throw new CycleDomainError(
-        "INVALID_STATUS_TRANSITION",
-        "The cycle changed while it was being published",
-      );
-    }
-    return CycleResponseDto.fromCycle(published);
+  /** What publishing would report now, without publishing: for the faculty's review step. */
+  async checkPublish(actor: CycleActor, id: string): Promise<PublishChecksDto> {
+    return this.transactions.run(async (tx) => {
+      const cycle = await this.lockOwned(actor, id, tx);
+      this.workflow.transition(cycle.status, "PUBLISH");
+      return PublishChecksDto.from(await this.publishChecks.run(cycle, tx));
+    });
+  }
+
+  /** Runs every publish check; any blocking one stops it, and all of them are reported (409 PUBLISH_BLOCKED). */
+  async publish(actor: CycleActor, id: string): Promise<PublishResponseDto> {
+    return this.transactions.run(async (tx) => {
+      const cycle = await this.lockOwned(actor, id, tx);
+      const nextStatus = this.workflow.transition(cycle.status, "PUBLISH");
+      const report = await this.publishChecks.run(cycle, tx);
+      if (report.blocking.length > 0) {
+        throw new CycleDomainError(
+          "PUBLISH_BLOCKED",
+          `The project cannot be published yet: ${report.blocking.length === 1 ? "1 thing needs" : `${report.blocking.length} things need`} fixing`,
+          report.blocking,
+        );
+      }
+      const published = await this.transition(cycle, nextStatus, tx);
+      await this.record("CYCLE_PUBLISHED", actor, published, tx, {
+        warnings: report.warnings.map((warning) => warning.code),
+      });
+      return Object.assign(this.toResponse(published), {
+        warnings: report.warnings,
+      });
+    });
   }
 
   async close(actor: CycleActor, id: string): Promise<CycleResponseDto> {
-    const cycle = await this.getById(id);
-    this.policy.assertOwner(actor, cycle);
-    const nextStatus = this.workflow.transition(cycle.status, "CLOSE");
-    const closed = await this.repository.transitionStatus(
-      id,
-      cycle.status,
-      nextStatus,
-      this.clock.now(),
-    );
-    if (!closed) {
-      throw new CycleDomainError(
-        "INVALID_STATUS_TRANSITION",
-        "The cycle changed while it was being closed",
-      );
-    }
-    return CycleResponseDto.fromCycle(closed);
+    const closed = await this.transactions.run(async (tx) => {
+      const cycle = await this.lockOwned(actor, id, tx);
+      const nextStatus = this.workflow.transition(cycle.status, "CLOSE");
+      const saved = await this.transition(cycle, nextStatus, tx);
+      await this.record("CYCLE_CLOSED", actor, saved, tx);
+      return saved;
+    });
+    return this.toResponse(closed);
   }
 
   /** For modules that build on cycles, when the rule does not depend on the caller (a team's own cycle). */
@@ -221,22 +258,106 @@ export class CourseCycleService {
     return cycle;
   }
 
-  private parseDates(
-    start: string,
-    deadline: string,
-  ): { start: Date; deadline: Date } {
-    const parsedStart = new Date(start);
-    const parsedDeadline = new Date(deadline);
-    if (
-      Number.isNaN(parsedStart.getTime()) ||
-      Number.isNaN(parsedDeadline.getTime())
-    ) {
-      throw new CycleDomainError(
-        "INVALID_DEADLINE",
-        "Cycle dates must be valid ISO timestamps",
+  private visibleCycles(actor: CycleActor): Promise<Cycle[]> {
+    if (actor.role === "STUDENT") {
+      return this.repository.listPublishedForStudent(
+        actor.batchYear,
+        actor.email,
       );
     }
-    return { start: parsedStart, deadline: parsedDeadline };
+    if (actor.role === "ADMIN") return this.repository.listPublishedOrClosed();
+    return Promise.resolve([]);
+  }
+
+  private async lockOwned(
+    actor: CycleActor,
+    id: string,
+    tx: Transaction,
+  ): Promise<Cycle> {
+    const cycle = await this.repository.lockById(id, tx);
+    if (!cycle) {
+      throw new CycleDomainError("CYCLE_NOT_FOUND", "Course cycle not found");
+    }
+    this.policy.assertOwner(actor, cycle);
+    return cycle;
+  }
+
+  private async transition(
+    cycle: Cycle,
+    nextStatus: Cycle["status"],
+    tx: Transaction,
+  ): Promise<Cycle> {
+    const saved = await this.repository.transitionStatus(
+      cycle.id,
+      cycle.status,
+      nextStatus,
+      this.clock.now(),
+      tx,
+    );
+    if (!saved) {
+      throw new CycleDomainError(
+        "INVALID_STATUS_TRANSITION",
+        "The cycle changed while its state was changing",
+      );
+    }
+    return saved;
+  }
+
+  private record(
+    action:
+      "CYCLE_CREATED" | "CYCLE_UPDATED" | "CYCLE_PUBLISHED" | "CYCLE_CLOSED",
+    actor: CycleActor,
+    cycle: Cycle,
+    tx: Transaction,
+    metadata: Record<string, string | number | readonly string[]> = {},
+  ): Promise<void> {
+    return this.audit.record(tx, {
+      action,
+      actorId: actor.id,
+      entityType: "CourseProjectCycle",
+      entityId: cycle.id,
+      metadata: { status: cycle.status, ...metadata },
+    });
+  }
+
+  private toResponse(cycle: Cycle): CycleResponseDto {
+    return CycleResponseDto.fromCycle(cycle, this.timeline);
+  }
+
+  /**
+   * The requested milestones as domain inputs. An item naming an existing
+   * milestone keeps whatever optional field it leaves out; an unknown id is
+   * refused before anything is saved.
+   */
+  private milestoneInputs(
+    items: readonly MilestoneDto[],
+    current: readonly Milestone[],
+  ): MilestoneInput[] {
+    const byId = new Map(current.map((milestone) => [milestone.id, milestone]));
+    const inputs = items.map((item): MilestoneInput => {
+      const existing = item.id ? byId.get(item.id) : undefined;
+      return cleanMilestone({
+        id: item.id,
+        name: item.name,
+        description:
+          item.description === undefined
+            ? (existing?.description ?? null)
+            : item.description,
+        submissionOpensAt: parseDate(item.submissionOpensAt),
+        submissionDueAt: parseDate(item.submissionDueAt),
+        evaluationAt: parseDate(item.evaluationAt),
+        linkRequirement: item.linkRequirement
+          ? LinkRequirement.from(item.linkRequirement)
+          : (existing?.linkRequirement ?? LinkRequirement.MILESTONE_DEFAULT),
+      });
+    });
+    if (unknownIds(current, inputs).length > 0) {
+      throw new CycleDomainError(
+        "MILESTONE_NOT_FOUND",
+        "A milestone in the list is not one of this project's, or appears twice",
+      );
+    }
+    return inputs;
   }
 
   private toPatch(dto: UpdateCycleDto): CyclePatch {
@@ -249,45 +370,20 @@ export class CourseCycleService {
     if (dto.description !== undefined) {
       patch.description = dto.description?.trim() || null;
     }
-    if (dto.submissionStartAt !== undefined) {
-      patch.submissionStartAt = new Date(dto.submissionStartAt);
-    }
-    if (dto.submissionDeadline !== undefined) {
-      patch.submissionDeadline = new Date(dto.submissionDeadline);
-    }
     if (dto.minTeamSize !== undefined) patch.minTeamSize = dto.minTeamSize;
     if (dto.maxTeamSize !== undefined) patch.maxTeamSize = dto.maxTeamSize;
-    if (dto.teamFormationDeadline !== undefined) {
-      patch.teamFormationDeadline = new Date(dto.teamFormationDeadline);
-    }
-    if (dto.teamCompletionDeadline) {
-      patch.teamCompletionDeadline = new Date(dto.teamCompletionDeadline);
+    if (dto.teamDeadline !== undefined) {
+      patch.teamDeadline = parseDate(dto.teamDeadline);
     }
     if (dto.ideaDeadline !== undefined) {
-      patch.ideaDeadline = new Date(dto.ideaDeadline);
+      patch.ideaDeadline = parseDate(dto.ideaDeadline);
+    }
+    if (dto.ideaSource !== undefined) patch.ideaSource = dto.ideaSource;
+    if (dto.ideaLinkRequirement !== undefined) {
+      patch.ideaLinkRequirement = LinkRequirement.from(dto.ideaLinkRequirement);
     }
     if (dto.kind !== undefined) patch.kind = dto.kind;
     return patch;
-  }
-
-  /**
-   * A stage that ends together with the one before it keeps doing so when that
-   * earlier deadline moves on its own: a cycle without a faculty window, or
-   * without a separate idea deadline, does not gain one by accident.
-   */
-  private followMovedStages(cycle: Cycle, patch: CyclePatch): void {
-    for (let index = 1; index < STAGE_DEADLINES.length; index += 1) {
-      const earlier = STAGE_DEADLINES[index - 1];
-      const later = STAGE_DEADLINES[index];
-      const moved = patch[earlier];
-      if (
-        moved !== undefined &&
-        patch[later] === undefined &&
-        cycle[later].getTime() === cycle[earlier].getTime()
-      ) {
-        patch[later] = moved;
-      }
-    }
   }
 
   private assertAcademicYear(value: string): void {
@@ -299,4 +395,15 @@ export class CourseCycleService {
       );
     }
   }
+}
+
+function parseDate(value: string): Date {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new CycleDomainError(
+      "INVALID_DEADLINE",
+      "Cycle dates must be valid ISO timestamps",
+    );
+  }
+  return date;
 }

@@ -1,5 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { Type } from "class-transformer";
 import {
+  ArrayMaxSize,
+  IsArray,
   IsIn,
   IsInt,
   IsOptional,
@@ -9,7 +12,9 @@ import {
   Matches,
   MaxLength,
   Min,
+  ValidateNested,
 } from "class-validator";
+import { LinkDto } from "../../../common/links/link.dto";
 import type { IdeaDecision } from "../../domain/idea";
 
 export const IDEA_LIMITS = {
@@ -52,15 +57,17 @@ export class SubmitIdeaDto {
   solution!: string;
 
   @ApiPropertyOptional({
-    type: String,
-    nullable: true,
-    example: "https://github.com/team/lost-and-found",
-    description: "A repository, document or demo (http or https)",
+    type: LinkDto,
+    isArray: true,
+    description:
+      "Checked against the cycle's idea link requirement (by default GitHub and Drive are optional): 400 MISSING_REQUIRED_LINK, LINK_NOT_ALLOWED or INVALID_LINK. An empty url means none.",
   })
   @IsOptional()
-  @IsUrl({ protocols: ["http", "https"], require_protocol: true })
-  @MaxLength(IDEA_LIMITS.link)
-  link?: string | null;
+  @IsArray()
+  @ArrayMaxSize(10)
+  @ValidateNested({ each: true })
+  @Type(() => LinkDto)
+  links?: LinkDto[];
 }
 
 export class ReviewIdeaDto {

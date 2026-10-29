@@ -19,23 +19,24 @@ export interface MemberPlan {
  * The team rules of a cycle, free of I/O. Sizes always count the leader, and a
  * saved team is always within the cycle's size range, so later phases never
  * meet an incomplete team. Two windows follow each other: students form their
- * own teams until the formation deadline, then the owning faculty complete
- * teams until the completion deadline.
+ * own teams until the team deadline, then the owning faculty place the
+ * students left without a team until the idea deadline (A1).
  */
 export class TeamRules {
   isFormationOpen(cycle: TeamCycle, now: Date): boolean {
-    return cycle.status === "PUBLISHED" && now < cycle.teamFormationDeadline;
+    return cycle.status === "PUBLISHED" && now < cycle.teamDeadline;
   }
 
-  isCompletionOpen(cycle: TeamCycle, now: Date): boolean {
+  /** The faculty's window: from the team deadline until the idea deadline. */
+  isPlacementOpen(cycle: TeamCycle, now: Date): boolean {
     return (
       cycle.status === "PUBLISHED" &&
-      cycle.teamFormationDeadline <= now &&
-      now < cycle.teamCompletionDeadline
+      cycle.teamDeadline <= now &&
+      now < cycle.ideaDeadline
     );
   }
 
-  /** Teams change only in a published cycle, strictly before its formation deadline. */
+  /** Teams change only in a published cycle, strictly before its team deadline. */
   assertFormationOpen(cycle: TeamCycle, now: Date): void {
     if (!this.isFormationOpen(cycle, now)) {
       throw new TeamDomainError(
@@ -45,14 +46,14 @@ export class TeamRules {
     }
   }
 
-  /** The faculty's window: after students' formation ends, before completion ends. */
-  assertCompletionOpen(cycle: TeamCycle, now: Date): void {
-    if (this.isCompletionOpen(cycle, now)) return;
+  /** Faculty placement (a team by hand, a member added, auto-group): after the team deadline, before the idea deadline. */
+  assertPlacementOpen(cycle: TeamCycle, now: Date): void {
+    if (this.isPlacementOpen(cycle, now)) return;
     throw new TeamDomainError(
       "TEAM_COMPLETION_CLOSED",
       this.isFormationOpen(cycle, now)
-        ? "Students are still forming their own teams; faculty completion opens at the team formation deadline"
-        : "Team completion for this cycle has ended",
+        ? "Students are still forming their own teams; you can place students from the team deadline until the idea deadline"
+        : "The time to place students ended at the idea deadline",
     );
   }
 

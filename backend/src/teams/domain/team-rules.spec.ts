@@ -5,7 +5,8 @@ import { DirectoryUser, ProposedTeam, Team, TeamCycle } from "./team";
 
 const rules = new TeamRules();
 const DEADLINE = new Date("2026-11-01T12:00:00.000Z");
-const COMPLETION = new Date("2026-11-05T12:00:00.000Z");
+// Phase 8 (A1): the faculty place students until the idea deadline (was a completion deadline).
+const IDEAS = new Date("2026-11-05T12:00:00.000Z");
 const batch2026 = CycleRoster.wholeBatch(2026);
 
 const cycle = (overrides: Partial<TeamCycle> = {}): TeamCycle => ({
@@ -16,8 +17,8 @@ const cycle = (overrides: Partial<TeamCycle> = {}): TeamCycle => ({
   createdByFacultyId: "faculty",
   minTeamSize: 2,
   maxTeamSize: 4,
-  teamFormationDeadline: DEADLINE,
-  teamCompletionDeadline: COMPLETION,
+  teamDeadline: DEADLINE,
+  ideaDeadline: IDEAS,
   ...overrides,
 });
 
@@ -176,45 +177,40 @@ describe("TeamRules", () => {
     });
   });
 
-  describe("faculty completion window", () => {
+  describe("faculty placement window (A1)", () => {
     const before = new Date(DEADLINE.getTime() - 1);
-    const end = COMPLETION;
+    const end = IDEAS;
 
-    it("opens exactly at the formation deadline and closes at the completion deadline", () => {
-      expect(rules.isCompletionOpen(cycle(), before)).toBe(false);
-      expect(rules.isCompletionOpen(cycle(), DEADLINE)).toBe(true);
-      expect(rules.isCompletionOpen(cycle(), new Date(end.getTime() - 1))).toBe(
+    it("opens exactly at the team deadline and closes at the idea deadline", () => {
+      expect(rules.isPlacementOpen(cycle(), before)).toBe(false);
+      expect(rules.isPlacementOpen(cycle(), DEADLINE)).toBe(true);
+      expect(rules.isPlacementOpen(cycle(), new Date(end.getTime() - 1))).toBe(
         true,
       );
-      expect(rules.isCompletionOpen(cycle(), end)).toBe(false);
+      expect(rules.isPlacementOpen(cycle(), end)).toBe(false);
     });
 
     it("never overlaps the students' window", () => {
       for (const now of [before, DEADLINE, end]) {
         expect(
           rules.isFormationOpen(cycle(), now) &&
-            rules.isCompletionOpen(cycle(), now),
+            rules.isPlacementOpen(cycle(), now),
         ).toBe(false);
       }
     });
 
     it("says why it is closed", () => {
-      expect(() => rules.assertCompletionOpen(cycle(), before)).toThrow(
+      expect(() => rules.assertPlacementOpen(cycle(), before)).toThrow(
         /Students are still forming their own teams/,
       );
-      expect(() => rules.assertCompletionOpen(cycle(), end)).toThrow(
-        "Team completion for this cycle has ended",
+      expect(() => rules.assertPlacementOpen(cycle(), end)).toThrow(
+        "The time to place students ended at the idea deadline",
       );
       expect(
         codeOf(() =>
-          rules.assertCompletionOpen(cycle({ status: "CLOSED" }), DEADLINE),
+          rules.assertPlacementOpen(cycle({ status: "CLOSED" }), DEADLINE),
         ),
       ).toBe("TEAM_COMPLETION_CLOSED");
-    });
-
-    it("does not exist when both deadlines are equal (the default)", () => {
-      const noWindow = cycle({ teamCompletionDeadline: DEADLINE });
-      expect(rules.isCompletionOpen(noWindow, DEADLINE)).toBe(false);
     });
   });
 

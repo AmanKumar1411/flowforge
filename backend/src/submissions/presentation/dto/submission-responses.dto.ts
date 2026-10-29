@@ -1,4 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
+import { LinkResponseDto } from "../../../common/links/link.dto";
 import type { CycleSubmission } from "../../application/submission.service";
 import type {
   Person,
@@ -20,16 +21,15 @@ export class SubmissionDto {
   teamId!: string;
   @ApiProperty()
   cycleId!: string;
+  @ApiProperty()
+  milestoneId!: string;
   @ApiProperty({
-    description: "1, 2, 3… per team; the highest is the current one",
+    description:
+      "1, 2, 3… per team and milestone; the highest is the current one",
   })
   version!: number;
-  @ApiProperty()
-  repositoryUrl!: string;
-  @ApiProperty({ type: String, nullable: true })
-  demoUrl!: string | null;
-  @ApiProperty({ type: String, nullable: true })
-  reportUrl!: string | null;
+  @ApiProperty({ type: LinkResponseDto, isArray: true })
+  links!: LinkResponseDto[];
   @ApiProperty({ type: String, nullable: true })
   notes!: string | null;
   @ApiProperty({ type: PersonDto })
@@ -76,6 +76,12 @@ export class CycleSubmissionDto {
     description: "The newest version",
   })
   latest!: SubmissionDto | null;
+  @ApiProperty({
+    type: SubmissionDto,
+    isArray: true,
+    description: "Every version for the milestone, newest first",
+  })
+  versions!: SubmissionDto[];
   @ApiProperty()
   versionCount!: number;
 
@@ -83,6 +89,7 @@ export class CycleSubmissionDto {
     team,
     idea,
     latest,
+    versions,
     versionCount,
   }: CycleSubmission): CycleSubmissionDto {
     const leader = team.members.find(
@@ -97,6 +104,7 @@ export class CycleSubmissionDto {
       },
       idea,
       latest: latest ? SubmissionDto.from(latest) : null,
+      versions: versions.map((version) => SubmissionDto.from(version)),
       versionCount,
     });
   }

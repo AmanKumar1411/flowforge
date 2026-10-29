@@ -3,6 +3,7 @@ import { AuditModule } from "../audit/audit.module";
 import { CourseCyclesModule } from "../course-cycles/course-cycles.module";
 import { TeamsModule } from "../teams/teams.module";
 import { IdeaCatalogService } from "./application/idea-catalog.service";
+import { IdeaPublishCheck } from "./application/idea-publish-check";
 import { IdeaService } from "./application/idea.service";
 import { IdeaCatalogRepository } from "./application/ports/idea-catalog.repository";
 import { IdeaTeams } from "./application/ports/idea-teams";
@@ -21,6 +22,7 @@ import { IdeasController } from "./presentation/ideas.controller";
   providers: [
     IdeaService,
     IdeaCatalogService,
+    IdeaPublishCheck,
     IdeaRules,
     { provide: IdeaRepository, useClass: PrismaIdeaRepository },
     { provide: IdeaCatalogRepository, useClass: PrismaIdeaCatalogRepository },

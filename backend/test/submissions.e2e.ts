@@ -8,6 +8,7 @@ import {
   startTestApp,
   TestApp,
 } from "./support/test-app";
+import { milestone } from "./support/schedule";
 import { TestBrowser } from "./support/test-browser";
 
 const MINUTE_MS = 60 * 1000;
@@ -26,9 +27,9 @@ const EMAILS: Record<Student, string> = {
 
 interface SubmissionBody {
   id: string;
+  milestoneId: string;
   version: number;
-  repositoryUrl: string;
-  demoUrl: string | null;
+  links: { type: string; url: string }[];
   notes: string | null;
   submittedBy: { id: string };
   code?: string;
@@ -38,15 +39,30 @@ interface CycleSubmissionBody {
   team: { id: string; name: string; leader: { name: string } };
   idea: { title: string; status: string; source: string } | null;
   latest: SubmissionBody | null;
+  versions: SubmissionBody[];
   versionCount: number;
 }
 
+interface MilestoneBody {
+  id: string;
+  position: number;
+  name: string;
+}
+
+const repository = {
+  type: "GITHUB",
+  url: "https://github.com/falcon/lost-and-found",
+};
+const drive = {
+  type: "DRIVE",
+  url: "https://drive.google.com/drive/folders/falcon-final",
+};
 const work = {
-  repositoryUrl: "https://github.com/falcon/lost-and-found",
-  demoUrl: "https://falcon.example.edu",
+  links: [repository, { type: "DEMO", url: "https://falcon.example.edu" }],
   notes: "First version: board and photo upload",
 };
 
+// Phase 8: every submission belongs to a milestone with its own window and links (was one window per cycle).
 describe("Submissions", () => {
   // Each test builds its cycle relative to this clock and moves it past deadlines.
   const clock = new FixedClock(new Date());
@@ -80,22 +96,34 @@ describe("Submissions", () => {
 
   /**
    * Published, batch 2026, 1 to 3 members: teams for an hour, ideas due after
-   * three hours, submissions open after a day and close after thirty.
+   * three hours. M1 (GitHub) is open from day 1 to day 5; M2, the final one,
+   * from day 5 to day 10 and asks for a Drive link only (the AIML example).
    */
-  async function openCycle() {
-    const created = await owner.post("/course-cycles", {
+  async function openCycle(): Promise<{
+    cycleId: string;
+    m1: string;
+    m2: string;
+  }> {
+    const created = await owner.post<{
+      id: string;
+      milestones: MilestoneBody[];
+    }>("/course-cycles", {
       body: {
         courseName: "Software Design",
         title: "Submissions",
         batchYear: 2026,
         semester: 7,
         academicYear: "2026-27",
-        submissionStartAt: at(DAY_MS),
-        submissionDeadline: at(30 * DAY_MS),
         minTeamSize: 1,
         maxTeamSize: 3,
-        teamFormationDeadline: at(HOUR_MS),
+        teamDeadline: at(HOUR_MS),
         ideaDeadline: at(3 * HOUR_MS),
+        milestones: [
+          milestone("Prototype", at(DAY_MS), at(5 * DAY_MS)),
+          milestone("Final", at(5 * DAY_MS), at(10 * DAY_MS), {
+            linkRequirement: { required: ["DRIVE"], optional: [] },
+          }),
+        ],
       },
     });
     assert.equal(created.status, 201, JSON.stringify(created.body));
@@ -104,7 +132,8 @@ describe("Submissions", () => {
       (await owner.post(`/course-cycles/${cycleId}/publish`)).status,
       200,
     );
-    return cycleId;
+    const [m1, m2] = created.body.milestones.map((m) => m.id);
+    return { cycleId, m1, m2 };
   }
 
   async function team(cycleId: string, leader: Student, members: Student[]) {
@@ -140,58 +169,115 @@ describe("Submissions", () => {
     assert.equal(approved.status, 200, JSON.stringify(approved.body));
   }
 
-  const submitWork = (student: Student, teamId: string, body: object = work) =>
-    students[student].post<SubmissionBody>(`/teams/${teamId}/submissions`, {
+  const route = (teamId: string, milestoneId: string) =>
+    `/teams/${teamId}/milestones/${milestoneId}/submissions`;
+  const submitWork = (
+    student: Student,
+    teamId: string,
+    milestoneId: string,
+    body: object = work,
+  ) =>
+    students[student].post<SubmissionBody>(route(teamId, milestoneId), {
       body,
     });
 
-  it("opens at 'submissions open'; any member adds versions; members, owner and admins read them", async () => {
-    const cycleId = await openCycle();
+  it("keeps each milestone to its own window; any member adds versions; members, owner and admins read them", async () => {
+    const { cycleId, m1, m2 } = await openCycle();
     const teamId = await team(cycleId, "aman", ["neha"]);
     await approvedIdea("aman", teamId);
 
-    const early = await submitWork("neha", teamId);
+    const early = await submitWork("neha", teamId, m1);
     assert.equal(early.status, 409);
     assert.equal(early.body.code, "SUBMISSION_NOT_OPEN");
 
     clock.advance(DAY_MS);
-    const first = await submitWork("neha", teamId, { ...work, demoUrl: null });
-    assert.equal(first.status, 201, JSON.stringify(first.body));
-    assert.equal(first.body.version, 1);
-    assert.equal(first.body.submittedBy.id, ids.neha);
-    const second = await submitWork("aman", teamId, {
-      ...work,
-      notes: "Second version: owner notifications",
+    const first = await submitWork("neha", teamId, m1, {
+      links: [repository],
+      notes: null,
     });
+    assert.equal(first.status, 201, JSON.stringify(first.body));
+    assert.deepEqual([first.body.version, first.body.milestoneId], [1, m1]);
+    // M1 is open while M2 is still to come.
+    const upcoming = await submitWork("aman", teamId, m2, { links: [drive] });
+    assert.equal(upcoming.body.code, "SUBMISSION_NOT_OPEN");
+    const second = await submitWork("aman", teamId, m1);
     assert.equal(second.body.version, 2);
+    assert.deepEqual(second.body.links, work.links);
 
     for (const reader of [students.neha, owner, admin]) {
-      const list = await reader.get<SubmissionBody[]>(
-        `/teams/${teamId}/submissions`,
-      );
-      assert.equal(list.status, 200);
+      const listed = await reader.get<SubmissionBody[]>(route(teamId, m1));
+      assert.equal(listed.status, 200);
       assert.deepEqual(
-        list.body.map((entry) => entry.version),
+        listed.body.map((s) => s.version),
         [2, 1],
       );
     }
     for (const outsider of [students.ravi, otherFaculty]) {
-      assert.equal(
-        (await outsider.get(`/teams/${teamId}/submissions`)).status,
-        404,
-      );
+      const hidden = await outsider.get(route(teamId, m1));
+      assert.equal(hidden.status, 404);
+      assert.equal(hidden.body.code, "TEAM_NOT_FOUND");
     }
-    assert.equal((await submitWork("ravi", teamId)).status, 404);
+
+    // At M1's due date it closes and M2 opens; M2's versions start again at 1.
+    clock.advance(4 * DAY_MS);
+    const late = await submitWork("aman", teamId, m1);
+    assert.equal(late.status, 409);
+    assert.equal(late.body.code, "SUBMISSION_CLOSED");
+    const final = await submitWork("aman", teamId, m2, {
+      links: [drive],
+      notes: "Final deck",
+    });
+    assert.equal(final.status, 201, JSON.stringify(final.body));
+    assert.equal(final.body.version, 1);
     assert.deepEqual(
-      (await auditActions(app.prisma, { entityId: second.body.id })).map(
-        (entry) => [entry.action, entry.metadata.version],
-      ),
-      [["SUBMISSION_CREATED", 2]],
+      (await auditActions(app.prisma, { action: "SUBMISSION_CREATED" }))
+        .filter(
+          (row) => (row.metadata as { teamId?: string }).teamId === teamId,
+        )
+        .map((row) => [
+          (row.metadata as { milestoneId: string }).milestoneId,
+          (row.metadata as { version: number }).version,
+        ]),
+      [
+        [m1, 1],
+        [m1, 2],
+        [m2, 1],
+      ],
     );
   });
 
+  it("asks each milestone for its own links: Drive only for the final one", async () => {
+    const { cycleId, m1, m2 } = await openCycle();
+    const teamId = await team(cycleId, "aman", []);
+    await approvedIdea("aman", teamId);
+    clock.advance(DAY_MS);
+    for (const [links, code] of [
+      [[], "MISSING_REQUIRED_LINK"],
+      [[{ type: "GITHUB", url: "https://github.com/falcon" }], "INVALID_LINK"],
+      [[repository, repository], "INVALID_LINK"],
+      [[repository, drive], "LINK_NOT_ALLOWED"],
+    ] as const) {
+      const refused = await submitWork("aman", teamId, m1, { links });
+      assert.equal(refused.status, 400, JSON.stringify(links));
+      assert.equal(refused.body.code, code);
+    }
+    clock.advance(4 * DAY_MS);
+    const githubOnly = await submitWork("aman", teamId, m2, {
+      links: [repository],
+    });
+    assert.equal(githubOnly.status, 400);
+    assert.equal(githubOnly.body.code, "LINK_NOT_ALLOWED");
+    const driveOnly = await submitWork("aman", teamId, m2, { links: [drive] });
+    assert.equal(driveOnly.status, 201, JSON.stringify(driveOnly.body));
+    const tooLong = await submitWork("aman", teamId, m2, {
+      links: [drive],
+      notes: "x".repeat(4001),
+    });
+    assert.equal(tooLong.body.code, "VALIDATION_FAILED");
+  });
+
   it("needs an approved idea; a pick from the faculty's catalog is enough", async () => {
-    const cycleId = await openCycle();
+    const { cycleId, m1 } = await openCycle();
     const waiting = await team(cycleId, "aman", []);
     const none = await team(cycleId, "ravi", []);
     const picker = await team(cycleId, "priya", []);
@@ -211,128 +297,113 @@ describe("Submissions", () => {
       ["aman", waiting],
       ["ravi", none],
     ] as const) {
-      const refused = await submitWork(student, teamId);
+      const refused = await submitWork(student, teamId, m1);
       assert.equal(refused.status, 409);
       assert.equal(refused.body.code, "IDEA_NOT_APPROVED");
     }
-    assert.equal((await submitWork("priya", picker)).status, 201);
+    assert.equal((await submitWork("priya", picker, m1)).status, 201);
   });
 
-  it("closes at the deadline and when the cycle closes; earlier versions stay", async () => {
-    const cycleId = await openCycle();
+  it("closes when the cycle closes; earlier versions stay; a milestone of another cycle is not found", async () => {
+    const { cycleId, m1 } = await openCycle();
+    const other = await openCycle();
     const teamId = await team(cycleId, "aman", []);
     await approvedIdea("aman", teamId);
     clock.advance(DAY_MS);
-    await submitWork("aman", teamId);
-    clock.advance(29 * DAY_MS);
-    const late = await submitWork("aman", teamId);
-    assert.equal(late.status, 409);
-    assert.equal(late.body.code, "SUBMISSION_CLOSED");
+    await submitWork("aman", teamId, m1);
+    const foreign = await submitWork("aman", teamId, other.m1);
+    assert.equal(foreign.status, 404);
+    assert.equal(foreign.body.code, "MILESTONE_NOT_FOUND");
+    await owner.post(`/course-cycles/${cycleId}/close`);
+    const closed = await submitWork("aman", teamId, m1);
+    assert.equal(closed.status, 409);
+    assert.equal(closed.body.code, "SUBMISSION_CLOSED");
     assert.equal(
-      (await students.aman.get<unknown[]>(`/teams/${teamId}/submissions`)).body
+      (await students.aman.get<SubmissionBody[]>(route(teamId, m1))).body
         .length,
       1,
     );
-
-    const other = await openCycle();
-    const otherTeam = await team(other, "neha", []);
-    await approvedIdea("neha", otherTeam);
-    clock.advance(DAY_MS);
-    await owner.post(`/course-cycles/${other}/close`);
-    assert.equal(
-      (await submitWork("neha", otherTeam)).body.code,
-      "SUBMISSION_CLOSED",
-    );
   });
 
-  it("lists every team of the cycle for its faculty and admins, with the latest version", async () => {
-    const cycleId = await openCycle();
+  it("lists every team of the cycle for its faculty and admins, per milestone, with every version", async () => {
+    const { cycleId, m1, m2 } = await openCycle();
     const falcon = await team(cycleId, "aman", ["neha"]);
-    const kestrel = await team(cycleId, "ravi", []);
+    await team(cycleId, "ravi", []);
     await approvedIdea("aman", falcon);
     clock.advance(DAY_MS);
-    await submitWork("aman", falcon);
-    await submitWork("neha", falcon, { ...work, notes: "v2" });
-
+    await submitWork("aman", falcon, m1);
+    await submitWork("neha", falcon, m1);
+    const path = (milestoneId: string) =>
+      `/course-cycles/${cycleId}/milestones/${milestoneId}/submissions`;
     for (const reader of [owner, admin]) {
-      const rows = await reader.get<CycleSubmissionBody[]>(
-        `/course-cycles/${cycleId}/submissions`,
+      const listed = await reader.get<CycleSubmissionBody[]>(path(m1));
+      assert.equal(listed.status, 200);
+      const rows = new Map(listed.body.map((row) => [row.team.name, row]));
+      assert.deepEqual(
+        [
+          rows.get("aman's team")?.latest?.version,
+          rows.get("aman's team")?.versions.map((v) => v.version),
+        ],
+        [2, [2, 1]],
       );
-      assert.equal(rows.status, 200);
-      const byTeam = new Map(rows.body.map((row) => [row.team.id, row]));
-      assert.equal(byTeam.get(falcon)?.versionCount, 2);
-      assert.equal(byTeam.get(falcon)?.latest?.notes, "v2");
-      assert.equal(byTeam.get(falcon)?.idea?.status, "APPROVED");
-      assert.equal(byTeam.get(kestrel)?.latest, null);
-      assert.equal(byTeam.get(kestrel)?.idea, null);
+      assert.equal(rows.get("ravi's team")?.latest, null);
     }
     assert.equal(
-      (await otherFaculty.get(`/course-cycles/${cycleId}/submissions`)).status,
-      404,
+      (await owner.get<CycleSubmissionBody[]>(path(m2))).body[0].versionCount,
+      0,
     );
-    assert.equal(
-      (await students.aman.get(`/course-cycles/${cycleId}/submissions`)).status,
-      403,
-    );
-  });
-
-  it("checks the links and notes", async () => {
-    const cycleId = await openCycle();
-    const teamId = await team(cycleId, "aman", []);
-    await approvedIdea("aman", teamId);
-    clock.advance(DAY_MS);
-    for (const body of [
-      {},
-      { repositoryUrl: "github.com/falcon" },
-      { repositoryUrl: "ftp://example.edu/app" },
-      { ...work, demoUrl: "javascript:alert(1)" },
-      { ...work, notes: "x".repeat(4001) },
-      { ...work, extra: true },
-    ]) {
-      assert.equal(
-        (await submitWork("aman", teamId, body)).status,
-        400,
-        JSON.stringify(body),
-      );
+    for (const outsider of [otherFaculty, students.aman]) {
+      assert.notEqual((await outsider.get(path(m1))).status, 200);
     }
   });
 
   it("numbers versions one after another when two members submit at once", async () => {
-    const cycleId = await openCycle();
+    const { cycleId, m1 } = await openCycle();
     const teamId = await team(cycleId, "aman", ["neha", "kiran"]);
     await approvedIdea("aman", teamId);
     clock.advance(DAY_MS);
     const results = await Promise.all(
-      (["aman", "neha", "kiran"] as const).map((student) =>
-        submitWork(student, teamId),
+      (["aman", "neha"] as const).map((student) =>
+        submitWork(student, teamId, m1),
       ),
     );
     assert.deepEqual(
       results.map((result) => result.status),
-      [201, 201, 201],
+      [201, 201],
     );
     assert.deepEqual(
       results.map((result) => result.body.version).sort(),
-      [1, 2, 3],
+      [1, 2],
+    );
+    assert.equal(
+      await app.prisma.submission.count({ where: { teamId, milestoneId: m1 } }),
+      2,
     );
   });
 
-  it("is guarded by the database: unique versions, from 1, in the team's own cycle", async () => {
-    const cycleId = await openCycle();
-    const otherCycle = await openCycle();
+  it("is guarded by the database: unique versions per milestone, from 1, in the team's and the milestone's own cycle", async () => {
+    const { cycleId, m1 } = await openCycle();
+    const other = await openCycle();
     const teamId = await team(cycleId, "aman", []);
     await approvedIdea("aman", teamId);
     clock.advance(DAY_MS);
-    await submitWork("aman", teamId);
-    const insert = (version: number, cycle: string) =>
+    await submitWork("aman", teamId, m1);
+    const insert = (version: number, cycle: string, milestoneId: string) =>
       app.prisma.$executeRaw`
-        INSERT INTO "Submission" ("id", "teamId", "cycleId", "version", "repositoryUrl", "submittedById", "submittedAt")
-        VALUES (gen_random_uuid(), ${teamId}, ${cycle}, ${version}, 'https://github.com/x/y', ${ids.aman}, now())`;
-    await assert.rejects(insert(1, cycleId), /Submission_teamId_version_key/);
-    await assert.rejects(insert(0, cycleId), /Submission_version_check/);
+        INSERT INTO "Submission" ("id", "teamId", "cycleId", "milestoneId", "version", "links", "submittedById", "submittedAt")
+        VALUES (gen_random_uuid(), ${teamId}, ${cycle}, ${milestoneId}, ${version}, '[]'::jsonb, ${ids.aman}, now())`;
     await assert.rejects(
-      insert(2, otherCycle),
+      insert(1, cycleId, m1),
+      /Submission_teamId_milestoneId_version_key/,
+    );
+    await assert.rejects(insert(0, cycleId, m1), /Submission_version_check/);
+    await assert.rejects(
+      insert(2, other.cycleId, other.m1),
       /Submission_teamId_cycleId_fkey/,
+    );
+    await assert.rejects(
+      insert(2, cycleId, other.m1),
+      /Submission_milestoneId_cycleId_fkey/,
     );
   });
 });

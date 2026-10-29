@@ -13,6 +13,8 @@ export type IdeaErrorCode =
   | "IDEA_FEEDBACK_REQUIRED"
   | "CATALOG_IDEA_NOT_FOUND"
   | "CATALOG_IDEA_PICKED"
-  | "CATALOG_CLOSED";
+  | "CATALOG_CLOSED"
+  | "PROPOSALS_NOT_ALLOWED"
+  | "CATALOG_NOT_ALLOWED";
 
 export class IdeaDomainError extends DomainError<IdeaErrorCode> {}

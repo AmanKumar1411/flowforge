@@ -1,21 +1,21 @@
 import { Injectable } from "@nestjs/common";
-import { AuditService } from "../audit/audit.service";
+import { AuditService } from "../../audit/audit.service";
 import {
   StudentEmailCheck,
   StudentPreRegistration,
-} from "../auth/application/student-pre-registration";
-import { normalizeEmail } from "../auth/domain/university-identity-parser";
-import { TransactionRunner } from "../common/transaction";
-import { User } from "../users/domain/user";
-import { UsersService } from "../users/users.service";
+} from "../../auth/application/student-pre-registration";
+import { normalizeEmail } from "../../auth/domain/university-identity-parser";
+import { TransactionRunner } from "../../common/transaction";
+import { User } from "../../users/domain/user";
+import { UsersService } from "../../users/users.service";
 import {
   CycleActor,
   CycleAuthorizationPolicy,
-} from "./domain/cycle-authorization-policy";
-import { CycleDomainError } from "./domain/cycle.errors";
-import { CycleRepository } from "./domain/cycle-repository";
-import { CycleRoster } from "./domain/cycle-roster";
-import { Cycle } from "./domain/cycle.types";
+} from "../domain/cycle-authorization-policy";
+import { CycleDomainError } from "../domain/cycle.errors";
+import { CycleRepository } from "./ports/cycle.repository";
+import { CycleRoster } from "../domain/cycle-roster";
+import { Cycle } from "../domain/cycle.types";
 import { EnrollmentRemovalChecks } from "./enrollment-removal-checks";
 
 export interface EnrolledStudent {
