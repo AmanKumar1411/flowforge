@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { Type } from "class-transformer";
 import {
+  IsArray,
   IsIn,
   IsInt,
   IsISO8601,
@@ -10,14 +12,22 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateNested,
 } from "class-validator";
 import {
   CourseKind,
+  CycleIdeaSource,
   DEFAULT_TEAM_SIZE,
   TEAM_SIZE_LIMIT,
-} from "../domain/cycle.types";
+} from "../../domain/cycle.types";
+import { LinkRequirementDto, MilestoneDto } from "./milestone.dto";
 
 const COURSE_KINDS: CourseKind[] = ["CORE", "ELECTIVE"];
+export const IDEA_SOURCES: CycleIdeaSource[] = [
+  "STUDENT_PROPOSALS",
+  "FACULTY_LIST",
+  "BOTH",
+];
 
 export class CreateCycleDto {
   @ApiProperty({ example: "Software Design & System Development" })
@@ -55,14 +65,6 @@ export class CreateCycleDto {
   @Matches(/^\d{4}-\d{2}$/)
   academicYear!: string;
 
-  @ApiProperty({ example: "2026-10-01T09:00:00.000Z" })
-  @IsISO8601()
-  submissionStartAt!: string;
-
-  @ApiProperty({ example: "2026-12-01T17:00:00.000Z" })
-  @IsISO8601()
-  submissionDeadline!: string;
-
   @ApiPropertyOptional({
     example: 2,
     minimum: 1,
@@ -87,14 +89,41 @@ export class CreateCycleDto {
   @Max(TEAM_SIZE_LIMIT)
   maxTeamSize?: number;
 
-  @ApiPropertyOptional({
-    example: "2026-10-20T17:00:00.000Z",
+  @ApiProperty({
+    example: "2026-11-04T18:29:00.000Z",
     description:
-      "When team membership becomes fixed for students. Defaults to submissionStartAt.",
+      "Students change their own teams until then; the owning faculty then place students without a team until ideaDeadline.",
+  })
+  @IsISO8601()
+  teamDeadline!: string;
+
+  @ApiProperty({
+    example: "2026-11-11T18:29:00.000Z",
+    description:
+      "Strictly after teamDeadline. Teams pick or propose their first idea until then; feedback rounds continue after it. The first milestone opens at or after it.",
+  })
+  @IsISO8601()
+  ideaDeadline!: string;
+
+  @ApiPropertyOptional({
+    enum: IDEA_SOURCES,
+    default: "BOTH",
+    description:
+      "Where ideas come from: teams' own proposals, the faculty's list, or either. Fixed once published.",
   })
   @IsOptional()
-  @IsISO8601()
-  teamFormationDeadline?: string;
+  @IsIn(IDEA_SOURCES)
+  ideaSource?: CycleIdeaSource;
+
+  @ApiPropertyOptional({
+    type: LinkRequirementDto,
+    description:
+      'The links an idea needs. Defaults to { required: [], optional: ["GITHUB", "DRIVE"] }. Fixed once published.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LinkRequirementDto)
+  ideaLinkRequirement?: LinkRequirementDto;
 
   @ApiPropertyOptional({
     enum: COURSE_KINDS,
@@ -107,22 +136,14 @@ export class CreateCycleDto {
   kind?: CourseKind;
 
   @ApiPropertyOptional({
-    example: "2026-10-25T17:00:00.000Z",
-    type: String,
-    nullable: true,
+    type: MilestoneDto,
+    isArray: true,
     description:
-      "The owning faculty place students without a team until then; it must come after teamFormationDeadline. Null or left out: no faculty window (stored equal to teamFormationDeadline). Must be by submissionStartAt.",
+      "M1…Mn in order, saved with the cycle in one transaction. A draft may have none; publishing needs 1 to 10.",
   })
   @IsOptional()
-  @IsISO8601()
-  teamCompletionDeadline?: string | null;
-
-  @ApiPropertyOptional({
-    example: "2026-10-28T17:00:00.000Z",
-    description:
-      "Teams pick or propose their first idea until then; after a rejection they revise until the cycle closes. Defaults to teamCompletionDeadline. Must be between it and submissionStartAt.",
-  })
-  @IsOptional()
-  @IsISO8601()
-  ideaDeadline?: string;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MilestoneDto)
+  milestones?: MilestoneDto[];
 }

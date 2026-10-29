@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { Link } from "../../common/links/link-type";
 import { Transaction } from "../../common/transaction";
 import { Prisma } from "../../generated/prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -18,10 +19,10 @@ const toDomain = (row: SubmissionRow): Submission => ({
   id: row.id,
   teamId: row.teamId,
   cycleId: row.cycleId,
+  milestoneId: row.milestoneId,
   version: row.version,
-  repositoryUrl: row.repositoryUrl,
-  demoUrl: row.demoUrl,
-  reportUrl: row.reportUrl,
+  // Written only by create below, from links checked against the milestone.
+  links: row.links as unknown as Link[],
   notes: row.notes,
   submittedBy: row.submittedBy,
   submittedAt: row.submittedAt,
@@ -37,30 +38,34 @@ export class PrismaSubmissionRepository extends SubmissionRepository {
     super();
   }
 
-  async listByTeam(teamId: string): Promise<Submission[]> {
+  async listByTeam(teamId: string, milestoneId: string): Promise<Submission[]> {
     const rows = await this.prisma.submission.findMany({
-      where: { teamId },
+      where: { teamId, milestoneId },
       include: withSubmitter,
       orderBy: { version: "desc" },
     });
     return rows.map(toDomain);
   }
 
-  async listByCycle(cycleId: string): Promise<Submission[]> {
+  async listByMilestone(milestoneId: string): Promise<Submission[]> {
     const rows = await this.prisma.submission.findMany({
-      where: { cycleId },
+      where: { milestoneId },
       include: withSubmitter,
       orderBy: [{ teamId: "asc" }, { version: "desc" }],
     });
     return rows.map(toDomain);
   }
 
-  async lockLatestVersion(teamId: string, tx: Transaction): Promise<number> {
+  async lockLatestVersion(
+    teamId: string,
+    milestoneId: string,
+    tx: Transaction,
+  ): Promise<number> {
     const client = this.prisma.client(tx);
     // FOR UPDATE: two members saving at once take turns, so each gets the next number.
     await client.$queryRaw`SELECT "id" FROM "Team" WHERE "id" = ${teamId} FOR UPDATE`;
     const latest = await client.submission.aggregate({
-      where: { teamId },
+      where: { teamId, milestoneId },
       _max: { version: true },
     });
     return latest._max.version ?? 0;
@@ -72,7 +77,10 @@ export class PrismaSubmissionRepository extends SubmissionRepository {
   ): Promise<Submission> {
     try {
       const row = await this.prisma.client(tx).submission.create({
-        data: submission,
+        data: {
+          ...submission,
+          links: submission.links.map(({ type, url }) => ({ type, url })),
+        },
         include: withSubmitter,
       });
       return toDomain(row);

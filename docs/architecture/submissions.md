@@ -5,6 +5,27 @@ once the team's idea is approved or picked from the faculty's list. Every submis
 unchangeable version; the newest one before the deadline is the team's final work. Decision:
 [ADR 015](../decisions/015-versioned-submissions.md).
 
+## Phase 8: one card per milestone
+
+Submissions now belong to a **milestone** ([ADR 016](../decisions/016-milestones-replace-the-submission-window.md)),
+and the sections below read "the window" as **that milestone's window**:
+
+- A member adds a version for a milestone while the cycle is published and
+  `milestone.submissionOpensAt <= now < milestone.submissionDueAt`. M1 can be open while M2 is
+  still to come; at M1's due date it closes and M2 may open.
+- Versions are numbered **per team and milestone** (`@@unique([teamId, milestoneId, version])`),
+  still under the team's `FOR UPDATE` lock; M2's versions start again at 1.
+- `repositoryUrl`, `demoUrl` and `reportUrl` became `links: { type, url }[]`, checked against the
+  milestone's link requirement ([ADR 018](../decisions/018-configurable-link-requirements.md)):
+  `400 MISSING_REQUIRED_LINK`, `LINK_NOT_ALLOWED` or `INVALID_LINK`.
+- A composite foreign key `(milestoneId, cycleId)` keeps a version inside the team's own cycle;
+  a milestone of another cycle is `404 MILESTONE_NOT_FOUND`.
+- Routes: `GET/POST /teams/:teamId/milestones/:milestoneId/submissions` and
+  `GET /course-cycles/:cycleId/milestones/:milestoneId/submissions` (owning faculty and admins;
+  each team with its idea, latest version and every version). The cycle-wide routes are gone.
+- `IdeasSubmissionTeams` reads the team and idea through `IdeaService`, and the cycle with its
+  milestones through `CourseCycleService`.
+
 ## Rules
 
 | Rule | Where it is enforced |

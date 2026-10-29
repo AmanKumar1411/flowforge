@@ -27,6 +27,13 @@ Implemented so far:
   feedback rounds continue until the cycle closes. Teams with an approved or picked idea submit
   their work as links and notes: any member, a new version each time, until the submission
   deadline.
+- **Phase 8:** the faculty project lifecycle. A project is set up in one guided flow (details,
+  teams and ideas, milestones, idea list, students, review and publish), saved as a draft from
+  the first step. Milestones M1…Mn replace the single submission window, each with its own
+  dates, evaluation day and required links (GitHub, Drive, demo, report). The faculty place
+  students without a team until the idea deadline, choose where ideas come from, and see every
+  publish problem at once. Students see their project's stage, what comes next, and one
+  submission card per milestone.
 
 Evaluations come later.
 
@@ -155,7 +162,7 @@ In `backend/`:
 | Command | What it does |
 | --- | --- |
 | `npm run build` / `npm run lint` / `npm run typecheck` | Compile, lint, type-check including `test/` |
-| `npm run seed:demo` | Create the [demo accounts](#demo-accounts); safe to run again |
+| `npm run seed:demo` | Create the [demo accounts](#demo-accounts) and the published "AIML demo project" (three milestones); safe to run again |
 | `npm test` | Jest unit tests (domain rules, sessions, config, Google token verification) |
 | `npm run test:integration` | `node:test` against real PostgreSQL `flowforge_test`: Google flow (Google faked at its network boundary), faculty access, sessions, admin, RBAC matrix, boot checks, Phase 2 scenario, teams, ideas and submissions (including races and database constraints) |
 
@@ -168,7 +175,7 @@ In `frontend/`: `npm run build` and `npm run lint`.
 
 Browser end-to-end checks of the sign-in flows, the team screens, team completion, ideas and
 submissions live in [e2e/browser](e2e/browser/README.md). The latest results are in the
-[Phase 7 test report](docs/testing/phase7-test-report.md).
+[Phase 8 test report](docs/testing/phase8-test-report.md).
 
 ## API
 
@@ -195,9 +202,12 @@ All routes use the `/api` prefix and every error is `{ code, message }`. Interac
 | POST | `/course-cycles` | FACULTY |
 | GET | `/course-cycles` | STUDENT (own batch), ADMIN (all published or closed) |
 | GET | `/course-cycles/my` | FACULTY |
-| GET | `/course-cycles/:id` | STUDENT, FACULTY, ADMIN (404 when not visible) |
-| PATCH | `/course-cycles/:id` | FACULTY owner |
-| POST | `/course-cycles/:id/publish`, `/close` | FACULTY owner |
+| GET | `/course-cycles/:id` | STUDENT, FACULTY, ADMIN (404 when not visible); includes `milestones`, `currentStage` and `nextEvents` |
+| PATCH | `/course-cycles/:id` | FACULTY owner; `milestones` is the full list (A3 once published) |
+| GET | `/course-cycles/:id/publish-checks` | FACULTY owner of a draft: `{ blocking, warnings }` without publishing |
+| POST | `/course-cycles/:id/publish` | FACULTY owner; `409 PUBLISH_BLOCKED` lists every problem in `details`; warnings come back with the cycle |
+| POST | `/course-cycles/:id/close` | FACULTY owner |
+| GET | `/me/upcoming` | STUDENT: the next 10 events of their visible projects |
 | POST | `/course-cycles/:id/teams` | STUDENT of the batch, while formation is open; caller becomes leader |
 | GET | `/course-cycles/:id/teams` | STUDENT (own team), FACULTY owner, ADMIN (all teams) |
 | GET | `/course-cycles/:id/team-candidates?q=` | STUDENT, while formation is open |
@@ -208,30 +218,30 @@ All routes use the `/api` prefix and every error is `{ code, message }`. Interac
 | GET, POST | `/course-cycles/:id/enrollments` | FACULTY owner of an elective (POST takes `{ emails }`) |
 | DELETE | `/course-cycles/:id/enrollments/:email` | FACULTY owner of an elective, unless the student is in a team |
 | GET | `/course-cycles/:id/team-completion` | FACULTY owner, ADMIN (read-only): students without a team |
-| POST | `/course-cycles/:id/team-completion/teams` | FACULTY owner, between the two team deadlines |
-| POST | `/course-cycles/:id/team-completion/auto-group/preview`, `/auto-group` | FACULTY owner, between the two team deadlines |
-| POST | `/teams/:id/members` | FACULTY owner, between the two team deadlines |
+| POST | `/course-cycles/:id/team-completion/teams` | FACULTY owner, from the team deadline until the idea deadline |
+| POST | `/course-cycles/:id/team-completion/auto-group/preview`, `/auto-group` | FACULTY owner, from the team deadline until the idea deadline |
+| POST | `/teams/:id/members` | FACULTY owner, from the team deadline until the idea deadline |
 | GET, POST | `/course-cycles/:id/batch-students` | FACULTY owner of a core cycle: the batch list; POST `{ emails }` registers students who have not signed in |
 | GET | `/teams/:id/idea` | Team members, FACULTY owner, ADMIN |
-| PUT | `/teams/:id/idea` | Team leader: propose or edit before the idea deadline; after a rejection, resubmit any time while the cycle is published |
+| PUT | `/teams/:id/idea` | Team leader: propose or edit before the idea deadline; after a rejection, resubmit any time while the cycle is published; `links` follow the cycle's idea requirement; not in a list-only cycle |
 | POST | `/teams/:id/idea/pick` | Team leader: `{ catalogIdeaId }`, approved at once; whenever a proposal could be saved |
 | POST | `/teams/:id/idea/review` | FACULTY owner: `{ version, decision, feedback }` (feedback required to reject) |
 | GET | `/course-cycles/:id/ideas` | FACULTY owner, ADMIN: every team with its idea |
 | GET | `/course-cycles/:id/idea-catalog` | STUDENT of the cycle, FACULTY owner, ADMIN: the faculty's ideas with how many teams picked each |
 | POST | `/course-cycles/:id/idea-catalog` | FACULTY owner, until the cycle closes: `{ title, description, link? }` |
 | PUT, DELETE | `/course-cycles/:id/idea-catalog/:ideaId` | FACULTY owner; a picked idea cannot be removed |
-| GET | `/teams/:id/submissions` | Team members, FACULTY owner, ADMIN: every version, newest first |
-| POST | `/teams/:id/submissions` | Any team member, with an approved or picked idea, between "submissions open" and the deadline: `{ repositoryUrl, demoUrl?, reportUrl?, notes? }` |
-| GET | `/course-cycles/:id/submissions` | FACULTY owner, ADMIN: every team with its idea and latest version |
+| GET | `/teams/:id/milestones/:milestoneId/submissions` | Team members, FACULTY owner, ADMIN: every version for the milestone, newest first |
+| POST | `/teams/:id/milestones/:milestoneId/submissions` | Any team member, with an approved or picked idea, while that milestone is open: `{ links: [{ type, url }], notes? }` |
+| GET | `/course-cycles/:id/milestones/:milestoneId/submissions` | FACULTY owner, ADMIN: every team with its idea, latest version and every version |
 
-Cycles accept `minTeamSize`, `maxTeamSize` (defaults 1 and 4, at most 10),
-`teamFormationDeadline` (students; defaults to `submissionStartAt`), `teamCompletionDeadline`
-(faculty; when given it must come after the formation deadline, and `null` or leaving it out
-means no faculty window), `ideaDeadline`
-(defaults to the completion deadline) and `kind` (`CORE` for the whole batch, `ELECTIVE` for
-enrolled students only). The three deadlines come in that order, no later than
-`submissionStartAt`. The rules are in
-[teams.md](docs/architecture/teams.md).
+Cycles take `minTeamSize`, `maxTeamSize` (defaults 1 and 4, at most 10), `teamDeadline` and
+`ideaDeadline` (required, the idea deadline strictly later), `ideaSource` (`BOTH`,
+`STUDENT_PROPOSALS` or `FACULTY_LIST`), `ideaLinkRequirement`, `kind` (`CORE` for the whole
+batch, `ELECTIVE` for enrolled students only) and `milestones`: 1 to 10 to publish, each
+`{ name, description?, submissionOpensAt, submissionDueAt, evaluationAt, linkRequirement? }`, one
+after another from the idea deadline. A link requirement is `{ required, optional }` over
+`GITHUB`, `DRIVE`, `DEMO` and `REPORT`. The rules are in
+[course-cycles.md](docs/architecture/course-cycles.md).
 
 ## Future work: faculty CSV import
 
@@ -256,6 +266,9 @@ reads the allowlist through `FacultyDirectory`, so `SignInService` and `RoleReso
 - [Phase 6 test report](docs/testing/phase6-test-report.md) (ideas, pre-registered students)
 - [Phase 7 test report](docs/testing/phase7-test-report.md) (idea list, open-ended rounds,
   submissions)
+- [Phase 8 baseline analysis](docs/analysis/phase8-faculty-lifecycle-baseline.md),
+  [plan](docs/plans/phase8-plan.md) and [test report](docs/testing/phase8-test-report.md)
+  (milestones, link requirements, guided creation)
 - [Architecture: foundation](docs/architecture/foundation.md),
   [course cycles](docs/architecture/course-cycles.md),
   [authentication and RBAC](docs/architecture/auth-and-rbac.md),
@@ -276,4 +289,8 @@ reads the allowlist through `FacultyDirectory`, so `SignInService` and `RoleReso
   [012 pre-registered students](docs/decisions/012-pre-registered-students.md),
   [013 project ideas](docs/decisions/013-project-ideas.md),
   [014 idea list and open-ended rounds](docs/decisions/014-idea-catalog-and-open-ended-rounds.md),
-  [015 versioned submissions](docs/decisions/015-versioned-submissions.md)
+  [015 versioned submissions](docs/decisions/015-versioned-submissions.md),
+  [016 milestones](docs/decisions/016-milestones-replace-the-submission-window.md),
+  [017 computed events](docs/decisions/017-computed-dashboard-events.md),
+  [018 link requirements](docs/decisions/018-configurable-link-requirements.md),
+  [019 publish checks](docs/decisions/019-publish-checks-registry.md)

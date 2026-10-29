@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AuditModule } from "../audit/audit.module";
+import { CourseCyclesModule } from "../course-cycles/course-cycles.module";
 import { IdeasModule } from "../ideas/ideas.module";
 import { SubmissionService } from "./application/submission.service";
 import { SubmissionTeams } from "./application/ports/submission-teams";
@@ -11,7 +12,7 @@ import { CycleSubmissionsController } from "./presentation/cycle-submissions.con
 import { SubmissionsController } from "./presentation/submissions.controller";
 
 @Module({
-  imports: [IdeasModule, AuditModule],
+  imports: [IdeasModule, CourseCyclesModule, AuditModule],
   controllers: [SubmissionsController, CycleSubmissionsController],
   providers: [
     SubmissionService,

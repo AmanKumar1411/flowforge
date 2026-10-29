@@ -1,4 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
+import { LinkResponseDto } from "../../../common/links/link.dto";
 import type { CycleIdea } from "../../application/idea.service";
 import type {
   CatalogIdea,
@@ -54,8 +55,13 @@ export class IdeaResponseDto {
     description: "Null for a pick from the catalog",
   })
   solution!: string | null;
-  @ApiProperty({ type: String, nullable: true })
-  link!: string | null;
+  @ApiProperty({
+    type: LinkResponseDto,
+    isArray: true,
+    description:
+      "Checked against the cycle's idea link requirement; none for a pick",
+  })
+  links!: LinkResponseDto[];
   @ApiProperty({
     enum: ["PROPOSAL", "CATALOG"],
     description: "CATALOG: picked from the faculty's list, approved at once",

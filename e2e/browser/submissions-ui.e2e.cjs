@@ -7,7 +7,8 @@ const {
   createRun,
   devSignIn,
   apiSession,
-  openSection,
+  cycleBody,
+  openTab,
   openTeamPage,
 } = require("./support.cjs");
 const [chromePath, FRONTEND, API, OUT] = process.argv.slice(2);
@@ -37,22 +38,25 @@ const SUBMISSIONS_OPEN_S = 55;
     const facultyApi = await session(`meera.j${DOMAIN}`, "Meera J");
 
     const t0 = Date.now();
-    const at = (seconds) => new Date(t0 + seconds * 1000).toISOString();
-    const created = await facultyApi.call("POST", "/course-cycles", {
-      courseName: "Capstone",
-      title: `Submissions ${t0}`,
-      batchYear: 2021,
-      semester: 7,
-      academicYear: "2026-27",
-      submissionStartAt: at(SUBMISSIONS_OPEN_S),
-      submissionDeadline: at(30 * 24 * 60 * 60),
-      minTeamSize: 1,
-      maxTeamSize: 3,
-      teamFormationDeadline: at(IDEAS_DUE_S),
-      ideaDeadline: at(IDEAS_DUE_S),
-    });
+    const at = (seconds) => new Date(t0 + seconds * 1000);
+    // Phase 8: teams settle before the idea deadline, and one milestone (GitHub required) opens after it.
+    const created = await facultyApi.call(
+      "POST",
+      "/course-cycles",
+      cycleBody(
+        { courseName: "Capstone", title: `Submissions ${t0}`, batchYear: 2021, minTeamSize: 1, maxTeamSize: 3 },
+        {
+          teamDeadline: at(IDEAS_DUE_S - 10),
+          ideaDeadline: at(IDEAS_DUE_S),
+          opensAt: at(SUBMISSIONS_OPEN_S),
+          dueAt: at(30 * 24 * 60 * 60),
+        },
+        { required: ["GITHUB"], optional: ["DEMO", "REPORT"] },
+      ),
+    );
     assert(created.status === 201, `cycle: ${created.status} ${JSON.stringify(created.body)}`);
     const cycleId = created.body.id;
+    const milestoneId = created.body.milestones[0].id;
     assert((await facultyApi.call("POST", `/course-cycles/${cycleId}/publish`)).status === 200, "publish");
 
     // Two teams through the API: Orbit (Uma leads, Dev is a member) and Comet (Isha, who proposes).
@@ -76,7 +80,7 @@ const SUBMISSIONS_OPEN_S = 55;
     const catalog = faculty.locator("section", { has: faculty.locator("#catalog-heading") });
 
     await run.check("Faculty add ideas to the cycle's list, and remove one nobody picked", async () => {
-      await openSection(faculty, "Idea list");
+      await openTab(faculty, "Ideas");
       for (const [title, description] of [
         ["Library seat finder", "Show which library seats are free right now"],
         ["Bus tracker", "Live campus bus positions"],
@@ -106,7 +110,7 @@ const SUBMISSIONS_OPEN_S = 55;
 
     await run.check("Faculty see the pick, and a picked idea can no longer be removed", async () => {
       await faculty.reload();
-      await openSection(faculty, "Idea list");
+      await openTab(faculty, "Ideas");
       await catalog.getByText("Picked by 1 team", { exact: true }).waitFor();
       assert(await catalog.getByRole("button", { name: "Remove Library seat finder" }).count() === 0, "a picked idea can be removed");
     }, faculty);
@@ -140,27 +144,30 @@ const SUBMISSIONS_OPEN_S = 55;
     await run.check("A member (not the leader) submits the first version", async () => {
       await member.goto(`${FRONTEND}/student/cycles/${cycleId}`);
       await member.getByRole("button", { name: "Submit work" }).click();
-      await member.getByLabel("Repository URL").fill("https://github.com/orbit/seat-finder");
+      await member.getByLabel("GitHub repository").fill("https://github.com/orbit/seat-finder");
       await member.getByLabel("Notes (optional)").fill("Seat map from the gate sensors");
       await member.getByRole("button", { name: "Submit version 1" }).click();
-      await member.getByRole("heading", { name: "Version 1 submitted" }).waitFor();
+      await member.getByRole("heading", { name: /Version 1 submitted/ }).waitFor();
       await member.getByRole("list", { name: "Submitted versions" }).getByText("Seat map from the gate sensors").waitFor();
     }, member);
 
     await run.check("The leader submits version 2; the links carry over", async () => {
       await leader.reload();
       await leader.getByRole("button", { name: "Submit a new version" }).click();
-      assert((await leader.getByLabel("Repository URL").inputValue()) === "https://github.com/orbit/seat-finder", "repository not carried over");
-      await leader.getByLabel("Demo URL (optional)").fill("https://orbit.example.edu");
+      assert((await leader.getByLabel("GitHub repository").inputValue()) === "https://github.com/orbit/seat-finder", "repository not carried over");
+      await leader.getByLabel("Demo (optional)").fill("https://orbit.example.edu");
       await leader.getByRole("button", { name: "Submit version 2" }).click();
-      await leader.getByRole("heading", { name: "Version 2 submitted" }).waitFor();
+      await leader.getByRole("heading", { name: /Version 2 submitted/ }).waitFor();
       const versions = leader.getByRole("list", { name: "Submitted versions" }).getByRole("listitem");
       assert(await versions.count() === 2, `versions: ${await versions.count()}`);
     }, leader);
 
     await run.check("Faculty see each team's latest version and its history", async () => {
       await faculty.reload();
-      await faculty.locator(".glance", { hasText: "1 of 2 teams submitted" }).waitFor();
+      // The page keeps the tab it was on (Ideas); the glance card is on the overview.
+      await openTab(faculty, "Overview");
+      await faculty.locator(".glance", { hasText: "M1 · Final submission: 1 of 2 teams submitted" }).waitFor();
+      await openTab(faculty, "Teams");
       await faculty.locator(".team-row", { hasText: "Orbit" }).getByText("2 submissions").waitFor();
       await openTeamPage(faculty, "Orbit");
       const work = faculty.getByRole("list", { name: "Submitted versions" });
@@ -168,9 +175,10 @@ const SUBMISSIONS_OPEN_S = 55;
       await work.getByText("Version 1").waitFor();
       // Submissions are still open, so the newest version is marked as the latest, not yet final.
       await work.locator("li").first().locator(".final-tag", { hasText: "Latest" }).waitFor();
-      const rows = (await facultyApi.call("GET", `/course-cycles/${cycleId}/submissions`)).body;
+      const rows = (await facultyApi.call("GET", `/course-cycles/${cycleId}/milestones/${milestoneId}/submissions`)).body;
       const orbitRow = rows.find((row) => row.team.name === "Orbit");
-      assert(orbitRow.versionCount === 2 && orbitRow.latest.demoUrl === "https://orbit.example.edu", JSON.stringify(orbitRow));
+      const demo = orbitRow.latest.links.find((link) => link.type === "DEMO");
+      assert(orbitRow.versionCount === 2 && demo?.url === "https://orbit.example.edu", JSON.stringify(orbitRow));
     }, faculty);
   } finally {
     await Promise.all(sessions.map((created) => created.dispose()));

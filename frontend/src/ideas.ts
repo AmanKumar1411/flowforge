@@ -1,4 +1,4 @@
-import type { Cycle, Idea, IdeaStatus } from "./types";
+import type { Cycle, Idea, IdeaStatus, Milestone } from "./types";
 
 /**
  * Mirror the API's idea windows for display only; the API decides. `now`
@@ -46,10 +46,14 @@ export function ideaAction(
 
 export type SubmissionWindow = "NOT_OPEN" | "OPEN" | "CLOSED";
 
-/** Mirrors the API: open from `submissionStartAt` until `submissionDeadline`, while published. */
-export function submissionWindow(cycle: Cycle, now: number): SubmissionWindow {
-  if (cycle.status !== "PUBLISHED" || now >= Date.parse(cycle.submissionDeadline)) {
+/** Mirrors the API: a milestone is open from its `submissionOpensAt` until its `submissionDueAt`, while published. */
+export function submissionWindow(
+  cycle: Pick<Cycle, "status">,
+  milestone: Pick<Milestone, "submissionOpensAt" | "submissionDueAt">,
+  now: number,
+): SubmissionWindow {
+  if (cycle.status !== "PUBLISHED" || now >= Date.parse(milestone.submissionDueAt)) {
     return "CLOSED";
   }
-  return now < Date.parse(cycle.submissionStartAt) ? "NOT_OPEN" : "OPEN";
+  return now < Date.parse(milestone.submissionOpensAt) ? "NOT_OPEN" : "OPEN";
 }

@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { Link } from "../../common/links/link-type";
 import { Transaction } from "../../common/transaction";
 import { Prisma } from "../../generated/prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -17,6 +18,9 @@ const withPeople = {
 
 type IdeaRow = Prisma.ProjectIdeaGetPayload<{ include: typeof withPeople }>;
 
+const asJson = (links: readonly Link[]): Prisma.InputJsonValue =>
+  links.map(({ type, url }) => ({ type, url }));
+
 const toDomain = (row: IdeaRow): Idea => ({
   id: row.id,
   teamId: row.teamId,
@@ -24,7 +28,7 @@ const toDomain = (row: IdeaRow): Idea => ({
   title: row.title,
   problem: row.problem,
   solution: row.solution,
-  link: row.link,
+  links: row.links as unknown as Link[],
   source: row.source,
   catalogIdeaId: row.catalogIdeaId,
   status: row.status,
@@ -75,7 +79,7 @@ export class PrismaIdeaRepository extends IdeaRepository {
   async create(idea: NewIdea, tx: Transaction): Promise<Idea> {
     try {
       const row = await this.prisma.client(tx).projectIdea.create({
-        data: idea,
+        data: { ...idea, links: asJson(idea.links) },
         include: withPeople,
       });
       return toDomain(row);
@@ -97,7 +101,7 @@ export class PrismaIdeaRepository extends IdeaRepository {
   ): Promise<Idea> {
     const row = await this.prisma.client(tx).projectIdea.update({
       where: { id },
-      data: revision,
+      data: { ...revision, links: asJson(revision.links) },
       include: withPeople,
     });
     return toDomain(row);

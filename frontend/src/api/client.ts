@@ -3,11 +3,19 @@ import { apiBaseUrl } from "../config";
 export class ApiError extends Error {
   readonly code?: string;
   readonly status?: number;
+  /** Several problems reported at once (a blocked publish). */
+  readonly details: { code: string; message: string }[];
 
-  constructor(message: string, code?: string, status?: number) {
+  constructor(
+    message: string,
+    code?: string,
+    status?: number,
+    details: { code: string; message: string }[] = [],
+  ) {
     super(message);
     this.code = code;
     this.status = status;
+    this.details = details;
   }
 }
 
@@ -115,10 +123,12 @@ async function toApiError(response: Response): Promise<ApiError> {
   const body = (await response.json().catch(() => ({}))) as {
     message?: string;
     code?: string;
+    details?: { code: string; message: string }[];
   };
   return new ApiError(
     body.message || "The request could not be completed.",
     body.code,
     response.status,
+    Array.isArray(body.details) ? body.details : [],
   );
 }

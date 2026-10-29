@@ -19,7 +19,7 @@ vi.mock("../api/ideas", () => ({ listCatalog: vi.fn(), listCycleIdeas: vi.fn() }
 vi.mock("../api/submissions", () => ({ listCycleSubmissions: vi.fn() }));
 vi.mock("../api/teams", () => ({ listCycleTeams: vi.fn(), getCompletionOverview: vi.fn() }));
 
-// Today is Thu, 29 Oct 2026: the cycle is in its teams phase.
+// Today is Thu, 29 Oct 2026: the cycle is in its teams phase. Phase 8: milestones and a computed stage.
 const cycle: Cycle = {
   id: "cycle",
   courseName: "Software Design",
@@ -36,11 +36,34 @@ const cycle: Cycle = {
   publishedAt: "2026-10-28T05:00:00.000Z",
   closedAt: null,
   updatedAt: "2026-10-28T05:00:00.000Z",
-  teamFormationDeadline: "2026-11-04T18:29:00.000Z",
-  teamCompletionDeadline: "2026-11-04T18:29:00.000Z",
+  teamDeadline: "2026-11-04T18:29:00.000Z",
   ideaDeadline: "2026-11-11T18:29:00.000Z",
-  submissionStartAt: "2026-11-11T18:30:00.000Z",
-  submissionDeadline: "2026-12-12T18:29:00.000Z",
+  ideaSource: "BOTH",
+  ideaLinkRequirement: { required: [], optional: ["GITHUB", "DRIVE"] },
+  milestones: [
+    {
+      id: "m1",
+      position: 1,
+      name: "Design review",
+      description: null,
+      submissionOpensAt: "2026-11-11T18:30:00.000Z",
+      submissionDueAt: "2026-11-25T18:29:00.000Z",
+      evaluationAt: "2026-11-26T18:29:00.000Z",
+      linkRequirement: { required: ["GITHUB"], optional: [] },
+    },
+    {
+      id: "m2",
+      position: 2,
+      name: "Final",
+      description: null,
+      submissionOpensAt: "2026-11-25T18:29:00.000Z",
+      submissionDueAt: "2026-12-12T18:29:00.000Z",
+      evaluationAt: "2026-12-12T18:29:00.000Z",
+      linkRequirement: { required: ["DRIVE"], optional: [] },
+    },
+  ],
+  currentStage: { kind: "TEAMS" },
+  nextEvents: [{ kind: "TEAM_DEADLINE", at: "2026-11-04T18:29:00.000Z" }],
 };
 
 const team = (id: string, name: string, leader: string): Team => ({
@@ -57,10 +80,10 @@ const team = (id: string, name: string, leader: string): Team => ({
   updatedAt: "",
 });
 
-function renderPage(kind: Cycle["kind"]) {
+function renderPage(kind: Cycle["kind"], tab = "") {
   vi.mocked(cycles.getCycle).mockResolvedValue({ ...cycle, kind });
   render(
-    <MemoryRouter initialEntries={["/faculty/cycles/cycle"]}>
+    <MemoryRouter initialEntries={[`/faculty/cycles/cycle${tab ? `?tab=${tab}` : ""}`]}>
       <Routes>
         <Route path="/faculty/cycles/:cycleId" element={<CycleDetailPage faculty />} />
       </Routes>
@@ -88,8 +111,8 @@ describe("CycleDetailPage by course type", () => {
       { team: { id: "t2" }, idea: null },
     ] as unknown as CycleIdea[]);
     vi.mocked(submissions.listCycleSubmissions).mockResolvedValue([
-      { team: { id: "t1" }, latest: null, versionCount: 0 },
-      { team: { id: "t2" }, latest: null, versionCount: 0 },
+      { team: { id: "t1", name: "Byte Club" }, latest: null, versions: [], versionCount: 0 },
+      { team: { id: "t2", name: "Null Pointers" }, latest: null, versions: [], versionCount: 0 },
     ] as unknown as CycleSubmission[]);
     vi.mocked(teams.getCompletionOverview).mockResolvedValue({
       open: false,
@@ -102,18 +125,13 @@ describe("CycleDetailPage by course type", () => {
     vi.useRealTimers();
   });
 
-  it("shows an elective its teams, submission count and a link to its enrolled students only", async () => {
+  it("opens on an overview: the stage, what comes next, what needs the faculty, at a glance", async () => {
     renderPage("ELECTIVE");
-    const list = await screen.findByRole("heading", { name: "Teams (2)" });
-    expect(list).toBeVisible();
-    expect(screen.getByRole("link", { name: "View details of Byte Club" })).toHaveAttribute(
-      "href",
-      "/faculty/cycles/cycle/teams/t1",
-    );
-    const glance = screen.getByRole("complementary", { name: "The project at a glance" });
-    expect(within(glance).getByText(/Enrolled students \(5\)/)).toBeVisible();
-    expect(within(glance).getByRole("link", { name: "Manage" })).toHaveAttribute("href", "/faculty/cycles/cycle/students");
-    expect(within(glance).getByText("0 of 2 teams submitted")).toBeVisible();
+    const glance = await screen.findByRole("complementary", { name: "The project at a glance" });
+    expect(await within(glance).findByText(/Enrolled students \(5\)/)).toBeVisible();
+    expect(screen.getByText("Teams forming")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Coming up" })).toBeVisible();
+    expect(screen.getByText("Team deadline")).toBeVisible();
     expect(
       screen.getByText("Elective · open to enrolled students · Teams of 2–4 · Semester 7 (Aug–Dec 2026)"),
     ).toBeVisible();
@@ -121,17 +139,33 @@ describe("CycleDetailPage by course type", () => {
     expect(await screen.findByRole("button", { name: "Review 1 proposal" })).toBeVisible();
     expect(screen.getByText("1 proposal is waiting for your review")).toBeVisible();
     expect(screen.getByRole("button", { name: "Edit project" })).toBeVisible();
-    expect(screen.queryByText("Idea list")).toBeNull();
+    for (const name of ["Overview", "Students", "Teams", "Ideas", "Milestones"]) {
+      expect(screen.getByRole("button", { name })).toBeVisible();
+    }
+  });
+
+  it("lists an elective's teams on the Teams tab, without the faculty's placement panel", async () => {
+    renderPage("ELECTIVE", "teams");
+    expect(await screen.findByRole("heading", { name: "Teams (2)" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "View details of Byte Club" })).toHaveAttribute(
+      "href",
+      "/faculty/cycles/cycle/teams/t1",
+    );
     expect(screen.queryByRole("heading", { name: /Students without a team/ })).toBeNull();
   });
 
-  it("shows a core course the same, plus its idea list and the students without a team", async () => {
-    renderPage("CORE");
+  it("shows a core course the students without a team, and every milestone's work on its own tab", async () => {
+    renderPage("CORE", "teams");
     expect(await screen.findByRole("heading", { name: "Teams (2)" })).toBeVisible();
-    const glance = screen.getByRole("complementary", { name: "The project at a glance" });
-    expect(within(glance).getByText(/Batch 2023 students \(5\)/)).toBeVisible();
-    expect(screen.getByText("Idea list")).toBeVisible();
     expect(await screen.findByRole("heading", { name: "Students without a team (1)" })).toBeVisible();
+    cleanup();
+
+    renderPage("CORE", "milestones");
+    expect(await screen.findByRole("heading", { name: "Design review" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Final" })).toBeVisible();
+    expect(await screen.findAllByRole("link", { name: "Byte Club" })).toHaveLength(2);
+    expect(screen.getByText(/Links: Google Drive or Docs required/)).toBeVisible();
+    expect(submissions.listCycleSubmissions).toHaveBeenCalledWith("cycle", "m2");
   });
 
   it("says nothing about team completion while no student takes part, and offers to add them", async () => {
@@ -142,14 +176,13 @@ describe("CycleDetailPage by course type", () => {
     vi.mocked(submissions.listCycleSubmissions).mockResolvedValue([]);
     vi.mocked(teams.getCompletionOverview).mockResolvedValue({ open: false, unassigned: [], notSignedIn: [] });
     renderPage("ELECTIVE");
-    // The header's primary action and the attention card; the empty list doesn't repeat it.
+    // The header's primary action and the attention card.
     expect(await screen.findAllByRole("button", { name: "Enroll students" })).toHaveLength(2);
     expect(screen.getByText("No students are enrolled yet")).toBeVisible();
-    expect(screen.getByText(/No teams yet\. Enroll students so they can form teams\./)).toBeVisible();
     cleanup();
 
-    renderPage("CORE");
-    expect(await screen.findAllByRole("button", { name: "Add students" })).toHaveLength(2);
+    renderPage("CORE", "teams");
+    expect(await screen.findByText(/No teams yet\. Add the students of batch 2023/)).toBeVisible();
     expect(screen.queryByRole("heading", { name: /Students without a team/ })).toBeNull();
     expect(screen.queryByText("Every student is in a team.")).toBeNull();
   });

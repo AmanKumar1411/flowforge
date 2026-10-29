@@ -8,6 +8,7 @@ import {
   startTestApp,
   TestApp,
 } from "./support/test-app";
+import { milestone } from "./support/schedule";
 import { TestBrowser } from "./support/test-browser";
 
 const MINUTE_MS = 60 * 1000;
@@ -29,7 +30,7 @@ interface IdeaBody {
   title: string;
   problem: string;
   solution: string | null;
-  link: string | null;
+  links: { type: string; url: string }[];
   source: string;
   catalogIdeaId: string | null;
   status: string;
@@ -43,7 +44,7 @@ const content = {
   title: "Campus lost and found",
   problem: "Things get lost on campus and nobody knows where to look",
   solution: "A board with photos, owners notified by email",
-  link: "https://github.com/falcon/lost-and-found",
+  links: [{ type: "GITHUB", url: "https://github.com/falcon/lost-and-found" }],
 };
 
 describe("Ideas", () => {
@@ -79,8 +80,8 @@ describe("Ideas", () => {
 
   /**
    * Published, batch 2026, 1 to 3 members. Students form teams for an hour,
-   * faculty complete them for another, ideas are due after three hours and
-   * submissions open after a day.
+   * the faculty place the rest until ideas are due after three hours, and the
+   * first milestone opens after a day.
    */
   async function openCycle(overrides: Record<string, unknown> = {}) {
     const created = await owner.post("/course-cycles", {
@@ -90,22 +91,18 @@ describe("Ideas", () => {
         batchYear: 2026,
         semester: 7,
         academicYear: "2026-27",
-        submissionStartAt: at(DAY_MS),
-        submissionDeadline: at(30 * DAY_MS),
         minTeamSize: 1,
         maxTeamSize: 3,
-        teamFormationDeadline: at(HOUR_MS),
-        teamCompletionDeadline: at(2 * HOUR_MS),
+        teamDeadline: at(HOUR_MS),
         ideaDeadline: at(3 * HOUR_MS),
+        milestones: [milestone("Final", at(DAY_MS), at(30 * DAY_MS))],
         ...overrides,
       },
     });
     assert.equal(created.status, 201, JSON.stringify(created.body));
     const cycleId = String(created.body.id);
-    assert.equal(
-      (await owner.post(`/course-cycles/${cycleId}/publish`)).status,
-      200,
-    );
+    const published = await owner.post(`/course-cycles/${cycleId}/publish`);
+    assert.equal(published.status, 200, JSON.stringify(published.body));
     return cycleId;
   }
 
@@ -162,32 +159,41 @@ describe("Ideas", () => {
   };
 
   describe("the idea deadline", () => {
-    it("defaults to the completion deadline and must fall before submissions open", async () => {
+    it("is required, comes after the team deadline, and by the time the first milestone opens", async () => {
       const base = {
         courseName: "Software Design",
         title: "Dates",
         batchYear: 2026,
         semester: 7,
         academicYear: "2026-27",
-        submissionStartAt: at(DAY_MS),
-        submissionDeadline: at(30 * DAY_MS),
-        teamFormationDeadline: at(HOUR_MS),
-        teamCompletionDeadline: at(2 * HOUR_MS),
+        teamDeadline: at(HOUR_MS),
+        milestones: [milestone("Final", at(DAY_MS), at(30 * DAY_MS))],
       };
-      const created = await owner.post("/course-cycles", { body: base });
+      // Phase 8: no default any more (it used to follow the completion deadline).
+      const missing = await owner.post("/course-cycles", { body: base });
+      assert.equal(missing.body.code, "VALIDATION_FAILED");
+      const created = await owner.post("/course-cycles", {
+        body: { ...base, ideaDeadline: at(2 * HOUR_MS) },
+      });
       assert.equal(created.body.ideaDeadline, at(2 * HOUR_MS));
-      for (const ideaDeadline of [at(HOUR_MS), at(DAY_MS + MINUTE_MS)]) {
+      for (const [ideaDeadline, code] of [
+        [at(HOUR_MS), "INVALID_IDEA_DEADLINE"],
+        [at(DAY_MS + MINUTE_MS), "INVALID_MILESTONE_SCHEDULE"],
+      ]) {
         const refused = await owner.post("/course-cycles", {
           body: { ...base, ideaDeadline },
         });
         assert.equal(refused.status, 400);
-        assert.equal(refused.body.code, "INVALID_IDEA_DEADLINE");
+        assert.equal(refused.body.code, code);
       }
-      // Teams must now settle before submissions open, too.
       const late = await owner.post("/course-cycles", {
-        body: { ...base, teamFormationDeadline: at(2 * DAY_MS) },
+        body: {
+          ...base,
+          ideaDeadline: at(2 * HOUR_MS),
+          teamDeadline: at(3 * HOUR_MS),
+        },
       });
-      assert.equal(late.body.code, "INVALID_TEAM_FORMATION_DEADLINE");
+      assert.equal(late.body.code, "INVALID_IDEA_DEADLINE");
     });
 
     it("moves while open on a published cycle, and never once passed", async () => {
@@ -235,20 +241,35 @@ describe("Ideas", () => {
       assert.equal(outsider.body.code, "TEAM_NOT_FOUND");
     });
 
-    it("rejects blank content and links that are not http(s)", async () => {
+    it("rejects blank content and links that do not fit the requirement", async () => {
       const cycleId = await openCycle();
       const teamId = await team(cycleId, "aman", []);
-      for (const body of [
-        { ...content, title: "   " },
-        { ...content, solution: "" },
-        { ...content, link: "ftp://files.example.com/idea" },
-        { ...content, link: "not a url" },
-      ]) {
-        assert.equal((await submit("aman", teamId, body)).status, 400);
+      for (const [body, code] of [
+        [{ ...content, title: "   " }, "VALIDATION_FAILED"],
+        [{ ...content, solution: "" }, "VALIDATION_FAILED"],
+        [
+          {
+            ...content,
+            links: [{ type: "GITHUB", url: "ftp://files.example.com/idea" }],
+          },
+          "INVALID_LINK",
+        ],
+        [
+          { ...content, links: [{ type: "GITHUB", url: "not a url" }] },
+          "INVALID_LINK",
+        ],
+        [
+          { ...content, links: [{ type: "DEMO", url: "https://falcon.app" }] },
+          "LINK_NOT_ALLOWED",
+        ],
+      ] as const) {
+        const refused = await submit("aman", teamId, body);
+        assert.equal(refused.status, 400, JSON.stringify(body));
+        assert.equal(refused.body.code, code);
       }
-      const noLink = await submit("aman", teamId, { ...content, link: null });
+      const noLink = await submit("aman", teamId, { ...content, links: [] });
       assert.equal(noLink.status, 200);
-      assert.equal(noLink.body.link, null);
+      assert.deepEqual(noLink.body.links, []);
     });
 
     it("lets the leader change a waiting idea, as new versions, until the idea deadline", async () => {
@@ -652,7 +673,7 @@ describe("Ideas", () => {
   });
 
   describe("database guarantees", () => {
-    it("one idea per team, feedback on every rejection, ideas due before submissions open", async () => {
+    it("one idea per team, feedback on every rejection, ideas due after teams settle", async () => {
       const cycleId = await openCycle();
       const teamId = await team(cycleId, "aman", []);
       const idea = await submit("aman", teamId);
@@ -670,8 +691,8 @@ describe("Ideas", () => {
       );
       await assert.rejects(
         app.prisma.$executeRaw`
-          UPDATE "CourseProjectCycle" SET "ideaDeadline" = "submissionStartAt" + interval '1 minute' WHERE "id" = ${cycleId}`,
-        /CourseProjectCycle_idea_deadline_check/,
+          UPDATE "CourseProjectCycle" SET "ideaDeadline" = "teamDeadline" - interval '1 minute' WHERE "id" = ${cycleId}`,
+        /CourseProjectCycle_team_idea_deadline_check/,
       );
       // A proposal needs a solution; a pick must be approved and name its catalog idea.
       for (const change of [
@@ -682,6 +703,83 @@ describe("Ideas", () => {
       ]) {
         await assert.rejects(change, /ProjectIdea_source_check/);
       }
+    });
+  });
+
+  describe("where ideas come from (Phase 8)", () => {
+    it("takes only proposals, only picks, or both, as the faculty chose", async () => {
+      const proposalsOnly = await openCycle({
+        ideaSource: "STUDENT_PROPOSALS",
+      });
+      const listOnly = await (async () => {
+        // A list-only project needs its list before it can be published.
+        const created = await owner.post("/course-cycles", {
+          body: {
+            courseName: "Software Design",
+            title: "From the list",
+            batchYear: 2026,
+            semester: 7,
+            academicYear: "2026-27",
+            teamDeadline: at(HOUR_MS),
+            ideaDeadline: at(3 * HOUR_MS),
+            ideaSource: "FACULTY_LIST",
+            milestones: [milestone("Final", at(DAY_MS), at(30 * DAY_MS))],
+          },
+        });
+        const cycleId = String(created.body.id);
+        await owner.post(`/course-cycles/${cycleId}/idea-catalog`, {
+          body: {
+            title: "Seat finder",
+            description: "Free library seats",
+            link: null,
+          },
+        });
+        assert.equal(
+          (await owner.post(`/course-cycles/${cycleId}/publish`)).status,
+          200,
+        );
+        return cycleId;
+      })();
+
+      const proposer = await team(proposalsOnly, "aman", []);
+      assert.equal((await submit("aman", proposer)).status, 200);
+      const noList = await owner.post(
+        `/course-cycles/${proposalsOnly}/idea-catalog`,
+        {
+          body: { title: "Seat finder", description: "Free seats", link: null },
+        },
+      );
+      assert.equal(noList.status, 409);
+      assert.equal(noList.body.code, "CATALOG_NOT_ALLOWED");
+
+      const picker = await team(listOnly, "neha", []);
+      const refused = await submit("neha", picker);
+      assert.equal(refused.status, 409);
+      assert.equal(refused.body.code, "PROPOSALS_NOT_ALLOWED");
+      const [offered] = (
+        await owner.get<{ id: string }[]>(
+          `/course-cycles/${listOnly}/idea-catalog`,
+        )
+      ).body;
+      assert.equal((await pick("neha", picker, offered.id)).status, 200);
+    });
+
+    it("checks a proposal's links against the project's idea requirement", async () => {
+      const cycleId = await openCycle({
+        ideaLinkRequirement: { required: ["DRIVE"], optional: [] },
+      });
+      const teamId = await team(cycleId, "aman", []);
+      const missing = await submit("aman", teamId, { ...content, links: [] });
+      assert.equal(missing.body.code, "MISSING_REQUIRED_LINK");
+      const github = await submit("aman", teamId, content);
+      assert.equal(github.body.code, "LINK_NOT_ALLOWED");
+      const drive = await submit("aman", teamId, {
+        ...content,
+        links: [
+          { type: "DRIVE", url: "https://docs.google.com/document/d/brief" },
+        ],
+      });
+      assert.equal(drive.status, 200, JSON.stringify(drive.body));
     });
   });
 });

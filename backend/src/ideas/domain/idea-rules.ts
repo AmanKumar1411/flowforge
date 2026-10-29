@@ -22,7 +22,8 @@ export type IdeaActor = { id: string; role: Role };
  * instead) for as many rounds as it takes, while the cycle is published. The
  * owning faculty review any submitted version while the cycle is published.
  * An approved or picked idea is final. The team never changes because of its
- * idea.
+ * idea. The cycle's idea source decides whether teams may propose, pick, or
+ * both, and its link requirement which links a proposal carries.
  */
 export class IdeaRules {
   /** Whether the leader can submit a first idea now. */
@@ -33,6 +34,26 @@ export class IdeaRules {
   /** Whether a rejected idea can be revised now: in every round, while the cycle is published. */
   isResubmissionOpen(cycle: IdeaCycle): boolean {
     return cycle.status === "PUBLISHED";
+  }
+
+  /** A cycle limited to the faculty's list takes no proposals. */
+  assertProposalsAllowed(cycle: IdeaCycle): void {
+    if (cycle.ideaSource === "FACULTY_LIST") {
+      throw new IdeaDomainError(
+        "PROPOSALS_NOT_ALLOWED",
+        "This project's ideas come from the faculty's list; pick one of them",
+      );
+    }
+  }
+
+  /** A cycle limited to teams' own proposals has no list to pick from or add to. */
+  assertCatalogAllowed(cycle: IdeaCycle): void {
+    if (cycle.ideaSource === "STUDENT_PROPOSALS") {
+      throw new IdeaDomainError(
+        "CATALOG_NOT_ALLOWED",
+        "In this project teams propose their own ideas; there is no list to pick from",
+      );
+    }
   }
 
   assertLeader(actor: IdeaActor, team: IdeaTeam): void {
@@ -120,25 +141,25 @@ export class IdeaRules {
     return feedback;
   }
 
-  /** Trimmed proposal content; an empty link means none. */
-  clean(content: IdeaContent): IdeaVersionContent {
+  /** Trimmed proposal content, with its links checked against the cycle's requirement. */
+  clean(content: IdeaContent, cycle: IdeaCycle): IdeaVersionContent {
     return {
       title: content.title.trim(),
       problem: content.problem.trim(),
       solution: content.solution.trim(),
-      link: content.link?.trim() || null,
+      links: cycle.ideaLinkRequirement.check(content.links),
       source: "PROPOSAL",
       catalogIdeaId: null,
     };
   }
 
-  /** A pick copies the catalog idea, so later edits to the catalog never change the team's idea. */
+  /** A pick copies the catalog idea's text, so later edits never change the team's idea; it copies no links. */
   pickContent(catalogIdea: CatalogIdea): IdeaVersionContent {
     return {
       title: catalogIdea.title,
       problem: catalogIdea.description,
       solution: null,
-      link: catalogIdea.link,
+      links: [],
       source: "CATALOG",
       catalogIdeaId: catalogIdea.id,
     };

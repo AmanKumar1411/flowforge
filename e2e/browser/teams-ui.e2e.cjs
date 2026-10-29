@@ -3,7 +3,7 @@
 const path = require("node:path");
 const fs = require("node:fs");
 const { chromium, request } = require("playwright-core");
-const { createCycleInWizard } = require("./support.cjs");
+const { createCycleInWizard, cycleBody, openTab } = require("./support.cjs");
 const [chromePath, FRONTEND, API, OUT] = process.argv.slice(2);
 
 const DOMAIN = "@nst.rishihood.edu.in";
@@ -107,24 +107,22 @@ const teamPanel = (page) => page.locator(".team-panel");
       return `cycle ${cycleId}`;
     }, faculty);
 
-    await check("Faculty extends the formation deadline of the published cycle; team sizes are locked", async () => {
+    await check("Faculty extends the team deadline of the published cycle; team sizes and milestones are locked", async () => {
       const extended = minuteFromNow(180);
       await faculty.locator(".cycle-card", { hasText: cycleTitle }).getByRole("button", { name: "Edit" }).click();
       // The same wizard, with what publishing locked shown as locked.
       assert(await faculty.getByLabel("Course name").isDisabled(), "course name is editable after publish");
-      await faculty.getByRole("button", { name: "Next: Teams" }).click();
-      assert(await faculty.getByLabel("Minimum team size").isDisabled(), "minimum size is editable after publish");
-      assert(await faculty.getByLabel("Maximum team size").isDisabled(), "maximum size is editable after publish");
-      await faculty.getByRole("button", { name: "Next: Timeline" }).click();
-      assert(await faculty.getByLabel("Submissions open").isDisabled(), "submissions open is editable after publish");
-      await faculty.getByLabel("Students form teams until").fill(localInput(extended));
-      await faculty.getByRole("button", { name: "Next: Review" }).click();
-      await faculty.getByRole("button", { name: "Save changes" }).click();
-      await faculty.waitForURL(new RegExp(`/faculty/cycles/${cycleId}$`));
+      assert(await faculty.getByLabel("Smallest team").isDisabled(), "minimum size is editable after publish");
+      assert(await faculty.getByLabel("Largest team").isDisabled(), "maximum size is editable after publish");
+      await faculty.getByRole("button", { name: "Save and continue" }).click();
+      await faculty.getByLabel("Team deadline").fill(localInput(extended));
+      await faculty.getByRole("button", { name: "Save and continue" }).click();
+      // A3: published milestones can't be added or removed.
+      await faculty.getByText("Milestones can't be added or removed once the project is published.").waitFor();
       const cycle = await admin.call("GET", `/course-cycles/${cycleId}`);
-      assert(cycle.body.teamFormationDeadline === extended.toISOString(),
-        `deadline is ${cycle.body.teamFormationDeadline}, expected ${extended.toISOString()}`);
-      return `teamFormationDeadline=${extended.toISOString()}`;
+      assert(cycle.body.teamDeadline === extended.toISOString(),
+        `deadline is ${cycle.body.teamDeadline}, expected ${extended.toISOString()}`);
+      return `teamDeadline=${extended.toISOString()}`;
     }, faculty);
 
     const isha = await devSignIn(await fresh(), `isha.r26csai${DOMAIN}`, "Isha");
@@ -201,7 +199,8 @@ const teamPanel = (page) => page.locator(".team-panel");
     }, isha);
 
     await check("Faculty sees every team of the cycle with its leader and members", async () => {
-      await faculty.reload();
+      await faculty.goto(`${FRONTEND}/faculty/cycles/${cycleId}`);
+      await openTab(faculty, "Teams");
       const row = faculty.locator(".team-row", { hasText: "Falcon" });
       await row.getByText("Led by Isha").waitFor();
       await row.getByText("2/3 members").waitFor();
@@ -227,18 +226,19 @@ const teamPanel = (page) => page.locator(".team-panel");
       const facultyApi = await apiSession(`meera.n${DOMAIN}`, "Meera N");
       sessions.push(facultyApi);
       const deadline = new Date(Date.now() + 6000);
-      const created = await facultyApi.call("POST", "/course-cycles", {
-        courseName: "Software Design",
-        title: `Fixed teams ${Date.now()}`,
-        batchYear: 2026,
-        semester: 7,
-        academicYear: "2026-27",
-        submissionStartAt: minuteFromNow(24 * 60).toISOString(),
-        submissionDeadline: minuteFromNow(30 * 24 * 60).toISOString(),
-        minTeamSize: 2,
-        maxTeamSize: 2,
-        teamFormationDeadline: deadline.toISOString(),
-      });
+      const created = await facultyApi.call(
+        "POST",
+        "/course-cycles",
+        cycleBody(
+          { courseName: "Software Design", title: `Fixed teams ${Date.now()}`, batchYear: 2026, minTeamSize: 2, maxTeamSize: 2 },
+          {
+            teamDeadline: deadline,
+            ideaDeadline: minuteFromNow(60),
+            opensAt: minuteFromNow(24 * 60),
+            dueAt: minuteFromNow(30 * 24 * 60),
+          },
+        ),
+      );
       assert(created.status === 201, `cycle: ${created.status} ${JSON.stringify(created.body)}`);
       await facultyApi.call("POST", `/course-cycles/${created.body.id}/publish`);
       const taraApi = await apiSession(`tara.s26csai${DOMAIN}`, "Tara");

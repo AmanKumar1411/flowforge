@@ -1,4 +1,6 @@
 import { AuditService } from "../../audit/audit.service";
+import { PublishChecks } from "../../course-cycles/application/publish-checks";
+import { CycleTimeline } from "../../course-cycles/domain/cycle-timeline";
 import { AuditEvent } from "../../audit/domain/audit-event";
 import { StudentPreRegistration } from "../../auth/application/student-pre-registration";
 import { BatchYearPolicy } from "../../auth/domain/batch-year.policy";
@@ -7,12 +9,12 @@ import { FixedClock } from "../../common/testing/fixed-clock";
 import { ImmediateTransactionRunner } from "../../common/testing/immediate-transaction.runner";
 import { SeededRandom } from "../../common/testing/seeded-random";
 import { Transaction } from "../../common/transaction";
-import { CourseCycleService } from "../../course-cycles/course-cycle.service";
-import { CycleEnrollmentService } from "../../course-cycles/cycle-enrollment.service";
+import { CourseCycleService } from "../../course-cycles/application/course-cycle.service";
+import { CycleEnrollmentService } from "../../course-cycles/application/cycle-enrollment.service";
 import { CycleAuthorizationPolicy } from "../../course-cycles/domain/cycle-authorization-policy";
 import { CycleWorkflow } from "../../course-cycles/domain/cycle-workflow";
-import { InMemoryCycleRepository } from "../../course-cycles/domain/in-memory-cycle.repository";
-import { EnrollmentRemovalChecks } from "../../course-cycles/enrollment-removal-checks";
+import { InMemoryCycleRepository } from "../../course-cycles/testing/in-memory-cycle.repository";
+import { EnrollmentRemovalChecks } from "../../course-cycles/application/enrollment-removal-checks";
 import { NewUser } from "../../users/domain/user";
 import { UsersService } from "../../users/users.service";
 import { TeamCompletionService } from "../application/team-completion.service";
@@ -88,10 +90,15 @@ export function createTeamKit(seed = 1) {
     lastLoginAt: new Date("2026-10-20T09:00:00.000Z"),
   });
   const removalChecks = new EnrollmentRemovalChecks();
+  // Cycle changes are audited too; the kit keeps only the teams module's events.
   const cycles = new CourseCycleService(
     cycleRepository,
     new CycleWorkflow(),
     new CycleAuthorizationPolicy(),
+    new PublishChecks(),
+    new CycleTimeline(clock),
+    { record: async () => undefined } as unknown as AuditService,
+    transactions,
     clock,
   );
   // The two calls the enrollment service makes: reading students, and pre-registering new ones.

@@ -21,7 +21,7 @@ import { TeamSeekerRepository } from "./ports/team-seeker.repository";
 import { TeamRepository } from "./ports/team.repository";
 
 export interface CompletionOverview {
-  /** True between the formation and completion deadlines of a published cycle. */
+  /** True between the team and idea deadlines of a published cycle. */
   open: boolean;
   unassigned: UnassignedStudent[];
   /** Enrolled emails with no account (enrolled before pre-registration): enrolling them again registers them. */
@@ -36,8 +36,8 @@ export interface AutoGroupPreview {
 }
 
 /**
- * The owning faculty complete teams after students' formation deadline: by
- * hand (create a team, add a student to a team with room) or by random
+ * The owning faculty place students left without a team between the team
+ * deadline and the idea deadline (A1): by hand (create a team, add a student to a team with room) or by random
  * auto-grouping. Auto-group is preview-then-confirm and stateless: the preview
  * is only a suggestion, and confirming re-checks every team like a manual one.
  */
@@ -67,7 +67,7 @@ export class TeamCompletionService {
   ): Promise<CompletionOverview> {
     const cycle = await this.cycles.getVisible(actor, cycleId);
     return {
-      open: this.rules.isCompletionOpen(cycle, this.clock.now()),
+      open: this.rules.isPlacementOpen(cycle, this.clock.now()),
       unassigned: await this.unassigned(cycle),
       notSignedIn: await this.cycles.notSignedIn(cycle),
     };
@@ -94,7 +94,7 @@ export class TeamCompletionService {
     if (!found) throw new TeamDomainError("TEAM_NOT_FOUND", "Team not found");
     const cycle = await this.cycles.getById(found.cycleId);
     this.policy.assertCycleOwner(actor, found, cycle);
-    this.rules.assertCompletionOpen(cycle, this.clock.now());
+    this.rules.assertPlacementOpen(cycle, this.clock.now());
     const roster = await this.cycles.rosterOf(cycle);
     return this.transactions.run(async (tx) => {
       const team = await this.teams.findByIdForUpdate(teamId, tx);
@@ -259,7 +259,7 @@ export class TeamCompletionService {
   ): Promise<TeamCycle> {
     // Faculty only reach this through the role guard; getVisible limits them to their own cycles.
     const cycle = await this.cycles.getVisible(actor, cycleId);
-    this.rules.assertCompletionOpen(cycle, this.clock.now());
+    this.rules.assertPlacementOpen(cycle, this.clock.now());
     return cycle;
   }
 

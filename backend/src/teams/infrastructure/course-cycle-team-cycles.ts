@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
-import { CourseCycleService } from "../../course-cycles/course-cycle.service";
-import { CycleEnrollmentService } from "../../course-cycles/cycle-enrollment.service";
+import { CourseCycleService } from "../../course-cycles/application/course-cycle.service";
+import { CycleEnrollmentService } from "../../course-cycles/application/cycle-enrollment.service";
 import { CycleRoster } from "../../course-cycles/domain/cycle-roster";
 import { TeamCycles } from "../application/ports/team-cycles";
 import { TeamActor } from "../domain/team-access.policy";

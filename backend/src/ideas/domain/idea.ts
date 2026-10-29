@@ -1,3 +1,4 @@
+import type { Link } from "../../common/links/link-type";
 import type { Cycle } from "../../course-cycles/domain/cycle.types";
 
 /** SUBMITTED waits for the faculty; REJECTED goes back to the team; APPROVED is final. */
@@ -15,8 +16,8 @@ export interface IdeaContent {
   problem: string;
   /** How they plan to solve it. */
   solution: string;
-  /** A repository, document or demo; optional. */
-  link: string | null;
+  /** As the leader typed them; checked against the cycle's idea link requirement. */
+  links: readonly { type: string; url: string }[];
 }
 
 /**
@@ -27,7 +28,8 @@ export interface IdeaVersionContent {
   title: string;
   problem: string;
   solution: string | null;
-  link: string | null;
+  /** Checked against the cycle's requirement; a pick has none. */
+  links: Link[];
   source: IdeaSource;
   catalogIdeaId: string | null;
 }
@@ -114,8 +116,8 @@ export type IdeaCycle = Pick<
   | "status"
   | "createdByFacultyId"
   | "ideaDeadline"
-  | "submissionStartAt"
-  | "submissionDeadline"
+  | "ideaSource"
+  | "ideaLinkRequirement"
 >;
 
 /** The part of a team the idea rules need. */

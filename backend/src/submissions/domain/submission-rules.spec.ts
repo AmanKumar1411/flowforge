@@ -1,20 +1,48 @@
-import { SubmissionCycle, SubmissionIdea, SubmissionTeam } from "./submission";
-import { SubmissionActor, SubmissionRules } from "./submission-rules";
+import { LinkRequirement } from "../../common/links/link-requirement";
+import { LinkDomainError } from "../../common/links/link.errors";
+import { Milestone } from "../../course-cycles/domain/milestone";
+import { SubmissionCycle, SubmissionTeam } from "./submission";
 import { SubmissionDomainError } from "./submission.errors";
+import { SubmissionRules } from "./submission-rules";
 
 const rules = new SubmissionRules();
-const OPENS = new Date("2026-11-10T09:00:00.000Z");
-const CLOSES = new Date("2026-12-10T09:00:00.000Z");
-const during = new Date("2026-11-20T09:00:00.000Z");
+const at = (day: number) => new Date(Date.UTC(2026, 10, day, 9));
 
-const cycle = (overrides: Partial<SubmissionCycle> = {}): SubmissionCycle => ({
+const milestone = (
+  position: number,
+  opens: number,
+  due: number,
+  linkRequirement = LinkRequirement.MILESTONE_DEFAULT,
+): Milestone => ({
+  id: `m${position}`,
+  cycleId: "cycle",
+  position,
+  name: `M${position}`,
+  description: null,
+  submissionOpensAt: at(opens),
+  submissionDueAt: at(due),
+  evaluationAt: at(due),
+  linkRequirement,
+  createdAt: at(1),
+  updatedAt: at(1),
+});
+
+// Phase 8: one window per milestone (was one per cycle). M1 the 10th–15th, M2 the 15th–20th (Drive only).
+const cycle: SubmissionCycle = {
   id: "cycle",
   status: "PUBLISHED",
   createdByFacultyId: "faculty",
-  submissionStartAt: OPENS,
-  submissionDeadline: CLOSES,
-  ...overrides,
-});
+  milestones: [
+    milestone(1, 10, 15),
+    milestone(
+      2,
+      15,
+      20,
+      LinkRequirement.from({ required: ["DRIVE"], optional: [] }),
+    ),
+  ],
+};
+const [m1, m2] = cycle.milestones;
 
 const team: SubmissionTeam = {
   id: "team",
@@ -26,110 +54,187 @@ const team: SubmissionTeam = {
     { userId: "member", name: "Member" },
   ],
 };
-
-const approved: SubmissionIdea = {
-  title: "Lost and found",
+const approved = {
+  title: "Idea",
   status: "APPROVED",
   source: "PROPOSAL",
-};
-const member: SubmissionActor = { id: "member", role: "STUDENT" };
+} as const;
+const student = (id: string) => ({ id, role: "STUDENT" as const });
 
 const codeOf = (work: () => unknown): string | undefined => {
   try {
     work();
-    return undefined;
   } catch (error) {
-    return error instanceof SubmissionDomainError ? error.code : "OTHER";
+    if (
+      error instanceof SubmissionDomainError ||
+      error instanceof LinkDomainError
+    ) {
+      return error.code;
+    }
+    throw error;
   }
+  return undefined;
 };
 
 describe("SubmissionRules", () => {
+  it("finds the cycle's milestone, and nothing else", () => {
+    expect(rules.milestoneOf(cycle, "m2")).toBe(m2);
+    expect(codeOf(() => rules.milestoneOf(cycle, "other"))).toBe(
+      "MILESTONE_NOT_FOUND",
+    );
+  });
+
   it.each([
-    [
-      "before submissions open",
-      new Date("2026-11-10T08:59:59.999Z"),
-      "NOT_OPEN",
-    ],
-    ["exactly when they open", OPENS, "OPEN"],
-    ["while open", during, "OPEN"],
-    ["exactly at the deadline", CLOSES, "CLOSED"],
-  ] as const)("the window %s is %s", (_label, now, expected) => {
-    expect(rules.window(cycle(), now)).toBe(expected);
+    [at(9), "NOT_OPEN", "NOT_OPEN"],
+    [at(10), "OPEN", "NOT_OPEN"],
+    [new Date(at(15).getTime() - 1), "OPEN", "NOT_OPEN"],
+    [at(15), "CLOSED", "OPEN"],
+    [at(20), "CLOSED", "CLOSED"],
+  ])("at %s: M1 %s, M2 %s", (now, first, second) => {
+    expect(rules.window(cycle, m1, now)).toBe(first);
+    expect(rules.window(cycle, m2, now)).toBe(second);
   });
 
   it("closes the window of a closed or draft cycle", () => {
-    expect(rules.window(cycle({ status: "CLOSED" }), during)).toBe("CLOSED");
-    expect(rules.window(cycle({ status: "DRAFT" }), during)).toBe("CLOSED");
+    expect(rules.window({ ...cycle, status: "CLOSED" }, m1, at(12))).toBe(
+      "CLOSED",
+    );
+    expect(rules.window({ ...cycle, status: "DRAFT" }, m1, at(12))).toBe(
+      "CLOSED",
+    );
   });
 
-  it("lets any member submit while open, with an approved or picked idea", () => {
-    expect(() =>
-      rules.assertCanSubmit(member, team, cycle(), approved, during),
-    ).not.toThrow();
-    expect(() =>
-      rules.assertCanSubmit(
-        { id: "leader", role: "STUDENT" },
-        team,
-        cycle(),
-        { ...approved, source: "CATALOG" },
-        during,
-      ),
-    ).not.toThrow();
-  });
-
-  it.each([
-    ["no idea", null],
-    ["a waiting idea", { ...approved, status: "SUBMITTED" as const }],
-    ["a rejected idea", { ...approved, status: "REJECTED" as const }],
-  ])("refuses a team with %s", (_label, idea) => {
-    expect(
-      codeOf(() => rules.assertCanSubmit(member, team, cycle(), idea, during)),
-    ).toBe("IDEA_NOT_APPROVED");
-  });
-
-  it("refuses outside the window, and anyone outside the team", () => {
+  it("lets any member submit while the milestone is open, with an approved or picked idea", () => {
+    for (const id of ["leader", "member"]) {
+      expect(
+        codeOf(() =>
+          rules.assertCanSubmit(student(id), team, cycle, m1, approved, at(12)),
+        ),
+      ).toBeUndefined();
+    }
     expect(
       codeOf(() =>
         rules.assertCanSubmit(
-          member,
+          student("leader"),
           team,
-          cycle(),
+          cycle,
+          m1,
+          { ...approved, source: "CATALOG" },
+          at(12),
+        ),
+      ),
+    ).toBeUndefined();
+    expect(
+      codeOf(() =>
+        rules.assertCanSubmit(
+          student("leader"),
+          team,
+          cycle,
+          m1,
+          { ...approved, status: "SUBMITTED" },
+          at(12),
+        ),
+      ),
+    ).toBe("IDEA_NOT_APPROVED");
+    expect(
+      codeOf(() =>
+        rules.assertCanSubmit(student("leader"), team, cycle, m1, null, at(12)),
+      ),
+    ).toBe("IDEA_NOT_APPROVED");
+  });
+
+  it("refuses outside the milestone's window, and anyone outside the team", () => {
+    expect(
+      codeOf(() =>
+        rules.assertCanSubmit(
+          student("leader"),
+          team,
+          cycle,
+          m1,
           approved,
-          new Date("2026-11-01"),
+          at(9),
         ),
       ),
     ).toBe("SUBMISSION_NOT_OPEN");
     expect(
       codeOf(() =>
-        rules.assertCanSubmit(member, team, cycle(), approved, CLOSES),
+        rules.assertCanSubmit(
+          student("leader"),
+          team,
+          cycle,
+          m1,
+          approved,
+          at(15),
+        ),
       ),
     ).toBe("SUBMISSION_CLOSED");
     expect(
       codeOf(() =>
         rules.assertCanSubmit(
-          { id: "outsider", role: "STUDENT" },
+          student("leader"),
           team,
-          cycle(),
+          cycle,
+          m2,
           approved,
-          during,
+          at(15),
+        ),
+      ),
+    ).toBeUndefined();
+    expect(
+      codeOf(() =>
+        rules.assertCanSubmit(
+          student("outsider"),
+          team,
+          cycle,
+          m1,
+          approved,
+          at(12),
         ),
       ),
     ).toBe("TEAM_NOT_FOUND");
   });
 
-  it("trims the content and treats empty optional fields as none", () => {
+  it("checks the links against the milestone's requirement and trims the notes", () => {
     expect(
-      rules.clean({
-        repositoryUrl: " https://github.com/team/app ",
-        demoUrl: " ",
-        reportUrl: null,
-        notes: " First version ",
-      }),
+      rules.clean(
+        {
+          links: [
+            { type: "GITHUB", url: " https://github.com/falcon/app " },
+            { type: "DEMO", url: "" },
+          ],
+          notes: "  ",
+        },
+        m1,
+      ),
     ).toEqual({
-      repositoryUrl: "https://github.com/team/app",
-      demoUrl: null,
-      reportUrl: null,
-      notes: "First version",
+      links: [{ type: "GITHUB", url: "https://github.com/falcon/app" }],
+      notes: null,
+    });
+    expect(codeOf(() => rules.clean({ links: [], notes: null }, m1))).toBe(
+      "MISSING_REQUIRED_LINK",
+    );
+    expect(
+      codeOf(() =>
+        rules.clean(
+          {
+            links: [{ type: "GITHUB", url: "https://github.com/falcon/app" }],
+            notes: null,
+          },
+          m2,
+        ),
+      ),
+    ).toBe("LINK_NOT_ALLOWED");
+    expect(
+      rules.clean(
+        {
+          links: [{ type: "DRIVE", url: "https://drive.google.com/file/d/x" }],
+          notes: " Final deck ",
+        },
+        m2,
+      ),
+    ).toEqual({
+      links: [{ type: "DRIVE", url: "https://drive.google.com/file/d/x" }],
+      notes: "Final deck",
     });
   });
 });

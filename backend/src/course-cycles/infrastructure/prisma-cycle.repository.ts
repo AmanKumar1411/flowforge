@@ -1,11 +1,12 @@
 import { Injectable } from "@nestjs/common";
+import { LinkRequirement } from "../../common/links/link-requirement";
 import { Transaction } from "../../common/transaction";
 import {
-  CourseProjectCycle as PrismaCycle,
   CycleStatus as PrismaCycleStatus,
   Prisma,
 } from "../../generated/prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { CycleRepository } from "../application/ports/cycle.repository";
 import {
   Cycle,
   CycleCreateData,
@@ -13,14 +14,47 @@ import {
   CycleStatus,
   Enrollment,
 } from "../domain/cycle.types";
-import { CycleRepository } from "../domain/cycle-repository";
+import { Milestone, MilestonePlan, PlacedMilestone } from "../domain/milestone";
 
-const toDomainStatus = (status: PrismaCycleStatus): CycleStatus => status;
+const withMilestones = {
+  milestones: { orderBy: { position: "asc" } },
+} satisfies Prisma.CourseProjectCycleInclude;
 
-const toDomain = (cycle: PrismaCycle): Cycle => ({
-  ...cycle,
-  status: toDomainStatus(cycle.status),
+type CycleRow = Prisma.CourseProjectCycleGetPayload<{
+  include: typeof withMilestones;
+}>;
+
+const toMilestone = (row: CycleRow["milestones"][number]): Milestone => ({
+  ...row,
+  linkRequirement: LinkRequirement.from(row.linkRequirement),
 });
+
+const toDomain = (row: CycleRow): Cycle => ({
+  ...row,
+  status: row.status as CycleStatus,
+  ideaLinkRequirement: LinkRequirement.from(row.ideaLinkRequirement),
+  milestones: row.milestones.map(toMilestone),
+});
+
+const milestoneData = (milestone: PlacedMilestone) => ({
+  ...milestone,
+  linkRequirement: milestone.linkRequirement.toJSON() as object,
+});
+
+const fieldData = (
+  fields: CyclePatch,
+): Prisma.CourseProjectCycleUpdateManyMutationInput => {
+  const { ideaLinkRequirement, ...rest } = fields;
+  return {
+    ...rest,
+    ...(ideaLinkRequirement
+      ? { ideaLinkRequirement: ideaLinkRequirement.toJSON() as object }
+      : {}),
+  };
+};
+
+// Positions move out of the way first, so a reordered list never collides with itself.
+const POSITION_OFFSET = 1000;
 
 @Injectable()
 export class PrismaCycleRepository extends CycleRepository {
@@ -28,24 +62,43 @@ export class PrismaCycleRepository extends CycleRepository {
     super();
   }
 
-  async create(data: CycleCreateData): Promise<Cycle> {
-    const cycle = await this.prisma.courseProjectCycle.create({ data });
-    return toDomain(cycle);
+  async create(
+    data: CycleCreateData,
+    milestones: readonly PlacedMilestone[],
+    tx: Transaction,
+  ): Promise<Cycle> {
+    const row = await this.prisma.client(tx).courseProjectCycle.create({
+      data: {
+        ...data,
+        ideaLinkRequirement: data.ideaLinkRequirement.toJSON() as object,
+        milestones: { create: milestones.map(milestoneData) },
+      },
+      include: withMilestones,
+    });
+    return toDomain(row);
   }
 
-  async findById(id: string): Promise<Cycle | null> {
-    const cycle = await this.prisma.courseProjectCycle.findUnique({
+  async findById(id: string, tx?: Transaction): Promise<Cycle | null> {
+    const row = await this.prisma.client(tx).courseProjectCycle.findUnique({
       where: { id },
+      include: withMilestones,
     });
-    return cycle ? toDomain(cycle) : null;
+    return row ? toDomain(row) : null;
+  }
+
+  async lockById(id: string, tx: Transaction): Promise<Cycle | null> {
+    await this.prisma.client(tx)
+      .$queryRaw`SELECT "id" FROM "CourseProjectCycle" WHERE "id" = ${id} FOR UPDATE`;
+    return this.findById(id, tx);
   }
 
   async listByOwner(ownerId: string): Promise<Cycle[]> {
-    const cycles = await this.prisma.courseProjectCycle.findMany({
+    const rows = await this.prisma.courseProjectCycle.findMany({
       where: { createdByFacultyId: ownerId },
+      include: withMilestones,
       orderBy: { createdAt: "desc" },
     });
-    return cycles.map(toDomain);
+    return rows.map(toDomain);
   }
 
   async listPublishedForStudent(
@@ -56,7 +109,7 @@ export class PrismaCycleRepository extends CycleRepository {
       kind: "ELECTIVE",
       enrollments: { some: { email } },
     };
-    const cycles = await this.prisma.courseProjectCycle.findMany({
+    const rows = await this.prisma.courseProjectCycle.findMany({
       where: {
         status: PrismaCycleStatus.PUBLISHED,
         OR:
@@ -64,34 +117,56 @@ export class PrismaCycleRepository extends CycleRepository {
             ? [electives]
             : [{ kind: "CORE", batchYear }, electives],
       },
+      include: withMilestones,
       orderBy: { publishedAt: "desc" },
     });
-    return cycles.map(toDomain);
+    return rows.map(toDomain);
   }
 
   async listPublishedOrClosed(): Promise<Cycle[]> {
-    const cycles = await this.prisma.courseProjectCycle.findMany({
+    const rows = await this.prisma.courseProjectCycle.findMany({
       where: {
         status: { in: [PrismaCycleStatus.PUBLISHED, PrismaCycleStatus.CLOSED] },
       },
+      include: withMilestones,
       orderBy: { publishedAt: "desc" },
     });
-    return cycles.map(toDomain);
+    return rows.map(toDomain);
   }
 
-  async updateFields(
+  async update(
     id: string,
     expectedStatus: CycleStatus,
     fields: CyclePatch,
+    milestones: MilestonePlan | null,
+    tx: Transaction,
   ): Promise<Cycle | null> {
-    const result = await this.prisma.courseProjectCycle.updateMany({
+    const client = this.prisma.client(tx);
+    const { count } = await client.courseProjectCycle.updateMany({
       where: { id, status: expectedStatus as PrismaCycleStatus },
-      data: fields as Prisma.CourseProjectCycleUpdateManyMutationInput,
+      // updatedAt also moves when only the milestones change.
+      data: { ...fieldData(fields), updatedAt: new Date() },
     });
-    if (result.count === 0) {
-      return null;
+    if (count === 0) return null;
+    if (milestones) {
+      await client.milestone.deleteMany({
+        where: { cycleId: id, id: { in: milestones.remove } },
+      });
+      await client.$executeRaw`UPDATE "Milestone" SET "position" = "position" + ${POSITION_OFFSET} WHERE "cycleId" = ${id}`;
+      for (const { id: milestoneId, ...milestone } of milestones.update) {
+        await client.milestone.update({
+          where: { id: milestoneId },
+          data: milestoneData(milestone),
+        });
+      }
+      await client.milestone.createMany({
+        data: milestones.create.map((milestone) => ({
+          ...milestoneData(milestone),
+          cycleId: id,
+        })),
+      });
     }
-    return this.findById(id);
+    return this.findById(id, tx);
   }
 
   async transitionStatus(
@@ -99,20 +174,21 @@ export class PrismaCycleRepository extends CycleRepository {
     expectedStatus: CycleStatus,
     nextStatus: CycleStatus,
     timestamp: Date,
+    tx: Transaction,
   ): Promise<Cycle | null> {
     const data: Prisma.CourseProjectCycleUpdateManyMutationInput = {
       status: nextStatus as PrismaCycleStatus,
       publishedAt: nextStatus === "PUBLISHED" ? timestamp : undefined,
       closedAt: nextStatus === "CLOSED" ? timestamp : undefined,
     };
-    const result = await this.prisma.courseProjectCycle.updateMany({
+    const result = await this.prisma.client(tx).courseProjectCycle.updateMany({
       where: { id, status: expectedStatus as PrismaCycleStatus },
       data,
     });
     if (result.count === 0) {
       return null;
     }
-    return this.findById(id);
+    return this.findById(id, tx);
   }
 
   async isEnrolled(cycleId: string, email: string): Promise<boolean> {

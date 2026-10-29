@@ -38,9 +38,10 @@ export function semesterTerm(batchYear: number, semester: number): SemesterTerm 
   };
 }
 
-/** The semester a batch is in on a day (the next one in June and July), from 1 to 8. */
+/** The semester a batch is in on a day (the next odd one from July), from 1 to 8. */
 export function currentSemester(batchYear: number, today: Date = new Date()) {
   const years = today.getFullYear() - batchYear;
-  const semester = today.getMonth() <= 4 ? years * 2 : years * 2 + 1;
+  // January–June: the even semester; July–December: the odd one (Phase 8).
+  const semester = today.getMonth() <= 5 ? years * 2 : years * 2 + 1;
   return Math.min(SEMESTERS, Math.max(1, semester));
 }

@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { Transaction } from "../common/transaction";
+import { Transaction } from "../../common/transaction";
 
 /** Throws a DomainError to refuse removing the student from the elective. */
 export type EnrollmentRemovalCheck = (

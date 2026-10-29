@@ -19,6 +19,9 @@ export interface CycleData {
   catalog?: CatalogIdea[];
   teams?: Team[];
   ideas?: CycleIdea[];
+  /** Each milestone's rows, in milestone order. */
+  milestoneWork?: { milestoneId: string; rows: CycleSubmission[] }[];
+  /** Every milestone's rows together, for the teams list. */
   submissions?: CycleSubmission[];
   overview?: CompletionOverview;
   /** Parts that could not be loaded, by the summary they feed. */
@@ -48,7 +51,7 @@ export function useCycleData(cycle: Cycle | null, version: number): CycleData {
       .catch(fail("catalog"));
     // A draft has no teams yet.
     if (cycle.status === "DRAFT") {
-      merge({ teams: [], ideas: [], submissions: [] });
+      merge({ teams: [], ideas: [], submissions: [], milestoneWork: [] });
     } else {
       listCycleTeams(cycle.id)
         .then((teams) => merge({ teams }))
@@ -56,8 +59,14 @@ export function useCycleData(cycle: Cycle | null, version: number): CycleData {
       listCycleIdeas(cycle.id)
         .then((ideas) => merge({ ideas }))
         .catch(fail("teams", "ideas"));
-      listCycleSubmissions(cycle.id)
-        .then((submissions) => merge({ submissions }))
+      Promise.all(
+        cycle.milestones.map((milestone) =>
+          listCycleSubmissions(cycle.id, milestone.id).then((rows) => ({ milestoneId: milestone.id, rows })),
+        ),
+      )
+        .then((milestoneWork) =>
+          merge({ milestoneWork, submissions: milestoneWork.flatMap((work) => work.rows) }),
+        )
         .catch(fail("submissions"));
       getCompletionOverview(cycle.id)
         .then((overview) => merge({ overview }))
@@ -71,8 +80,8 @@ export function useCycleData(cycle: Cycle | null, version: number): CycleData {
 }
 
 /** The counts the summaries, the primary action and the attention card use. */
-export function countsOf(data: CycleData): CycleCounts {
-  const { roster, catalog, teams, ideas, submissions, overview } = data;
+export function countsOf(data: CycleData, cycle?: Cycle, now = Date.now()): CycleCounts {
+  const { roster, catalog, teams, ideas, milestoneWork, overview } = data;
   const ideaCount = (status: string | null) =>
     ideas?.filter((row) => (row.idea?.status ?? null) === status).length ?? 0;
   return {
@@ -92,9 +101,19 @@ export function countsOf(data: CycleData): CycleCounts {
       rejected: ideaCount("REJECTED"),
       none: ideaCount(null),
     },
-    submissions: submissions && {
-      submitted: submissions.filter((row) => row.latest).length,
-    },
+    // Milestones open now, and how many teams have handed something in for each.
+    openMilestones:
+      cycle && milestoneWork
+        ? cycle.milestones
+            .filter(
+              (milestone) =>
+                Date.parse(milestone.submissionOpensAt) <= now && now < Date.parse(milestone.submissionDueAt),
+            )
+            .map((milestone) => {
+              const rows = milestoneWork.find((work) => work.milestoneId === milestone.id)?.rows ?? [];
+              return { milestone, submitted: rows.filter((row) => row.latest).length, teams: rows.length };
+            })
+        : undefined,
     failed: data.failed,
   };
 }

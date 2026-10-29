@@ -3,49 +3,72 @@ import {
   SubmissionContent,
   SubmissionCycle,
   SubmissionIdea,
+  SubmissionMilestone,
   SubmissionTeam,
   SubmissionWindow,
 } from "./submission";
 import { SubmissionDomainError } from "./submission.errors";
+import { Link } from "../../common/links/link-type";
 
 export type SubmissionActor = { id: string; role: Role };
 
 /**
- * The submission rules of a cycle, free of I/O (ADR 015). Any member of a team
- * whose idea is approved (or picked from the catalog) adds a version while
- * submissions are open: from `submissionStartAt` until `submissionDeadline`,
- * while the cycle is published. There is no late work; the newest version
- * before the deadline is the team's final one.
+ * The submission rules of a cycle, free of I/O (ADRs 015 and 016). Any member
+ * of a team whose idea is approved (or picked from the catalog) adds a
+ * version for a milestone while that milestone is open: from its
+ * `submissionOpensAt` until its `submissionDueAt`, while the cycle is
+ * published. There is no late work; the newest version before the due date
+ * is the team's final one for that milestone.
  */
 export class SubmissionRules {
-  window(cycle: SubmissionCycle, now: Date): SubmissionWindow {
-    if (cycle.status !== "PUBLISHED" || now >= cycle.submissionDeadline) {
+  /** The cycle's milestone, or MILESTONE_NOT_FOUND. */
+  milestoneOf(
+    cycle: SubmissionCycle,
+    milestoneId: string,
+  ): SubmissionMilestone {
+    const milestone = cycle.milestones.find((m) => m.id === milestoneId);
+    if (!milestone) {
+      throw new SubmissionDomainError(
+        "MILESTONE_NOT_FOUND",
+        "This project has no such milestone",
+      );
+    }
+    return milestone;
+  }
+
+  window(
+    cycle: SubmissionCycle,
+    milestone: SubmissionMilestone,
+    now: Date,
+  ): SubmissionWindow {
+    if (cycle.status !== "PUBLISHED" || now >= milestone.submissionDueAt) {
       return "CLOSED";
     }
-    return now < cycle.submissionStartAt ? "NOT_OPEN" : "OPEN";
+    return now < milestone.submissionOpensAt ? "NOT_OPEN" : "OPEN";
   }
 
   assertCanSubmit(
     actor: SubmissionActor,
     team: SubmissionTeam,
     cycle: SubmissionCycle,
+    milestone: SubmissionMilestone,
     idea: SubmissionIdea | null,
     now: Date,
   ): void {
     if (!team.members.some((member) => member.userId === actor.id)) {
       throw new SubmissionDomainError("TEAM_NOT_FOUND", "Team not found");
     }
-    const window = this.window(cycle, now);
+    const window = this.window(cycle, milestone, now);
     if (window === "NOT_OPEN") {
       throw new SubmissionDomainError(
         "SUBMISSION_NOT_OPEN",
-        `Submissions open on ${cycle.submissionStartAt.toISOString()}`,
+        `Submissions for M${milestone.position} open on ${milestone.submissionOpensAt.toISOString()}`,
       );
     }
     if (window === "CLOSED") {
       throw new SubmissionDomainError(
         "SUBMISSION_CLOSED",
-        "Submissions for this cycle are closed",
+        `Submissions for M${milestone.position} are closed`,
       );
     }
     if (idea?.status !== "APPROVED") {
@@ -56,12 +79,13 @@ export class SubmissionRules {
     }
   }
 
-  /** Trimmed content; empty optional fields mean none. */
-  clean(content: SubmissionContent): SubmissionContent {
+  /** The links checked against the milestone's requirement; empty notes mean none. */
+  clean(
+    content: SubmissionContent,
+    milestone: SubmissionMilestone,
+  ): { links: Link[]; notes: string | null } {
     return {
-      repositoryUrl: content.repositoryUrl.trim(),
-      demoUrl: content.demoUrl?.trim() || null,
-      reportUrl: content.reportUrl?.trim() || null,
+      links: milestone.linkRequirement.check(content.links),
       notes: content.notes?.trim() || null,
     };
   }

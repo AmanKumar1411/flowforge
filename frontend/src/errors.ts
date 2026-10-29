@@ -72,5 +72,9 @@ export function readableError(error: unknown): string {
   if (!(error instanceof ApiError)) {
     return "Something went wrong. Check the API and try again.";
   }
-  return (error.code && messages[error.code]) || inScreenWords(error.message);
+  const message = (error.code && messages[error.code]) || inScreenWords(error.message);
+  // A blocked publish lists every problem; say each one.
+  return error.details.length > 0
+    ? `${message}. ${error.details.map((detail) => inScreenWords(detail.message)).join(". ")}.`
+    : message;
 }

@@ -1,5 +1,5 @@
 import { Injectable, OnModuleInit } from "@nestjs/common";
-import { EnrollmentRemovalChecks } from "../../course-cycles/enrollment-removal-checks";
+import { EnrollmentRemovalChecks } from "../../course-cycles/application/enrollment-removal-checks";
 import { TeamDomainError } from "../domain/team.errors";
 import { TeamRepository } from "./ports/team.repository";
 

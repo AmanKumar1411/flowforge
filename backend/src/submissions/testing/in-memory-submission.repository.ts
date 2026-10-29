@@ -10,20 +10,28 @@ export class InMemorySubmissionRepository extends SubmissionRepository {
     super();
   }
 
-  listByTeam(teamId: string): Promise<Submission[]> {
-    return Promise.resolve(this.newestFirst((row) => row.teamId === teamId));
+  listByTeam(teamId: string, milestoneId: string): Promise<Submission[]> {
+    return Promise.resolve(
+      this.newestFirst(
+        (row) => row.teamId === teamId && row.milestoneId === milestoneId,
+      ),
+    );
   }
 
-  listByCycle(cycleId: string): Promise<Submission[]> {
-    return Promise.resolve(this.newestFirst((row) => row.cycleId === cycleId));
+  listByMilestone(milestoneId: string): Promise<Submission[]> {
+    return Promise.resolve(
+      this.newestFirst((row) => row.milestoneId === milestoneId),
+    );
   }
 
-  lockLatestVersion(teamId: string): Promise<number> {
+  lockLatestVersion(teamId: string, milestoneId: string): Promise<number> {
     return Promise.resolve(
       Math.max(
         0,
         ...this.rows
-          .filter((row) => row.teamId === teamId)
+          .filter(
+            (row) => row.teamId === teamId && row.milestoneId === milestoneId,
+          )
           .map((row) => row.version),
       ),
     );
@@ -34,6 +42,7 @@ export class InMemorySubmissionRepository extends SubmissionRepository {
       this.rows.some(
         (row) =>
           row.teamId === submission.teamId &&
+          row.milestoneId === submission.milestoneId &&
           row.version === submission.version,
       )
     ) {

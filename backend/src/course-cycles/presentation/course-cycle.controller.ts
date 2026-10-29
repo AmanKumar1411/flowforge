@@ -15,12 +15,16 @@ import {
   ApiOperation,
   ApiTags,
 } from "@nestjs/swagger";
-import { AuthenticatedUser } from "../auth/application/authenticated-user";
-import { CurrentUser } from "../auth/presentation/decorators/current-user.decorator";
-import { Roles } from "../auth/presentation/decorators/roles.decorator";
-import { CourseCycleService } from "./course-cycle.service";
+import { AuthenticatedUser } from "../../auth/application/authenticated-user";
+import { CurrentUser } from "../../auth/presentation/decorators/current-user.decorator";
+import { Roles } from "../../auth/presentation/decorators/roles.decorator";
+import { CourseCycleService } from "../application/course-cycle.service";
 import { CreateCycleDto } from "./dto/create-cycle.dto";
-import { CycleResponseDto } from "./dto/cycle-response.dto";
+import {
+  CycleResponseDto,
+  PublishChecksDto,
+  PublishResponseDto,
+} from "./dto/cycle-response.dto";
 import { UpdateCycleDto } from "./dto/update-cycle.dto";
 
 @ApiTags("course-cycles")
@@ -88,15 +92,34 @@ export class CourseCycleController {
     return this.cycles.update(user, id, dto);
   }
 
+  @Get(":id/publish-checks")
+  @Roles("FACULTY")
+  @ApiOperation({
+    summary: "What publishing an owned draft would report now",
+    description:
+      "Runs every publish check without publishing: blocking problems and warnings, each with a code.",
+  })
+  @ApiOkResponse({ type: PublishChecksDto })
+  checkPublish(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id", new ParseUUIDPipe()) id: string,
+  ): Promise<PublishChecksDto> {
+    return this.cycles.checkPublish(user, id);
+  }
+
   @Post(":id/publish")
   @HttpCode(HttpStatus.OK)
   @Roles("FACULTY")
-  @ApiOperation({ summary: "Publish an owned draft" })
-  @ApiOkResponse({ type: CycleResponseDto })
+  @ApiOperation({
+    summary: "Publish an owned draft",
+    description:
+      "Runs every publish check. Any blocking one stops it with 409 PUBLISH_BLOCKED, listing all of them in details ({ code, message }). Warnings come back with the published cycle.",
+  })
+  @ApiOkResponse({ type: PublishResponseDto })
   publish(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id", new ParseUUIDPipe()) id: string,
-  ): Promise<CycleResponseDto> {
+  ): Promise<PublishResponseDto> {
     return this.cycles.publish(user, id);
   }
 

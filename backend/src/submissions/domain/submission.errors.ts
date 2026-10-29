@@ -5,6 +5,7 @@ export type SubmissionErrorCode =
   | "SUBMISSION_NOT_OPEN"
   | "SUBMISSION_CLOSED"
   | "IDEA_NOT_APPROVED"
-  | "SUBMISSION_CHANGED";
+  | "SUBMISSION_CHANGED"
+  | "MILESTONE_NOT_FOUND";
 
 export class SubmissionDomainError extends DomainError<SubmissionErrorCode> {}

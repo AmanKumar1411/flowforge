@@ -24,6 +24,69 @@ export interface DemoAccount {
   batchYear: number | null;
 }
 
+/** The kinds of link a faculty member can ask for. */
+export type LinkType = "GITHUB" | "DRIVE" | "DEMO" | "REPORT";
+
+export interface Link {
+  type: LinkType;
+  url: string;
+}
+
+/** Which links are required and which optional; any other type is not allowed. */
+export interface LinkRequirement {
+  required: LinkType[];
+  optional: LinkType[];
+}
+
+/** Where ideas come from: teams' own proposals, the faculty's list, or either. */
+export type CycleIdeaSource = "STUDENT_PROPOSALS" | "FACULTY_LIST" | "BOTH";
+
+/** One checkpoint (M1…Mn): a submission window and an evaluation day. */
+export interface Milestone {
+  id: string;
+  position: number;
+  name: string;
+  description: string | null;
+  submissionOpensAt: string;
+  /** Versions are accepted strictly before this moment. */
+  submissionDueAt: string;
+  evaluationAt: string;
+  linkRequirement: LinkRequirement;
+}
+
+export interface MilestoneRef {
+  id: string;
+  position: number;
+  name: string;
+}
+
+/** Where a cycle is, computed by the API from its dates. */
+export type CycleStage =
+  | { kind: "DRAFT" | "TEAMS" | "IDEAS" | "WRAP_UP" | "CLOSED" }
+  | {
+      kind: "MILESTONE";
+      milestone: MilestoneRef;
+      phase: "UPCOMING" | "OPEN" | "AWAITING_EVALUATION";
+    };
+
+export type CycleEventKind =
+  | "TEAM_DEADLINE"
+  | "IDEA_DEADLINE"
+  | "SUBMISSION_OPENS"
+  | "SUBMISSION_DUE"
+  | "EVALUATION";
+
+export interface CycleEvent {
+  kind: CycleEventKind;
+  at: string;
+  milestone?: MilestoneRef;
+}
+
+/** An event of one of the student's projects (`GET /me/upcoming`). */
+export interface UpcomingEvent extends CycleEvent {
+  cycle: { id: string; courseName: string; title: string };
+}
+
 export interface Cycle {
   id: string;
   courseName: string;
@@ -32,45 +95,67 @@ export interface Cycle {
   batchYear: number;
   semester: number;
   academicYear: string;
-  submissionStartAt: string;
-  submissionDeadline: string;
   minTeamSize: number;
   maxTeamSize: number;
-  /** Students change their own teams until this moment. */
-  teamFormationDeadline: string;
-  /** The owning faculty place students without a team until this moment. */
-  teamCompletionDeadline: string;
+  /** Students change their own teams until this moment; the faculty then place the rest until `ideaDeadline`. */
+  teamDeadline: string;
   /** Teams submit or pick their first idea until this moment; after a rejection, rounds continue while the cycle is published. */
   ideaDeadline: string;
+  ideaSource: CycleIdeaSource;
+  ideaLinkRequirement: LinkRequirement;
+  /** In order, M1 first. */
+  milestones: Milestone[];
   kind: CourseKind;
   status: CycleStatus;
+  currentStage: CycleStage;
+  /** The next three events. */
+  nextEvents: CycleEvent[];
   publishedAt: string | null;
   closedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface CycleInput {
+/** A milestone as the API takes it: `id` keeps an existing one. */
+export interface MilestonePayload {
+  id?: string;
+  name: string;
+  description: string | null;
+  submissionOpensAt: string;
+  submissionDueAt: string;
+  evaluationAt: string;
+  linkRequirement: LinkRequirement;
+}
+
+/** What the API takes to create or edit a cycle. */
+export interface CyclePayload {
   courseName: string;
   title: string;
   description?: string;
   batchYear: number;
   semester: number;
   academicYear: string;
-  submissionStartAt: string;
-  submissionDeadline: string;
   minTeamSize: number;
   maxTeamSize: number;
-  teamFormationDeadline: string;
-  teamCompletionDeadline: string;
+  teamDeadline: string;
   ideaDeadline: string;
+  ideaSource: CycleIdeaSource;
+  ideaLinkRequirement: LinkRequirement;
   kind: CourseKind;
+  milestones: MilestonePayload[];
 }
 
-/** What the API takes: a null placing deadline means no faculty window. */
-export type CyclePayload = Omit<CycleInput, "teamCompletionDeadline"> & {
-  teamCompletionDeadline: string | null;
-};
+/** One problem among several the API reports at once. */
+export interface ErrorDetail {
+  code: string;
+  message: string;
+}
+
+/** What publishing would report now. */
+export interface PublishChecks {
+  blocking: ErrorDetail[];
+  warnings: ErrorDetail[];
+}
 
 export interface TeamMember {
   userId: string;
@@ -180,7 +265,8 @@ export interface IdeaContent {
   title: string;
   problem: string;
   solution: string;
-  link: string | null;
+  /** Checked against the cycle's idea link requirement; a pick has none. */
+  links: Link[];
 }
 
 export interface IdeaReview {
@@ -236,17 +322,17 @@ export interface CatalogIdea extends CatalogIdeaContent {
 }
 
 export interface SubmissionContent {
-  repositoryUrl: string;
-  demoUrl: string | null;
-  reportUrl: string | null;
+  /** Checked against the milestone's link requirement. */
+  links: Link[];
   notes: string | null;
 }
 
-/** One version of a team's work; the highest version is the current one. */
+/** One version of a team's work for a milestone; the highest version is the current one. */
 export interface Submission extends SubmissionContent {
   id: string;
   teamId: string;
   cycleId: string;
+  milestoneId: string;
   version: number;
   submittedBy: { id: string; name: string };
   submittedAt: string;
@@ -256,6 +342,8 @@ export interface CycleSubmission {
   team: CycleIdea["team"];
   idea: { title: string; status: IdeaStatus; source: IdeaSource } | null;
   latest: Submission | null;
+  /** Every version for the milestone, newest first. */
+  versions: Submission[];
   versionCount: number;
 }
 

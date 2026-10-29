@@ -8,6 +8,7 @@ import {
 } from "../api/ideas";
 import { formatDate } from "../dates";
 import { readableError } from "../errors";
+import { linkProblems, linksFrom, valuesOf, type LinkValues } from "../links";
 import {
   ideaAction,
   ideaStatusLabel,
@@ -21,10 +22,12 @@ import type {
   Idea,
   IdeaContent,
   IdeaDecision,
+  LinkRequirement,
   Team,
 } from "../types";
+import { LinkFields, LinkList } from "./SubmissionPanels";
 
-const LIMITS = { title: 120, problem: 2000, solution: 4000, link: 500 };
+const LIMITS = { title: 120, problem: 2000, solution: 4000 };
 
 const SAVE_LABELS: Record<IdeaAction, string> = {
   SUBMIT: "Submit idea",
@@ -79,8 +82,11 @@ export function TeamIdeaPanel({
     setCatalog(await listCatalog(cycle.id));
   };
   // The list shows while the team still needs an idea; with a waiting proposal, on request.
+  // Phase 8: the project decides whether teams propose, pick from the list, or either.
+  const offered = cycle.ideaSource === "STUDENT_PROPOSALS" ? [] : catalog;
+  const canPropose = cycle.ideaSource !== "FACULTY_LIST";
   const showCatalog =
-    catalog.length > 0 &&
+    offered.length > 0 &&
     idea !== undefined &&
     !editing &&
     (idea === null || idea.status === "REJECTED" || picking);
@@ -97,7 +103,7 @@ export function TeamIdeaPanel({
         {idea && <IdeaStatusBadge idea={idea} />}
         {isLeader && action && !editing && (
           <div className="row-actions">
-            {action === "EDIT" && catalog.length > 0 && (
+            {action === "EDIT" && offered.length > 0 && (
               <button
                 className="text-button"
                 onClick={() => setPicking(!picking)}
@@ -105,25 +111,27 @@ export function TeamIdeaPanel({
                 {picking ? "Keep our proposal" : "Pick from the list instead"}
               </button>
             )}
-            <button
-              className="dark-button compact"
-              onClick={() => {
-                setEditing(true);
-                setPicking(false);
-              }}
-            >
-              {action === "SUBMIT"
-                ? "Write our own idea"
-                : action === "EDIT"
-                  ? "Edit idea"
-                  : "Revise and resubmit"}
-            </button>
+            {canPropose && (
+              <button
+                className="dark-button compact"
+                onClick={() => {
+                  setEditing(true);
+                  setPicking(false);
+                }}
+              >
+                {action === "SUBMIT"
+                  ? "Write our own idea"
+                  : action === "EDIT"
+                    ? "Edit idea"
+                    : "Revise and resubmit"}
+              </button>
+            )}
           </div>
         )}
       </div>
       {idea !== undefined && (
         <p className="field-hint">
-          {ideaNote(idea, cycle, now, isLeader, catalog.length > 0)}
+          {ideaNote(idea, cycle, now, isLeader, offered.length > 0)}
         </p>
       )}
       {error && <p className="form-error">{error}</p>}
@@ -135,6 +143,7 @@ export function TeamIdeaPanel({
               : null
           }
           saveLabel={SAVE_LABELS[action]}
+          requirement={cycle.ideaLinkRequirement}
           onSave={save}
           onCancel={() => setEditing(false)}
         />
@@ -143,7 +152,7 @@ export function TeamIdeaPanel({
       )}
       {showCatalog && (
         <CatalogList
-          ideas={catalog}
+          ideas={offered}
           onPick={isLeader && action ? pick : undefined}
         />
       )}
@@ -278,23 +287,29 @@ function CatalogList({
 function IdeaForm({
   initial,
   saveLabel,
+  requirement,
   onSave,
   onCancel,
 }: {
   initial: IdeaContent | null;
   saveLabel: string;
+  requirement: LinkRequirement;
   onSave: (content: IdeaContent) => Promise<void>;
   onCancel: () => void;
 }) {
   const [title, setTitle] = useState(initial?.title ?? "");
   const [problem, setProblem] = useState(initial?.problem ?? "");
   const [solution, setSolution] = useState(initial?.solution ?? "");
-  const [link, setLink] = useState(initial?.link ?? "");
+  const [links, setLinks] = useState<LinkValues>(() => valuesOf(initial?.links ?? []));
+  const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const problems = tried ? linkProblems(requirement, links) : {};
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    setTried(true);
+    if (Object.keys(linkProblems(requirement, links)).length > 0) return;
     setBusy(true);
     setError("");
     try {
@@ -302,7 +317,7 @@ function IdeaForm({
         title: title.trim(),
         problem: problem.trim(),
         solution: solution.trim(),
-        link: link.trim() || null,
+        links: linksFrom(requirement, links),
       });
     } catch (caught) {
       setError(readableError(caught));
@@ -344,16 +359,7 @@ function IdeaForm({
           required
         />
       </label>
-      <label>
-        Link (optional)
-        <input
-          type="url"
-          value={link}
-          onChange={(event) => setLink(event.target.value)}
-          maxLength={LIMITS.link}
-          placeholder="https://… a repository, document or demo"
-        />
-      </label>
+      <LinkFields requirement={requirement} values={links} problems={problems} onChange={setLinks} />
       {error && <p className="form-error">{error}</p>}
       <div className="form-actions">
         <button type="button" className="text-button" onClick={onCancel}>
@@ -380,13 +386,11 @@ export function IdeaDetails({ idea }: { idea: Idea }) {
             <dd>{idea.solution}</dd>
           </>
         )}
-        {idea.link && (
+        {idea.links.length > 0 && (
           <>
-            <dt>Link</dt>
+            <dt>Links</dt>
             <dd>
-              <a href={idea.link} target="_blank" rel="noopener noreferrer">
-                {idea.link}
-              </a>
+              <LinkList links={idea.links} />
             </dd>
           </>
         )}

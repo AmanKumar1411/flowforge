@@ -35,7 +35,11 @@ export function teamRows(
   submissions: CycleSubmission[],
 ): TeamRow[] {
   const ideaOf = new Map(ideas.map((row) => [row.team.id, row.idea]));
-  const versionsOf = new Map(submissions.map((row) => [row.team.id, row.versionCount]));
+  // Every milestone's rows: a team's count adds up its versions across milestones.
+  const versionsOf = new Map<string, number>();
+  for (const row of submissions) {
+    versionsOf.set(row.team.id, (versionsOf.get(row.team.id) ?? 0) + row.versionCount);
+  }
   return teams
     .map((team) => {
       const idea = ideaOf.get(team.id) ?? null;

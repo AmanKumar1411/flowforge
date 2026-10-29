@@ -35,6 +35,7 @@ export class IdeaCatalogService {
     content: CatalogIdeaContent,
   ): Promise<CatalogIdea> {
     const cycle = await this.editableCycle(actor, cycleId);
+    this.rules.assertCatalogAllowed(cycle);
     const clean = this.rules.cleanCatalog(content);
     return this.transactions.run(async (tx) => {
       const created = await this.catalog.create(

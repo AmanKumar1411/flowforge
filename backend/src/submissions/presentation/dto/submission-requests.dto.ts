@@ -1,38 +1,29 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsOptional, IsString, IsUrl, MaxLength } from "class-validator";
+import { Type } from "class-transformer";
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateNested,
+} from "class-validator";
+import { LinkDto } from "../../../common/links/link.dto";
 
-export const SUBMISSION_LIMITS = { url: 500, notes: 4000 } as const;
-
-const HTTP_URL = { protocols: ["http", "https"], require_protocol: true };
+export const SUBMISSION_LIMITS = { notes: 4000 } as const;
 
 export class SubmitWorkDto {
   @ApiProperty({
-    example: "https://github.com/nimbus/room-finder",
-    description: "Where the code lives (http or https)",
+    type: LinkDto,
+    isArray: true,
+    description:
+      "Checked against the milestone's link requirement: 400 MISSING_REQUIRED_LINK, LINK_NOT_ALLOWED, or INVALID_LINK (a bad URL, or one type twice). An empty url means none.",
   })
-  @IsUrl(HTTP_URL)
-  @MaxLength(SUBMISSION_LIMITS.url)
-  repositoryUrl!: string;
-
-  @ApiPropertyOptional({
-    type: String,
-    nullable: true,
-    description: "A running demo",
-  })
-  @IsOptional()
-  @IsUrl(HTTP_URL)
-  @MaxLength(SUBMISSION_LIMITS.url)
-  demoUrl?: string | null;
-
-  @ApiPropertyOptional({
-    type: String,
-    nullable: true,
-    description: "A report, slides or video",
-  })
-  @IsOptional()
-  @IsUrl(HTTP_URL)
-  @MaxLength(SUBMISSION_LIMITS.url)
-  reportUrl?: string | null;
+  @IsArray()
+  @ArrayMaxSize(10)
+  @ValidateNested({ each: true })
+  @Type(() => LinkDto)
+  links!: LinkDto[];
 
   @ApiPropertyOptional({
     type: String,

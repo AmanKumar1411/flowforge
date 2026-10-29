@@ -1,4 +1,5 @@
 import { AuditService } from "../../audit/audit.service";
+import { LinkRequirement } from "../../common/links/link-requirement";
 import { AuditEvent } from "../../audit/domain/audit-event";
 import { FixedClock } from "../../common/testing/fixed-clock";
 import { ImmediateTransactionRunner } from "../../common/testing/immediate-transaction.runner";
@@ -20,14 +21,14 @@ jest.mock("@nestjs/common", () => ({
 
 const HOUR_MS = 60 * 60 * 1000;
 const NOW = "2026-11-05T09:00:00.000Z";
-// The idea deadline is 4 days away; submissions open a day after it and close a month later.
+// The idea deadline is 4 days away. Phase 8: ideas come from proposals or the list, with optional links.
 const cycle: IdeaCycle = {
   id: "cycle",
   status: "PUBLISHED",
   createdByFacultyId: "faculty",
   ideaDeadline: new Date("2026-11-09T09:00:00.000Z"),
-  submissionStartAt: new Date("2026-11-10T09:00:00.000Z"),
-  submissionDeadline: new Date("2026-12-10T09:00:00.000Z"),
+  ideaSource: "BOTH",
+  ideaLinkRequirement: LinkRequirement.IDEA_DEFAULT,
 };
 
 const person = (id: string, role: TeamActor["role"]): TeamActor => ({
@@ -65,7 +66,7 @@ const content = {
   title: "Lost and found",
   problem: "Things get lost on campus",
   solution: "A board with photos",
-  link: null,
+  links: [],
 };
 
 /** Members see their team; the owning faculty and admins see every team; nobody else does. */
@@ -153,11 +154,15 @@ describe("IdeaService", () => {
     const idea = await kit.service.submit(leader, "falcon", {
       ...content,
       title: "  Lost and found ",
-      link: " ",
+      links: [
+        { type: "GITHUB", url: " https://github.com/falcon/lost-and-found " },
+      ],
     });
     expect(idea).toMatchObject({
       title: "Lost and found",
-      link: null,
+      links: [
+        { type: "GITHUB", url: "https://github.com/falcon/lost-and-found" },
+      ],
       status: "SUBMITTED",
       version: 1,
       submittedBy: { id: "leader" },

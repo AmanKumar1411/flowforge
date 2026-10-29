@@ -70,6 +70,10 @@ enum AuditAction {
   CATALOG_IDEA_REMOVED
   IDEA_PICKED
   SUBMISSION_CREATED
+  CYCLE_CREATED
+  CYCLE_UPDATED
+  CYCLE_PUBLISHED
+  CYCLE_CLOSED
 }
 
 model User {
@@ -179,41 +183,72 @@ enum CourseKind {
   ELECTIVE
 }
 
+// Where a cycle's ideas come from: teams' own proposals, the faculty's list, or either.
+enum CycleIdeaSource {
+  STUDENT_PROPOSALS
+  FACULTY_LIST
+  BOTH
+}
+
 model CourseProjectCycle {
-  id                     String            @id @default(uuid())
-  courseName             String
-  title                  String
-  description            String?
-  batchYear              Int
-  semester               Int
-  academicYear           String
-  submissionStartAt      DateTime
-  submissionDeadline     DateTime
+  id                  String            @id @default(uuid())
+  courseName          String
+  title               String
+  description         String?
+  batchYear           Int
+  semester            Int
+  academicYear        String
   // Team rules. The migration adds a CHECK: 1 <= min <= max <= 10.
-  minTeamSize            Int               @default(1)
-  maxTeamSize            Int               @default(4)
-  // Students change their own teams until teamFormationDeadline. The owning faculty then
-  // complete teams until teamCompletionDeadline. Teams submit their first idea by ideaDeadline;
-  // a rejected idea can be resubmitted until submissionStartAt.
-  // The migrations add CHECKs: formation <= completion <= idea deadline <= submissionStartAt.
-  teamFormationDeadline  DateTime
-  teamCompletionDeadline DateTime
-  ideaDeadline           DateTime
-  kind                   CourseKind        @default(CORE)
-  status                 CycleStatus       @default(DRAFT)
-  createdByFacultyId     String
-  createdByFaculty       User              @relation(fields: [createdByFacultyId], references: [id], onDelete: Restrict)
-  publishedAt            DateTime?
-  closedAt               DateTime?
-  createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @updatedAt
-  teams                  Team[]
-  enrollments            CycleEnrollment[]
-  teamSeekers            TeamSeeker[]
-  catalogIdeas           CatalogIdea[]
+  minTeamSize         Int               @default(1)
+  maxTeamSize         Int               @default(4)
+  // Students change their own teams until teamDeadline; the owning faculty place students left
+  // without a team from then until ideaDeadline, the first idea's deadline (ADR 016).
+  // The migration adds a CHECK: teamDeadline <= ideaDeadline (strict in the domain).
+  teamDeadline        DateTime
+  ideaDeadline        DateTime
+  ideaSource          CycleIdeaSource   @default(BOTH)
+  // A LinkRequirement: { required: LinkType[], optional: LinkType[] } (ADR 018).
+  ideaLinkRequirement Json              @default("{\"required\": [], \"optional\": [\"GITHUB\", \"DRIVE\"]}")
+  kind                CourseKind        @default(CORE)
+  status              CycleStatus       @default(DRAFT)
+  createdByFacultyId  String
+  createdByFaculty    User              @relation(fields: [createdByFacultyId], references: [id], onDelete: Restrict)
+  publishedAt         DateTime?
+  closedAt            DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  milestones          Milestone[]
+  teams               Team[]
+  enrollments         CycleEnrollment[]
+  teamSeekers         TeamSeeker[]
+  catalogIdeas        CatalogIdea[]
 
   @@index([createdByFacultyId, createdAt])
   @@index([batchYear, status, publishedAt])
+}
+
+// One checkpoint of a cycle: a submission window and an evaluation day (ADR 016). Saved with its
+// cycle. The migration adds CHECKs: position >= 1 and opens < due <= evaluation; the order between
+// milestones, and unique names, are checked by MilestoneSchedule.
+model Milestone {
+  id                String             @id @default(uuid())
+  cycleId           String
+  cycle             CourseProjectCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict)
+  position          Int
+  name              String
+  description       String?
+  submissionOpensAt DateTime
+  submissionDueAt   DateTime
+  evaluationAt      DateTime
+  // A LinkRequirement, like CourseProjectCycle.ideaLinkRequirement.
+  linkRequirement   Json
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  submissions       Submission[]
+
+  @@unique([cycleId, position])
+  // Target of Submission's composite foreign key (and a later Evaluation's).
+  @@unique([id, cycleId])
 }
 
 // The roster of an elective. Keyed by email so faculty can enroll students who have not
@@ -341,7 +376,8 @@ model ProjectIdea {
   problem       String
   // Null only for a pick (a CHECK in the migration).
   solution      String?
-  link          String?
+  // [{ type, url }], checked against the cycle's ideaLinkRequirement; a pick has none.
+  links         Json         @default("[]")
   status        IdeaStatus   @default(SUBMITTED)
   // A pick is approved at once; CHECKs tie source, catalogIdeaId and status together.
   source        IdeaSource   @default(PROPOSAL)
@@ -381,23 +417,25 @@ model IdeaReview {
 
 // Submissions
 
-// One version of a team's work. Every save adds a version; the latest is the current one (ADR 015).
+// One version of a team's work for one milestone. Every save adds a version; the latest is the
+// current one (ADRs 015 and 016).
 model Submission {
-  id            String   @id @default(uuid())
+  id            String    @id @default(uuid())
   teamId        String
-  // Copied from the team; the composite foreign key keeps it equal to the team's cycle.
+  // Copied from the team; both composite foreign keys keep it equal to the team's and the milestone's cycle.
   cycleId       String
-  team          Team     @relation(fields: [teamId, cycleId], references: [id, cycleId], onDelete: Restrict)
-  // 1, 2, 3… per team. The migration adds a CHECK: version >= 1.
+  team          Team      @relation(fields: [teamId, cycleId], references: [id, cycleId], onDelete: Restrict)
+  milestoneId   String
+  milestone     Milestone @relation(fields: [milestoneId, cycleId], references: [id, cycleId], onDelete: Restrict)
+  // 1, 2, 3… per team and milestone. The migration adds a CHECK: version >= 1.
   version       Int
-  repositoryUrl String
-  demoUrl       String?
-  reportUrl     String?
+  // [{ type, url }], checked against the milestone's linkRequirement.
+  links         Json
   notes         String?
   submittedById String
-  submittedBy   User     @relation("SubmissionAuthor", fields: [submittedById], references: [id], onDelete: Restrict)
+  submittedBy   User      @relation("SubmissionAuthor", fields: [submittedById], references: [id], onDelete: Restrict)
   submittedAt   DateTime
 
-  @@unique([teamId, version])
-  @@index([cycleId, submittedAt])
+  @@unique([teamId, milestoneId, version])
+  @@index([cycleId, milestoneId, submittedAt])
 }

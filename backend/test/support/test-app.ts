@@ -76,7 +76,7 @@ export async function startTestApp(
 // TRUNCATE bypasses the audit table's append-only row trigger, which only blocks UPDATE and DELETE.
 async function resetDatabase(prisma: PrismaService): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "AuditLog", "RefreshToken", "FacultyAccessRequest", "FacultyAllowlistEntry", "Submission", "IdeaReview", "ProjectIdea", "CatalogIdea", "TeamSeeker", "TeamMember", "Team", "CycleEnrollment", "CourseProjectCycle", "User" CASCADE',
+    'TRUNCATE "AuditLog", "RefreshToken", "FacultyAccessRequest", "FacultyAllowlistEntry", "Submission", "Milestone", "IdeaReview", "ProjectIdea", "CatalogIdea", "TeamSeeker", "TeamMember", "Team", "CycleEnrollment", "CourseProjectCycle", "User" CASCADE',
   );
 }
 

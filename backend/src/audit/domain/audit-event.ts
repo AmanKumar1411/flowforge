@@ -30,7 +30,11 @@ export type AuditAction =
   | "CATALOG_IDEA_UPDATED"
   | "CATALOG_IDEA_REMOVED"
   | "IDEA_PICKED"
-  | "SUBMISSION_CREATED";
+  | "SUBMISSION_CREATED"
+  | "CYCLE_CREATED"
+  | "CYCLE_UPDATED"
+  | "CYCLE_PUBLISHED"
+  | "CYCLE_CLOSED";
 
 export type AuditEntityType =
   | "User"

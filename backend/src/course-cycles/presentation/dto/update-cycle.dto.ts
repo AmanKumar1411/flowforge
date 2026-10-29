@@ -1,5 +1,7 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
+import { Type } from "class-transformer";
 import {
+  IsArray,
   IsIn,
   IsInt,
   IsISO8601,
@@ -9,8 +11,15 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateNested,
 } from "class-validator";
-import { CourseKind, TEAM_SIZE_LIMIT } from "../domain/cycle.types";
+import {
+  CourseKind,
+  CycleIdeaSource,
+  TEAM_SIZE_LIMIT,
+} from "../../domain/cycle.types";
+import { IDEA_SOURCES } from "./create-cycle.dto";
+import { LinkRequirementDto, MilestoneDto } from "./milestone.dto";
 
 const COURSE_KINDS: CourseKind[] = ["CORE", "ELECTIVE"];
 
@@ -53,16 +62,6 @@ export class UpdateCycleDto {
   @Matches(/^\d{4}-\d{2}$/)
   academicYear?: string;
 
-  @ApiPropertyOptional({ example: "2026-10-01T09:00:00.000Z" })
-  @IsOptional()
-  @IsISO8601()
-  submissionStartAt?: string;
-
-  @ApiPropertyOptional({ example: "2026-12-01T17:00:00.000Z" })
-  @IsOptional()
-  @IsISO8601()
-  submissionDeadline?: string;
-
   @ApiPropertyOptional({ example: 2, minimum: 1, maximum: TEAM_SIZE_LIMIT })
   @IsOptional()
   @IsInt()
@@ -78,17 +77,39 @@ export class UpdateCycleDto {
   maxTeamSize?: number;
 
   @ApiPropertyOptional({
-    example: "2026-10-20T17:00:00.000Z",
+    example: "2026-11-04T18:29:00.000Z",
     description:
-      "Editable on a published cycle only while formation is open, and only to a future time.",
+      "On a published cycle, editable only while team formation is open, and only to a future time.",
   })
   @IsOptional()
   @IsISO8601()
-  teamFormationDeadline?: string;
+  teamDeadline?: string;
+
+  @ApiPropertyOptional({
+    example: "2026-11-11T18:29:00.000Z",
+    description:
+      "On a published cycle, editable only before it passes, and only to a future time.",
+  })
+  @IsOptional()
+  @IsISO8601()
+  ideaDeadline?: string;
+
+  @ApiPropertyOptional({ enum: IDEA_SOURCES, description: "Drafts only." })
+  @IsOptional()
+  @IsIn(IDEA_SOURCES)
+  ideaSource?: CycleIdeaSource;
+
+  @ApiPropertyOptional({
+    type: LinkRequirementDto,
+    description: "Drafts only.",
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LinkRequirementDto)
+  ideaLinkRequirement?: LinkRequirementDto;
 
   @ApiPropertyOptional({
     enum: COURSE_KINDS,
-    default: "CORE",
     description:
       "CORE: the whole batch. ELECTIVE: only students on the enrollment list. Fixed once published.",
   })
@@ -97,22 +118,14 @@ export class UpdateCycleDto {
   kind?: CourseKind;
 
   @ApiPropertyOptional({
-    example: "2026-10-25T17:00:00.000Z",
-    type: String,
-    nullable: true,
+    type: MilestoneDto,
+    isArray: true,
     description:
-      "The owning faculty place students without a team until then; it must come after teamFormationDeadline. Null switches the faculty window off. On a published cycle, editable only while the window is open, and only to a future time.",
+      "The full list, in order: items with an id keep that milestone, new items have none, and left-out milestones are removed (drafts only). Once published the list keeps its milestones and order (409 MILESTONES_LOCKED), and only a milestone that has not opened may change its dates and description, to the future (409 MILESTONE_LOCKED).",
   })
   @IsOptional()
-  @IsISO8601()
-  teamCompletionDeadline?: string | null;
-
-  @ApiPropertyOptional({
-    example: "2026-10-28T17:00:00.000Z",
-    description:
-      "Teams pick or propose their first idea until then; after a rejection they revise until the cycle closes. Defaults to teamCompletionDeadline. Must be between it and submissionStartAt.",
-  })
-  @IsOptional()
-  @IsISO8601()
-  ideaDeadline?: string;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MilestoneDto)
+  milestones?: MilestoneDto[];
 }

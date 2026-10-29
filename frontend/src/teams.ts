@@ -5,26 +5,15 @@ import type { Cycle, TeamOrigin } from "./types";
  * the caller (read once per mount) so rendering stays pure.
  */
 export function isFormationOpen(cycle: Cycle, now: number) {
-  return (
-    cycle.status === "PUBLISHED" &&
-    now < Date.parse(cycle.teamFormationDeadline)
-  );
+  return cycle.status === "PUBLISHED" && now < Date.parse(cycle.teamDeadline);
 }
 
-/** The faculty's window: after students' formation, before completion. */
-export function isCompletionOpen(cycle: Cycle, now: number) {
+/** The faculty's window: from the team deadline until the idea deadline. */
+export function isPlacementOpen(cycle: Cycle, now: number) {
   return (
     cycle.status === "PUBLISHED" &&
-    Date.parse(cycle.teamFormationDeadline) <= now &&
-    now < Date.parse(cycle.teamCompletionDeadline)
-  );
-}
-
-/** Whether the cycle gives the faculty any time to place students after formation. */
-export function hasCompletionWindow(cycle: Cycle) {
-  return (
-    Date.parse(cycle.teamCompletionDeadline) >
-    Date.parse(cycle.teamFormationDeadline)
+    Date.parse(cycle.teamDeadline) <= now &&
+    now < Date.parse(cycle.ideaDeadline)
   );
 }
 

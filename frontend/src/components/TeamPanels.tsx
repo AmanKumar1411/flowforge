@@ -21,8 +21,7 @@ import { readableError } from "../errors";
 import {
   cleanSearch,
   describeTeamSize,
-  hasCompletionWindow,
-  isCompletionOpen,
+  isPlacementOpen,
   isFormationOpen,
 } from "../teams";
 import type { Cycle, Idea, Person, Team, TeamCandidate } from "../types";
@@ -30,15 +29,12 @@ import { TeamIdeaPanel } from "./IdeaPanels";
 import { TeamSubmissionPanel } from "./SubmissionPanels";
 
 export function FormationNote({ cycle, now }: { cycle: Cycle; now: number }) {
-  const deadline = formatDate(cycle.teamFormationDeadline);
-  let completion = "";
-  if (hasCompletionWindow(cycle)) {
-    completion =
-      cycle.status === "PUBLISHED" &&
-      now < Date.parse(cycle.teamCompletionDeadline)
-        ? `The faculty place anyone still without a team by ${formatDate(cycle.teamCompletionDeadline)}.`
-        : "The faculty's time to place students without a team has ended.";
-  }
+  const deadline = formatDate(cycle.teamDeadline);
+  // Phase 8 (A1): the faculty place students without a team until the idea deadline.
+  const completion =
+    cycle.status === "PUBLISHED" && now < Date.parse(cycle.ideaDeadline)
+      ? `The faculty place anyone still without a team by ${formatDate(cycle.ideaDeadline)}.`
+      : "The faculty's time to place students without a team has ended.";
   return (
     <p className="field-hint">
       {describeTeamSize(cycle)} members, leader included.{" "}
@@ -171,8 +167,8 @@ export function StudentTeamPanel({ cycle }: { cycle: Cycle }) {
         ) : (
           team === null && (
             <p className="muted">
-              {isCompletionOpen(cycle, now)
-                ? `You are not in a team yet. Your faculty will place you in one by ${formatDate(cycle.teamCompletionDeadline)}.`
+              {isPlacementOpen(cycle, now)
+                ? `You are not in a team yet. Your faculty will place you in one by ${formatDate(cycle.ideaDeadline)}.`
                 : "You are not in a team for this project. Contact your faculty."}
             </p>
           )

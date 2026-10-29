@@ -1,9 +1,12 @@
+import { LinkRequirement } from "../../common/links/link-requirement";
+import { LinkDomainError } from "../../common/links/link.errors";
 import { IdeaCycle, IdeaTeam } from "./idea";
 import { IdeaDomainError } from "./idea.errors";
 import { IdeaRules } from "./idea-rules";
 
 const rules = new IdeaRules();
 const IDEA_DEADLINE = new Date("2026-11-09T09:00:00.000Z");
+// Moments after the idea deadline, when milestones are open and after they are due.
 const SUBMISSIONS_OPEN = new Date("2026-11-10T09:00:00.000Z");
 const SUBMISSION_DEADLINE = new Date("2026-12-10T09:00:00.000Z");
 const before = new Date("2026-11-05T09:00:00.000Z");
@@ -14,8 +17,8 @@ const cycle = (overrides: Partial<IdeaCycle> = {}): IdeaCycle => ({
   status: "PUBLISHED",
   createdByFacultyId: "faculty",
   ideaDeadline: IDEA_DEADLINE,
-  submissionStartAt: SUBMISSIONS_OPEN,
-  submissionDeadline: SUBMISSION_DEADLINE,
+  ideaSource: "BOTH",
+  ideaLinkRequirement: LinkRequirement.IDEA_DEFAULT,
   ...overrides,
 });
 
@@ -199,19 +202,78 @@ describe("IdeaRules", () => {
     });
   });
 
+  it("lets each idea source take only its kind of idea", () => {
+    const code = (work: () => void) => {
+      try {
+        work();
+      } catch (error) {
+        return (error as IdeaDomainError).code;
+      }
+      return undefined;
+    };
+    for (const [ideaSource, proposals, catalog] of [
+      ["BOTH", undefined, undefined],
+      ["STUDENT_PROPOSALS", undefined, "CATALOG_NOT_ALLOWED"],
+      ["FACULTY_LIST", "PROPOSALS_NOT_ALLOWED", undefined],
+    ] as const) {
+      expect(
+        code(() => rules.assertProposalsAllowed(cycle({ ideaSource }))),
+      ).toBe(proposals);
+      expect(
+        code(() => rules.assertCatalogAllowed(cycle({ ideaSource }))),
+      ).toBe(catalog);
+    }
+  });
+
+  it("checks a proposal's links against the cycle's requirement", () => {
+    const drive = cycle({
+      ideaLinkRequirement: LinkRequirement.from({
+        required: ["DRIVE"],
+        optional: [],
+      }),
+    });
+    const content = { title: "T", problem: "P", solution: "S" };
+    expect(() =>
+      rules.clean(
+        {
+          ...content,
+          links: [{ type: "GITHUB", url: "https://github.com/a/b" }],
+        },
+        drive,
+      ),
+    ).toThrow(LinkDomainError);
+    expect(() => rules.clean({ ...content, links: [] }, drive)).toThrow(
+      "Add the Drive link",
+    );
+    expect(
+      rules.clean(
+        {
+          ...content,
+          links: [
+            { type: "DRIVE", url: "https://docs.google.com/document/d/x" },
+          ],
+        },
+        drive,
+      ).links,
+    ).toEqual([{ type: "DRIVE", url: "https://docs.google.com/document/d/x" }]);
+  });
+
   it("trims the content and treats an empty link as none", () => {
     expect(
-      rules.clean({
-        title: " T ",
-        problem: " P ",
-        solution: " S ",
-        link: "  ",
-      }),
+      rules.clean(
+        {
+          title: " T ",
+          problem: " P ",
+          solution: " S ",
+          links: [{ type: "GITHUB", url: "  " }],
+        },
+        cycle(),
+      ),
     ).toEqual({
       title: "T",
       problem: "P",
       solution: "S",
-      link: null,
+      links: [],
       source: "PROPOSAL",
       catalogIdeaId: null,
     });
@@ -228,12 +290,12 @@ describe("IdeaRules", () => {
       pickCount: 0,
     };
 
-    it("copies a picked idea: its description becomes the problem, with no solution", () => {
+    it("copies a picked idea: its description becomes the problem, with no solution and no links", () => {
       expect(rules.pickContent(catalogIdea)).toEqual({
         title: "Library seat finder",
         problem: "Show free library seats",
         solution: null,
-        link: "https://example.edu/brief",
+        links: [],
         source: "CATALOG",
         catalogIdeaId: "catalog-1",
       });

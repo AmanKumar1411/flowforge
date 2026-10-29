@@ -1,8 +1,10 @@
 import { AuditService } from "../../audit/audit.service";
 import { AuditEvent } from "../../audit/domain/audit-event";
+import { LinkRequirement } from "../../common/links/link-requirement";
 import { FixedClock } from "../../common/testing/fixed-clock";
 import { ImmediateTransactionRunner } from "../../common/testing/immediate-transaction.runner";
 import { Transaction } from "../../common/transaction";
+import { Milestone } from "../../course-cycles/domain/milestone";
 import { TeamActor } from "../../teams/domain/team-access.policy";
 import {
   SubmissionCycle,
@@ -21,14 +23,31 @@ jest.mock("@nestjs/common", () => ({
 }));
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-// Submissions opened yesterday and close in a month.
+const at = (day: number) => new Date(Date.UTC(2026, 10, day, 9));
+// Phase 8: M1 opened yesterday and is due in four days; M2 follows it.
 const NOW = "2026-11-11T09:00:00.000Z";
+const milestone = (
+  position: number,
+  opens: number,
+  due: number,
+): Milestone => ({
+  id: `m${position}`,
+  cycleId: "cycle",
+  position,
+  name: `M${position}`,
+  description: null,
+  submissionOpensAt: at(opens),
+  submissionDueAt: at(due),
+  evaluationAt: at(due),
+  linkRequirement: LinkRequirement.MILESTONE_DEFAULT,
+  createdAt: at(1),
+  updatedAt: at(1),
+});
 const cycle: SubmissionCycle = {
   id: "cycle",
   status: "PUBLISHED",
   createdByFacultyId: "faculty",
-  submissionStartAt: new Date("2026-11-10T09:00:00.000Z"),
-  submissionDeadline: new Date("2026-12-10T09:00:00.000Z"),
+  milestones: [milestone(1, 10, 15), milestone(2, 15, 25)],
 };
 
 const person = (id: string, role: TeamActor["role"]): TeamActor => ({
@@ -61,9 +80,7 @@ const kestrel: SubmissionTeam = {
 };
 
 const work = {
-  repositoryUrl: "https://github.com/falcon/app",
-  demoUrl: null,
-  reportUrl: null,
+  links: [{ type: "GITHUB", url: "https://github.com/falcon/app" }],
   notes: "First version",
 };
 
@@ -99,12 +116,13 @@ class FakeSubmissionTeams extends SubmissionTeams {
   }
 
   listForCycle() {
-    return Promise.resolve(
-      [falcon, kestrel].map((team) => ({
+    return Promise.resolve({
+      cycle,
+      rows: [falcon, kestrel].map((team) => ({
         team,
         idea: this.ideas.get(team.id) ?? null,
       })),
-    );
+    });
   }
 }
 
@@ -132,73 +150,96 @@ describe("SubmissionService", () => {
     kit = createKit();
   });
 
-  it("lets any member add versions; each save is the next version, newest first", async () => {
-    const first = await kit.service.submit(member, "falcon", {
-      ...work,
-      demoUrl: " ",
+  it("lets any member add versions to a milestone; each save is the next version, newest first", async () => {
+    const first = await kit.service.submit(leader, "falcon", "m1", work);
+    const second = await kit.service.submit(member, "falcon", "m1", {
+      links: [
+        { type: "GITHUB", url: "https://github.com/falcon/app" },
+        { type: "DEMO", url: "https://falcon.vercel.app" },
+      ],
+      notes: null,
     });
-    expect(first).toMatchObject({
-      version: 1,
-      demoUrl: null,
+    expect([first.version, second.version]).toEqual([1, 2]);
+    expect(second).toMatchObject({
+      milestoneId: "m1",
       submittedBy: { id: "member" },
     });
-    kit.clock.advance(DAY_MS);
-    const second = await kit.service.submit(leader, "falcon", {
-      ...work,
-      notes: "Fixed the map",
-    });
-    expect(second).toMatchObject({ version: 2, submittedBy: { id: "leader" } });
     expect(
-      (await kit.service.list(faculty, "falcon")).map((entry) => entry.version),
+      (await kit.service.list(leader, "falcon", "m1")).map((s) => s.version),
     ).toEqual([2, 1]);
-    expect(kit.audited).toMatchObject([
-      {
-        action: "SUBMISSION_CREATED",
-        metadata: { teamId: "falcon", version: 1 },
-      },
-      {
-        action: "SUBMISSION_CREATED",
-        metadata: { teamId: "falcon", version: 2 },
-      },
+    expect(kit.audited.map((event) => event.metadata)).toEqual([
+      { cycleId: "cycle", teamId: "falcon", milestoneId: "m1", version: 1 },
+      { cycleId: "cycle", teamId: "falcon", milestoneId: "m1", version: 2 },
     ]);
+  });
+
+  it("numbers each milestone's versions from 1, and keeps each milestone to its own window", async () => {
+    await kit.service.submit(leader, "falcon", "m1", work);
+    await expect(
+      kit.service.submit(leader, "falcon", "m2", work),
+    ).rejects.toMatchObject({
+      code: "SUBMISSION_NOT_OPEN",
+    });
+    kit.clock.advance(4 * DAY_MS);
+    const m2 = await kit.service.submit(leader, "falcon", "m2", work);
+    expect(m2.version).toBe(1);
+    await expect(
+      kit.service.submit(leader, "falcon", "m1", work),
+    ).rejects.toMatchObject({
+      code: "SUBMISSION_CLOSED",
+    });
+    expect(await kit.service.list(leader, "falcon", "m1")).toHaveLength(1);
+  });
+
+  it("checks links against the milestone and refuses an unknown milestone", async () => {
+    await expect(
+      kit.service.submit(leader, "falcon", "m1", { links: [], notes: null }),
+    ).rejects.toMatchObject({ code: "MISSING_REQUIRED_LINK" });
+    await expect(
+      kit.service.submit(leader, "falcon", "nope", work),
+    ).rejects.toMatchObject({
+      code: "MILESTONE_NOT_FOUND",
+    });
   });
 
   it("needs an approved idea", async () => {
     await expect(
-      kit.service.submit(person("other-leader", "STUDENT"), "kestrel", work),
+      kit.service.submit(
+        person("other-leader", "STUDENT"),
+        "kestrel",
+        "m1",
+        work,
+      ),
     ).rejects.toMatchObject({ code: "IDEA_NOT_APPROVED" });
   });
 
-  it("closes at the deadline; the last version before it stays the final one", async () => {
-    await kit.service.submit(member, "falcon", work);
-    kit.clock.advance(29 * DAY_MS);
-    await expect(
-      kit.service.submit(member, "falcon", work),
-    ).rejects.toMatchObject({ code: "SUBMISSION_CLOSED" });
-    expect(await kit.service.list(member, "falcon")).toHaveLength(1);
-  });
-
   it("hides another team's work", async () => {
+    await kit.service.submit(leader, "falcon", "m1", work);
     await expect(
-      kit.service.submit(outsider, "falcon", work),
-    ).rejects.toMatchObject({ code: "TEAM_NOT_FOUND" });
-    await expect(kit.service.list(outsider, "falcon")).rejects.toMatchObject({
+      kit.service.list(outsider, "falcon", "m1"),
+    ).rejects.toMatchObject({
       code: "TEAM_NOT_FOUND",
     });
+    expect(await kit.service.list(faculty, "falcon", "m1")).toHaveLength(1);
   });
 
-  it("lists every team of the cycle with its idea, latest version and count", async () => {
-    await kit.service.submit(member, "falcon", work);
-    await kit.service.submit(member, "falcon", { ...work, notes: "v2" });
-    const rows = await kit.service.listForCycle(faculty, "cycle");
-    expect(rows).toMatchObject([
-      {
-        team: { id: "falcon" },
-        idea: { status: "APPROVED" },
-        latest: { version: 2, notes: "v2" },
-        versionCount: 2,
-      },
-      { team: { id: "kestrel" }, latest: null, versionCount: 0 },
+  it("lists every team of the cycle with its idea and its versions for a milestone", async () => {
+    await kit.service.submit(leader, "falcon", "m1", work);
+    await kit.service.submit(member, "falcon", "m1", work);
+    const rows = await kit.service.listForCycle(faculty, "cycle", "m1");
+    expect(
+      rows.map((row) => [
+        row.team.id,
+        row.latest?.version ?? null,
+        row.versionCount,
+        row.versions.length,
+      ]),
+    ).toEqual([
+      ["falcon", 2, 2, 2],
+      ["kestrel", null, 0, 0],
     ]);
+    expect(
+      (await kit.service.listForCycle(faculty, "cycle", "m2"))[0].versionCount,
+    ).toBe(0);
   });
 });

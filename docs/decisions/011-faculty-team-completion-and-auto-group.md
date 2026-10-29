@@ -4,6 +4,8 @@
 that names `teamCompletionDeadline` must put it after `teamFormationDeadline`; `null` (or leaving
 it out) means no window, still stored as `D2 = D1`.
 
+**Amended (Phase 8, [ADR 016](016-milestones-replace-the-submission-window.md)):** `teamCompletionDeadline` is gone. The faculty place students (by hand, add a member, auto-group) from the team deadline until the idea deadline (A1).
+
 ## Context
 
 Some students always end up without a team. The team decided on two dates: students form their

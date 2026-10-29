@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { CourseCycleService } from "../../course-cycles/course-cycle.service";
+import { CourseCycleService } from "../../course-cycles/application/course-cycle.service";
 import { TeamQueryService } from "../../teams/application/team-query.service";
 import { TeamActor } from "../../teams/domain/team-access.policy";
 import { Team } from "../../teams/domain/team";

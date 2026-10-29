@@ -9,6 +9,24 @@ rounds as it takes. The team never changes because of its idea. Decisions:
 rounds) and [ADR 012](../decisions/012-pre-registered-students.md) (students registered before
 they sign in). Approved ideas unlock [submissions](submissions.md).
 
+## Phase 8: where ideas come from, and their links
+
+- A cycle's `ideaSource` is `STUDENT_PROPOSALS`, `FACULTY_LIST` or `BOTH` (the default), fixed
+  once published. `IdeaRules.assertProposalsAllowed` refuses a proposal in a list-only cycle
+  (`409 PROPOSALS_NOT_ALLOWED`); `assertCatalogAllowed` refuses a pick, and adding to the list, in
+  a proposals-only cycle (`409 CATALOG_NOT_ALLOWED`).
+- A proposal's `link` became `links: { type, url }[]`, checked against the cycle's
+  `ideaLinkRequirement` (default: GitHub and Drive optional;
+  [ADR 018](../decisions/018-configurable-link-requirements.md)). A pick copies the catalog
+  idea's text and **no links**; `CatalogIdea.link` stays as the faculty's reference.
+- The idea deadline must now come after the team deadline, and the first milestone opens at or
+  after it ([ADR 016](../decisions/016-milestones-replace-the-submission-window.md)). Until then
+  the faculty also place students left without a team. Feedback rounds after a rejection
+  continue while the cycle is published, as in Phase 7.
+- `IdeaPublishCheck` registers `IDEA_LIST_EMPTY` with the cycle's publish checks
+  ([ADR 019](../decisions/019-publish-checks-registry.md)) for a list-only cycle with an empty list.
+- In the stages below, "submissions open" means the first milestone opens.
+
 ## The stages of a cycle
 
 ```mermaid

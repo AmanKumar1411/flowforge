@@ -36,22 +36,24 @@ Six scripts drive the real React app in headless Chrome against the real API:
   - a member submitting version 1, the leader version 2 (links carried over), and the faculty
     seeing each team's latest version and its history.
   It waits about 55 seconds for the idea deadline to pass and submissions to open.
-- `cycles-ui.e2e.cjs` runs 9 checks of the cycle wizard and the cycle page:
-  - setting up a cycle from blank and saving a draft that students cannot see; editing the draft
-    in the same wizard and publishing it after the confirmation; a student of the batch seeing it;
-    starting a new cycle from a previous one; the wizard with the keyboard alone at 375px wide;
-  - the page's phase timeline with "Today", its one primary action and the empty teams list;
-    "Needs your attention" for a waiting idea, whose link opens that team's page to review it;
-    publishing a draft from its page; a closed cycle in the past tense with nothing left to do.
-  `openSection` in `support.cjs` opens a collapsible section of the cycle page, and `openTeamPage`
-  opens a team's page from the teams list.
+- `cycles-ui.e2e.cjs` (Phase 8) runs 10 checks of the guided wizard and the project page:
+  - setting up a project from blank, saved as a draft from the first step, that students cannot
+    see; adding a Drive-only milestone, with an overlap flagged as it is typed, and publishing;
+    an elective whose publish is blocked (no students), the review linking to the Students step,
+    then published; a student seeing the stage and next event; starting a new project from a
+    previous one, milestones included; the wizard with the keyboard alone at 375px wide;
+  - the page's overview (phases with today, "Coming up", one primary action), its Teams and
+    Milestones tabs; "Needs your attention" for a waiting idea, whose link opens that team's page;
+    a draft's page sending the faculty to the review step; a closed project with nothing to do.
+  `openTab` in `support.cjs` opens a tab of the project page, and `openTeamPage` opens a team's
+  page from the teams list.
 
 The Phase 4 to 7 scripts and `cycles-ui` set up their faculty member and students through the
 API, so all six run one after another on the same database. Each owns a batch, so their counts never mix:
 `auth-ui` uses 2023 (its batch-correction check moves a student to 2025), `teams-ui` 2026,
 `completion-ui` 2024 (its elective's newcomer is in 2022), `ideas-ui` 2027, `submissions-ui`
-2021 and `cycles-ui` 2020. `support.cjs` also holds `createCycleInWizard`, which walks the wizard,
-and `plannedDates`, which computes the dates the wizard stores. Shared helpers
+2021 and `cycles-ui` 2020. `support.cjs` also holds `createCycleInWizard`, which walks the six wizard steps,
+`plannedDates`, which computes the dates it fills in, and `cycleBody`, which builds a cycle for the API. Shared helpers
 (dev sign-in, API sessions, dates) are in `support.cjs`.
 
 It uses `playwright-core` with your installed Google Chrome, so nothing is downloaded and the app
