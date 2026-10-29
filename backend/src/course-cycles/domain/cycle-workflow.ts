@@ -1,30 +1,21 @@
-import { CycleDomainError } from "./cycle.errors";
+import { CycleDomainError, CycleErrorCode } from "./cycle.errors";
 import {
   CycleAction,
-  CyclePatch,
   CycleSchedule,
   CycleStatus,
+  EditableField,
   StageDeadline,
   TEAM_SIZE_LIMIT,
 } from "./cycle.types";
-import { CycleErrorCode } from "./cycle.errors";
+import { Milestone, MilestoneInput } from "./milestone";
+import { MilestoneSchedule, ScheduleProblem } from "./milestone-schedule";
 
 const deadlineRules: Record<
   StageDeadline,
   { label: string; invalid: CycleErrorCode }
 > = {
-  teamFormationDeadline: {
-    label: "Team formation",
-    invalid: "INVALID_TEAM_FORMATION_DEADLINE",
-  },
-  teamCompletionDeadline: {
-    label: "Team completion",
-    invalid: "INVALID_TEAM_COMPLETION_DEADLINE",
-  },
-  ideaDeadline: {
-    label: "Idea submission",
-    invalid: "INVALID_IDEA_DEADLINE",
-  },
+  teamDeadline: { label: "Team formation", invalid: "INVALID_TEAM_DEADLINE" },
+  ideaDeadline: { label: "Idea submission", invalid: "INVALID_IDEA_DEADLINE" },
 };
 
 const transitions: Record<
@@ -36,7 +27,7 @@ const transitions: Record<
   CLOSED: {},
 };
 
-const editableFields: Record<CycleStatus, readonly (keyof CyclePatch)[]> = {
+const editableFields: Record<CycleStatus, readonly EditableField[]> = {
   DRAFT: [
     "courseName",
     "title",
@@ -44,27 +35,26 @@ const editableFields: Record<CycleStatus, readonly (keyof CyclePatch)[]> = {
     "batchYear",
     "semester",
     "academicYear",
-    "submissionStartAt",
-    "submissionDeadline",
     "minTeamSize",
     "maxTeamSize",
-    "teamFormationDeadline",
-    "teamCompletionDeadline",
+    "teamDeadline",
     "ideaDeadline",
+    "ideaSource",
+    "ideaLinkRequirement",
     "kind",
+    "milestones",
   ],
-  // Sizes and the kind are fixed once students can act; the deadlines can still move (see assertTeamDeadlineChange).
-  PUBLISHED: [
-    "description",
-    "submissionDeadline",
-    "teamFormationDeadline",
-    "teamCompletionDeadline",
-    "ideaDeadline",
-  ],
+  // Sizes, the kind and the idea rules are fixed once students can act. The
+  // deadlines move while their stage is open (assertStageDeadlineChange);
+  // milestones follow A3 (assertPublishedMilestones).
+  PUBLISHED: ["description", "teamDeadline", "ideaDeadline", "milestones"],
   CLOSED: [],
 };
 
+/** The cycle's state machine and the rules every save keeps. Pure. */
 export class CycleWorkflow {
+  private readonly schedule = new MilestoneSchedule();
+
   transition(status: CycleStatus, action: CycleAction): CycleStatus {
     const nextStatus = transitions[status][action];
     if (!nextStatus) {
@@ -82,14 +72,11 @@ export class CycleWorkflow {
     return nextStatus;
   }
 
-  editableFields(status: CycleStatus): readonly (keyof CyclePatch)[] {
+  editableFields(status: CycleStatus): readonly EditableField[] {
     return editableFields[status];
   }
 
-  assertEditable(
-    status: CycleStatus,
-    fields: readonly (keyof CyclePatch)[],
-  ): void {
+  assertEditable(status: CycleStatus, fields: readonly EditableField[]): void {
     if (status === "CLOSED") {
       throw new CycleDomainError(
         "CYCLE_ALREADY_CLOSED",
@@ -105,65 +92,19 @@ export class CycleWorkflow {
     }
   }
 
-  assertValidDeadline(start: Date, deadline: Date): void {
-    if (!(start < deadline)) {
-      throw new CycleDomainError(
-        "INVALID_DEADLINE",
-        "Submission start must be before the deadline",
-      );
-    }
-  }
-
   /** Every date and team-size rule that holds for any saved cycle. */
   assertValidSchedule(schedule: CycleSchedule): void {
-    this.assertValidDeadline(
-      schedule.submissionStartAt,
-      schedule.submissionDeadline,
-    );
-    const { minTeamSize: min, maxTeamSize: max } = schedule;
-    if (
-      !Number.isInteger(min) ||
-      !Number.isInteger(max) ||
-      min < 1 ||
-      min > max ||
-      max > TEAM_SIZE_LIMIT
-    ) {
-      throw new CycleDomainError(
-        "INVALID_TEAM_SIZE",
-        `Team size must satisfy 1 <= minimum <= maximum <= ${TEAM_SIZE_LIMIT}`,
-      );
-    }
-    // Teams and ideas settle by the time submissions open, one stage after another.
-    if (schedule.teamFormationDeadline > schedule.submissionStartAt) {
-      throw new CycleDomainError(
-        "INVALID_TEAM_FORMATION_DEADLINE",
-        "Team formation must end by the time submissions open",
-      );
-    }
-    if (schedule.teamCompletionDeadline < schedule.teamFormationDeadline) {
-      throw new CycleDomainError(
-        "INVALID_TEAM_COMPLETION_DEADLINE",
-        "Faculty team completion cannot end before students' team formation",
-      );
-    }
-    if (schedule.teamCompletionDeadline > schedule.submissionStartAt) {
-      throw new CycleDomainError(
-        "INVALID_TEAM_COMPLETION_DEADLINE",
-        "Team completion must end by the time submissions open",
-      );
-    }
-    if (schedule.ideaDeadline < schedule.teamCompletionDeadline) {
-      throw new CycleDomainError(
-        "INVALID_IDEA_DEADLINE",
-        "Ideas cannot be due before the faculty finish completing teams",
-      );
-    }
-    if (schedule.ideaDeadline > schedule.submissionStartAt) {
-      throw new CycleDomainError(
-        "INVALID_IDEA_DEADLINE",
-        "Ideas must be due by the time submissions open",
-      );
-    }
+    const [problem] = this.teamSizeProblems(schedule);
+    if (problem) throw new CycleDomainError(problem.code, problem.message);
+    this.schedule.assertValid(schedule);
+  }
+
+  /** Everything a cycle must satisfy to be published, all at once: the save rules plus a first milestone. */
+  publishProblems(schedule: CycleSchedule): ScheduleProblem[] {
+    return [
+      ...this.teamSizeProblems(schedule),
+      ...this.schedule.problems(schedule, { forPublish: true }),
+    ];
   }
 
   /**
@@ -191,22 +132,30 @@ export class CycleWorkflow {
     }
   }
 
-  /**
-   * A faculty window has length: it ends after the students' deadline. No
-   * window at all is stored as an end equal to the students' deadline, which
-   * `assertValidSchedule` accepts; requests ask for it with null or by leaving
-   * the field out.
-   */
-  assertCompletionWindow(formation: Date, completion: Date): void {
-    if (completion <= formation) {
-      throw new CycleDomainError(
-        "INVALID_TEAM_COMPLETION_DEADLINE",
-        "Your time to place students must end after the students' team deadline; switch it off for no faculty window",
-      );
-    }
+  /** A3: after publishing, only a milestone that has not opened changes, only its dates and description. */
+  assertPublishedMilestones(
+    current: readonly Milestone[],
+    next: readonly MilestoneInput[],
+    now: Date,
+  ): void {
+    this.schedule.assertPublishedChange(current, next, now);
   }
 
-  validatePublishRules(schedule: CycleSchedule): void {
-    this.assertValidSchedule(schedule);
+  private teamSizeProblems(schedule: CycleSchedule): ScheduleProblem[] {
+    const { minTeamSize: min, maxTeamSize: max } = schedule;
+    const valid =
+      Number.isInteger(min) &&
+      Number.isInteger(max) &&
+      min >= 1 &&
+      min <= max &&
+      max <= TEAM_SIZE_LIMIT;
+    return valid
+      ? []
+      : [
+          {
+            code: "INVALID_TEAM_SIZE",
+            message: `Team size must satisfy 1 <= minimum <= maximum <= ${TEAM_SIZE_LIMIT}`,
+          },
+        ];
   }
 }

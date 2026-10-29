@@ -1,6 +1,37 @@
+import { LinkRequirement } from "../../common/links/link-requirement";
 import { CycleDomainError } from "./cycle.errors";
 import { CycleSchedule } from "./cycle.types";
 import { CycleWorkflow } from "./cycle-workflow";
+
+const day = (n: number) => new Date(Date.UTC(2026, 10, n, 18, 30));
+
+// Phase 8: one schedule of team and idea deadlines plus milestones (was a single submission window).
+const schedule: CycleSchedule = {
+  minTeamSize: 2,
+  maxTeamSize: 4,
+  teamDeadline: day(4),
+  ideaDeadline: day(8),
+  milestones: [
+    {
+      name: "Final",
+      description: null,
+      submissionOpensAt: day(8),
+      submissionDueAt: day(20),
+      evaluationAt: day(21),
+      linkRequirement: LinkRequirement.MILESTONE_DEFAULT,
+    },
+  ],
+};
+
+const codeOf = (work: () => void): string | undefined => {
+  try {
+    work();
+  } catch (error) {
+    if (error instanceof CycleDomainError) return error.code;
+    throw error;
+  }
+  return undefined;
+};
 
 describe("CycleWorkflow", () => {
   const workflow = new CycleWorkflow();
@@ -22,276 +53,132 @@ describe("CycleWorkflow", () => {
   });
 
   it("reports editable fields by state", () => {
-    expect(workflow.editableFields("DRAFT")).toContain("title");
     expect(workflow.editableFields("DRAFT")).toEqual(
       expect.arrayContaining([
+        "title",
         "minTeamSize",
         "maxTeamSize",
-        "teamFormationDeadline",
-        "teamCompletionDeadline",
+        "teamDeadline",
         "ideaDeadline",
+        "ideaSource",
+        "ideaLinkRequirement",
         "kind",
+        "milestones",
       ]),
     );
-    // Sizes and the course kind are fixed once students can act.
+    // Sizes, the course kind and the idea rules are fixed once students can act.
     expect(workflow.editableFields("PUBLISHED")).toEqual([
       "description",
-      "submissionDeadline",
-      "teamFormationDeadline",
-      "teamCompletionDeadline",
+      "teamDeadline",
       "ideaDeadline",
+      "milestones",
     ]);
     expect(workflow.editableFields("CLOSED")).toEqual([]);
-  });
-
-  // Formation, completion and ideas end one after another, before submissions open.
-  const schedule = (overrides: Partial<CycleSchedule> = {}): CycleSchedule => ({
-    submissionStartAt: new Date("2026-11-10T09:00:00.000Z"),
-    submissionDeadline: new Date("2026-12-01T17:00:00.000Z"),
-    minTeamSize: 2,
-    maxTeamSize: 4,
-    teamFormationDeadline: new Date("2026-11-01T09:00:00.000Z"),
-    teamCompletionDeadline: new Date("2026-11-08T09:00:00.000Z"),
-    ideaDeadline: new Date("2026-11-09T09:00:00.000Z"),
-    ...overrides,
-  });
-  const codeOf = (work: () => void): string | undefined => {
-    try {
-      work();
-      return undefined;
-    } catch (error) {
-      return (error as CycleDomainError).code;
-    }
-  };
-
-  it("rejects an invalid publish deadline", () => {
+    expect(codeOf(() => workflow.assertEditable("PUBLISHED", ["kind"]))).toBe(
+      "CYCLE_FIELD_LOCKED",
+    );
+    expect(
+      codeOf(() => workflow.assertEditable("PUBLISHED", ["ideaSource"])),
+    ).toBe("CYCLE_FIELD_LOCKED");
+    expect(
+      codeOf(() => workflow.assertEditable("CLOSED", ["description"])),
+    ).toBe("CYCLE_ALREADY_CLOSED");
     expect(
       codeOf(() =>
-        workflow.validatePublishRules(
-          schedule({
-            submissionStartAt: new Date("2026-10-02T10:00:00.000Z"),
-            submissionDeadline: new Date("2026-10-02T10:00:00.000Z"),
-          }),
-        ),
+        workflow.assertEditable("PUBLISHED", ["milestones", "description"]),
       ),
-    ).toBe("INVALID_DEADLINE");
-  });
-
-  it.each([
-    [1, 1],
-    [1, 10],
-    [3, 3],
-  ])("accepts team size %i to %i", (minTeamSize, maxTeamSize) => {
-    expect(() =>
-      workflow.assertValidSchedule(schedule({ minTeamSize, maxTeamSize })),
-    ).not.toThrow();
+    ).toBeUndefined();
   });
 
   it.each([
     [0, 4],
-    [5, 4],
-    [1, 11],
+    [3, 2],
+    [2, 11],
     [1.5, 4],
-  ])("rejects team size %d to %d", (minTeamSize, maxTeamSize) => {
+  ])("rejects team sizes %s to %s", (min, max) => {
     expect(
       codeOf(() =>
-        workflow.assertValidSchedule(schedule({ minTeamSize, maxTeamSize })),
+        workflow.assertValidSchedule({
+          ...schedule,
+          minTeamSize: min,
+          maxTeamSize: max,
+        }),
       ),
     ).toBe("INVALID_TEAM_SIZE");
   });
 
-  it("gives a faculty window length: it must end after the students' deadline", () => {
-    const formation = new Date("2026-11-01T09:00:00.000Z");
-    expect(() =>
-      workflow.assertCompletionWindow(
-        formation,
-        new Date("2026-11-01T09:01:00.000Z"),
-      ),
-    ).not.toThrow();
-    for (const completion of [
-      formation,
-      new Date("2026-10-31T09:00:00.000Z"),
-    ]) {
-      expect(
-        codeOf(() => workflow.assertCompletionWindow(formation, completion)),
-      ).toBe("INVALID_TEAM_COMPLETION_DEADLINE");
-    }
-  });
-
-  it("requires team formation to end by the time submissions open", () => {
-    const later = new Date("2026-11-15T09:00:00.000Z");
+  it("checks the milestone schedule on every save, and needs a milestone only to publish", () => {
+    expect(
+      codeOf(() => workflow.assertValidSchedule(schedule)),
+    ).toBeUndefined();
     expect(
       codeOf(() =>
-        workflow.assertValidSchedule(
-          schedule({
-            teamFormationDeadline: later,
-            teamCompletionDeadline: later,
-            ideaDeadline: later,
-          }),
-        ),
+        workflow.assertValidSchedule({ ...schedule, ideaDeadline: day(4) }),
       ),
-    ).toBe("INVALID_TEAM_FORMATION_DEADLINE");
-    // All three stages may end exactly when submissions open.
-    const opening = new Date("2026-11-10T09:00:00.000Z");
-    expect(() =>
-      workflow.assertValidSchedule(
-        schedule({
-          teamFormationDeadline: opening,
-          teamCompletionDeadline: opening,
-          ideaDeadline: opening,
-        }),
+    ).toBe("INVALID_IDEA_DEADLINE");
+    expect(
+      codeOf(() =>
+        workflow.assertValidSchedule({ ...schedule, milestones: [] }),
       ),
-    ).not.toThrow();
+    ).toBeUndefined();
+    expect(
+      workflow
+        .publishProblems({ ...schedule, milestones: [], maxTeamSize: 11 })
+        .map((p) => p.code),
+    ).toEqual(["INVALID_TEAM_SIZE", "NO_MILESTONES"]);
+    expect(workflow.publishProblems(schedule)).toEqual([]);
   });
 
   describe("moving a stage deadline of a published cycle", () => {
-    const now = new Date("2026-10-27T12:00:00.000Z");
-    const open = new Date("2026-10-30T12:00:00.000Z");
-    const passed = new Date("2026-10-27T11:59:59.000Z");
+    const now = day(2);
 
-    it("allows an extension while formation is open", () => {
-      expect(() =>
-        workflow.assertStageDeadlineChange(
-          "teamFormationDeadline",
-          open,
-          new Date("2026-11-05T12:00:00.000Z"),
-          now,
-        ),
-      ).not.toThrow();
-    });
-
-    it("never reopens formation that has ended", () => {
+    it("allows an extension while the stage is open", () => {
       expect(
         codeOf(() =>
           workflow.assertStageDeadlineChange(
-            "teamFormationDeadline",
-            passed,
-            new Date("2026-11-05T12:00:00.000Z"),
+            "teamDeadline",
+            day(4),
+            day(5),
             now,
           ),
         ),
-      ).toBe("CYCLE_FIELD_LOCKED");
-      // Exactly at the deadline counts as ended.
-      expect(
-        codeOf(() =>
-          workflow.assertStageDeadlineChange(
-            "teamFormationDeadline",
-            now,
-            open,
-            now,
-          ),
-        ),
-      ).toBe("CYCLE_FIELD_LOCKED");
+      ).toBeUndefined();
     });
 
-    it("refuses a new deadline in the past", () => {
+    it("never reopens a stage that has ended", () => {
       expect(
         codeOf(() =>
           workflow.assertStageDeadlineChange(
-            "teamFormationDeadline",
-            open,
-            passed,
-            now,
-          ),
-        ),
-      ).toBe("INVALID_TEAM_FORMATION_DEADLINE");
-    });
-
-    it("applies the same rules to the completion deadline, with its own code", () => {
-      expect(
-        codeOf(() =>
-          workflow.assertStageDeadlineChange(
-            "teamCompletionDeadline",
-            passed,
-            open,
+            "teamDeadline",
+            day(1),
+            day(5),
             now,
           ),
         ),
       ).toBe("CYCLE_FIELD_LOCKED");
       expect(
         codeOf(() =>
+          workflow.assertStageDeadlineChange("teamDeadline", now, day(5), now),
+        ),
+      ).toBe("CYCLE_FIELD_LOCKED");
+    });
+
+    it("refuses a new deadline in the past, with each stage's own code", () => {
+      expect(
+        codeOf(() =>
           workflow.assertStageDeadlineChange(
-            "teamCompletionDeadline",
-            open,
-            passed,
+            "teamDeadline",
+            day(4),
+            day(1),
             now,
           ),
         ),
-      ).toBe("INVALID_TEAM_COMPLETION_DEADLINE");
-    });
-
-    it("applies the same rules to the idea deadline, with its own code", () => {
+      ).toBe("INVALID_TEAM_DEADLINE");
       expect(
         codeOf(() =>
-          workflow.assertStageDeadlineChange("ideaDeadline", passed, open, now),
-        ),
-      ).toBe("CYCLE_FIELD_LOCKED");
-      expect(
-        codeOf(() =>
-          workflow.assertStageDeadlineChange("ideaDeadline", open, passed, now),
+          workflow.assertStageDeadlineChange("ideaDeadline", day(8), now, now),
         ),
       ).toBe("INVALID_IDEA_DEADLINE");
-    });
-  });
-
-  describe("the stage deadlines", () => {
-    it("accept completion equal to formation: no faculty window", () => {
-      expect(() =>
-        workflow.assertValidSchedule(
-          schedule({
-            teamCompletionDeadline: new Date("2026-11-01T09:00:00.000Z"),
-          }),
-        ),
-      ).not.toThrow();
-    });
-
-    it("refuse completion before formation", () => {
-      expect(
-        codeOf(() =>
-          workflow.assertValidSchedule(
-            schedule({
-              teamCompletionDeadline: new Date("2026-10-31T09:00:00.000Z"),
-            }),
-          ),
-        ),
-      ).toBe("INVALID_TEAM_COMPLETION_DEADLINE");
-    });
-
-    it("refuse completion after submissions open", () => {
-      expect(
-        codeOf(() =>
-          workflow.assertValidSchedule(
-            schedule({
-              teamCompletionDeadline: new Date("2026-11-12T09:00:00.000Z"),
-              ideaDeadline: new Date("2026-11-12T09:00:00.000Z"),
-            }),
-          ),
-        ),
-      ).toBe("INVALID_TEAM_COMPLETION_DEADLINE");
-    });
-
-    it("accept ideas due when team completion ends, or when submissions open", () => {
-      for (const ideaDeadline of [
-        new Date("2026-11-08T09:00:00.000Z"),
-        new Date("2026-11-10T09:00:00.000Z"),
-      ]) {
-        expect(() =>
-          workflow.assertValidSchedule(schedule({ ideaDeadline })),
-        ).not.toThrow();
-      }
-    });
-
-    it("refuse ideas due before team completion ends or after submissions open", () => {
-      for (const ideaDeadline of [
-        new Date("2026-11-07T09:00:00.000Z"),
-        new Date("2026-11-10T09:00:01.000Z"),
-      ]) {
-        expect(
-          codeOf(() =>
-            workflow.assertValidSchedule(schedule({ ideaDeadline })),
-          ),
-        ).toBe("INVALID_IDEA_DEADLINE");
-      }
     });
   });
 });
