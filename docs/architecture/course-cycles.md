@@ -104,6 +104,11 @@ Batch filtering occurs in `PrismaCycleRepository.listPublishedForBatch`; email p
 - Description is optional and limited to 2000 characters.
 - Semester is an integer from 1 through 12.
 - Academic year uses consecutive `YYYY-YY` values.
+- The wizard offers semesters 1 to 8: odd ones run August to December, even ones January to May,
+  and semester n of a batch (its admission year) starts in the academic year beginning in August
+  of `batchYear + floor((n - 1) / 2)`. It sends the academic year that follows from that
+  (`frontend/src/semester.ts: semesterTerm`), starts a new plan inside the term, and warns, without
+  blocking, when a plan's dates fall outside it.
 - Closed cycles are hidden from students.
 - PostgreSQL `RESTRICT` protects the faculty ownership relation.
 - The student list is unpaginated and ordered by newest publication.

@@ -1,17 +1,18 @@
 import {
-  academicYearFor,
   addDays,
   buildSchedule,
   DEFAULT_CYCLE_DAYS,
   DEFAULT_DURATIONS,
   localDay,
-  semesterFor,
+  termWarnings,
   timelineFromCycle,
+  timelineInTerm,
   timelineProblems,
   type BuiltSchedule,
   type TimelineInput,
 } from "./cycle-plan";
 import { formatDate, isoDate, localDateInput } from "./dates";
+import { currentSemester, semesterTerm, SEMESTERS, type SemesterTerm } from "./semester";
 import type { CourseKind, Cycle, CyclePayload } from "./types";
 
 /**
@@ -48,7 +49,6 @@ export interface WizardState {
   kind: CourseKind;
   batchYear: number;
   semester: number;
-  academicYear: string;
   minTeamSize: number;
   maxTeamSize: number;
   timeline: TimelineInput;
@@ -56,6 +56,8 @@ export interface WizardState {
   deadlines: PublishedDeadlines;
   /** A draft keeps its exact dates until the faculty touch the plan. */
   timelineTouched: boolean;
+  /** A new plan follows the semester's term until the faculty change its dates. */
+  timelineAuto: boolean;
 }
 
 export type Problems = Partial<Record<string, string>>;
@@ -93,31 +95,48 @@ function defaultTimeline(today: Date): TimelineInput {
   };
 }
 
+/** The term of the batch and semester entered, once both are usable. */
+export function termOf(state: Pick<WizardState, "batchYear" | "semester">): SemesterTerm | null {
+  if (!Number.isInteger(state.batchYear) || !Number.isInteger(state.semester) || state.semester < 1) {
+    return null;
+  }
+  return semesterTerm(state.batchYear, state.semester);
+}
+
+/** After the batch or semester changes, a plan the faculty have not changed moves into the new term. */
+export function followTerm(state: WizardState, today = new Date()): WizardState {
+  const term = termOf(state);
+  if (!state.timelineAuto || !term) return state;
+  return { ...state, timeline: timelineInTerm(state.timeline, term, localDay(today)) };
+}
+
 /**
  * A blank cycle: the batch of the faculty's latest cycle (or this year), the
- * semester and academic year worked out from today, teams of 2 to 4, and the
- * default plan.
+ * semester it is in today, teams of 2 to 4, and the default plan inside that
+ * semester's term.
  */
 export function blankState(previous: Cycle[], today = new Date()): WizardState {
   const latest = [...previous].sort((a, b) =>
     b.createdAt.localeCompare(a.createdAt),
   )[0];
   const batchYear = latest?.batchYear ?? today.getFullYear();
-  const timeline = defaultTimeline(today);
-  return {
-    courseName: "",
-    title: "",
-    description: "",
-    kind: "CORE",
-    batchYear,
-    semester: semesterFor(batchYear, today),
-    academicYear: academicYearFor(today),
-    minTeamSize: 2,
-    maxTeamSize: 4,
-    timeline,
-    deadlines: emptyDeadlines(),
-    timelineTouched: true,
-  };
+  return followTerm(
+    {
+      courseName: "",
+      title: "",
+      description: "",
+      kind: "CORE",
+      batchYear,
+      semester: currentSemester(batchYear, today),
+      minTeamSize: 2,
+      maxTeamSize: 4,
+      timeline: defaultTimeline(today),
+      deadlines: emptyDeadlines(),
+      timelineTouched: true,
+      timelineAuto: true,
+    },
+    today,
+  );
 }
 
 function emptyDeadlines(): PublishedDeadlines {
@@ -130,22 +149,25 @@ function emptyDeadlines(): PublishedDeadlines {
   };
 }
 
-/** A previous cycle as a template: its settings, and its phases moved to start today. */
+/** A previous cycle as a template: its settings, and its phases moved to start today (or when the term starts). */
 export function stateFromTemplate(cycle: Cycle, today = new Date()): WizardState {
-  return {
-    courseName: cycle.courseName,
-    title: cycle.title,
-    description: cycle.description ?? "",
-    kind: cycle.kind,
-    batchYear: cycle.batchYear,
-    semester: semesterFor(cycle.batchYear, today),
-    academicYear: academicYearFor(today),
-    minTeamSize: cycle.minTeamSize,
-    maxTeamSize: cycle.maxTeamSize,
-    timeline: timelineFromCycle(cycle, localDay(today)),
-    deadlines: emptyDeadlines(),
-    timelineTouched: true,
-  };
+  return followTerm(
+    {
+      courseName: cycle.courseName,
+      title: cycle.title,
+      description: cycle.description ?? "",
+      kind: cycle.kind,
+      batchYear: cycle.batchYear,
+      semester: currentSemester(cycle.batchYear, today),
+      minTeamSize: cycle.minTeamSize,
+      maxTeamSize: cycle.maxTeamSize,
+      timeline: timelineFromCycle(cycle, localDay(today)),
+      deadlines: emptyDeadlines(),
+      timelineTouched: true,
+      timelineAuto: true,
+    },
+    today,
+  );
 }
 
 /** The cycle being edited. A draft's plan is measured from today; a published cycle keeps its exact dates. */
@@ -157,12 +179,12 @@ export function stateFromCycle(cycle: Cycle, today = new Date()): WizardState {
     kind: cycle.kind,
     batchYear: cycle.batchYear,
     semester: cycle.semester,
-    academicYear: cycle.academicYear,
     minTeamSize: cycle.minTeamSize,
     maxTeamSize: cycle.maxTeamSize,
     timeline: timelineFromCycle(cycle, localDay(today), localDay(today)),
     deadlines: deadlinesOf(cycle),
     timelineTouched: false,
+    timelineAuto: false,
   };
 }
 
@@ -181,12 +203,8 @@ export function basicsProblems(state: WizardState): Problems {
   if (!Number.isInteger(state.batchYear) || state.batchYear < 2000 || state.batchYear > 2100) {
     problems.batchYear = "Enter the batch as a four-digit year, for example 2023.";
   }
-  if (!Number.isInteger(state.semester) || state.semester < 1 || state.semester > 12) {
-    problems.semester = "Use a whole number from 1 to 12.";
-  }
-  const year = /^(\d{4})-(\d{2})$/.exec(state.academicYear);
-  if (!year || Number(year[2]) !== (Number(year[1]) + 1) % 100) {
-    problems.academicYear = "Use two years in a row, like 2026-27.";
+  if (!Number.isInteger(state.semester) || state.semester < 1 || state.semester > SEMESTERS) {
+    problems.semester = `Choose a semester from 1 to ${SEMESTERS}.`;
   }
   return problems;
 }
@@ -316,6 +334,24 @@ export function scheduleOf(
   });
 }
 
+/**
+ * Where the plan leaves its semester's term. The start counts only while the
+ * faculty plan it; a published cycle (or an untouched draft) keeps its own.
+ */
+export function planWarnings(
+  state: WizardState,
+  mode: WizardMode,
+  schedule: BuiltSchedule | null,
+): string[] {
+  const term = termOf(state);
+  if (!schedule || !term) return [];
+  const planned = mode === "create" || (mode === "draft" && state.timelineTouched);
+  return termWarnings(term, {
+    start: planned ? state.timeline.start : null,
+    submissionDeadline: schedule.submissionDeadline,
+  });
+}
+
 function basicsAndTeams(state: WizardState) {
   return {
     courseName: state.courseName.trim(),
@@ -324,7 +360,8 @@ function basicsAndTeams(state: WizardState) {
     kind: state.kind,
     batchYear: state.batchYear,
     semester: state.semester,
-    academicYear: state.academicYear.trim(),
+    // Display only in the wizard: the API stores it, the semester decides it.
+    academicYear: termOf(state)?.academicYear ?? "",
     minTeamSize: state.minTeamSize,
     maxTeamSize: state.maxTeamSize,
   };

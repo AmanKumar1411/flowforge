@@ -1,4 +1,5 @@
-import { formatDate, formatDay } from "./dates";
+import { formatDate, formatDay, formatFullDay } from "./dates";
+import type { SemesterTerm } from "./semester";
 import type { Cycle, CourseKind } from "./types";
 
 /**
@@ -201,17 +202,54 @@ export function timelineFromCycle(
   };
 }
 
-/** The academic year a date falls in; years start in July ("2026-27" from July 2026 to June 2027). */
-export function academicYearFor(date: Date) {
-  const first = date.getMonth() >= 6 ? date.getFullYear() : date.getFullYear() - 1;
-  return `${first}-${String((first + 1) % 100).padStart(2, "0")}`;
+/**
+ * A plan moved into a semester's term: it starts today, or on the term's
+ * first day while the term is still ahead, and keeps its length; a final
+ * deadline past the term comes back to the term's last day when the phases
+ * still fit. A term that is over leaves the plan starting today, and the
+ * wizard warns about it.
+ */
+export function timelineInTerm(
+  timeline: TimelineInput,
+  term: SemesterTerm,
+  today: string,
+): TimelineInput {
+  const start = today < term.firstDay ? term.firstDay : today;
+  let finalDeadline = addDays(start, daysBetween(timeline.start, timeline.finalDeadline));
+  const { teams, placing, ideas } = timeline.durations;
+  // Submissions open the day after ideas are due, and teams need more than a day after that.
+  const earliest = addDays(start, teams + (timeline.placingWindow ? placing : 0) + ideas + 2);
+  if (start <= term.lastDay && finalDeadline > term.lastDay && earliest <= term.lastDay) {
+    finalDeadline = term.lastDay;
+  }
+  return { ...timeline, start, finalDeadline };
 }
 
-/** The semester a batch is in on a date: 1 from the July it joins, 2 from January, and so on. */
-export function semesterFor(batchYear: number, date: Date) {
-  const semester =
-    (date.getFullYear() - batchYear) * 2 + (date.getMonth() >= 6 ? 1 : 0);
-  return Math.min(12, Math.max(1, semester));
+/**
+ * Where a plan falls outside its semester's term, in words. Only a warning:
+ * a cycle can run past its term. `start` is the local day the plan starts,
+ * or null when it is fixed already (a published cycle).
+ */
+export function termWarnings(
+  term: SemesterTerm,
+  plan: { start: string | null; submissionDeadline: string },
+): string[] {
+  const semester = `semester ${term.semester} (${term.label})`;
+  const day = (value: string) => formatFullDay(`${value}T12:00`);
+  if (plan.start && plan.start > term.lastDay) {
+    return [`It starts on ${day(plan.start)}, after ${semester} has ended.`];
+  }
+  const warnings: string[] = [];
+  if (plan.start && plan.start < term.firstDay) {
+    warnings.push(`It starts on ${day(plan.start)}, before ${semester} begins.`);
+  }
+  const final = localDay(plan.submissionDeadline);
+  if (final > term.lastDay) {
+    warnings.push(`The final deadline, ${day(final)}, is after ${semester} ends.`);
+  } else if (final < term.firstDay) {
+    warnings.push(`The final deadline, ${day(final)}, is before ${semester} begins.`);
+  }
+  return warnings;
 }
 
 /** A phrase with its key dates in bold. */

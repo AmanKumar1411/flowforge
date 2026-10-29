@@ -1268,6 +1268,37 @@ ul.catalog-list {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+/* The semester's term, next to the semester picker. */
+.term-display {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-self: start;
+  gap: 2px;
+  /* Level with the inputs, below their labels. */
+  margin: 27px 0 18px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--lime);
+  background: white;
+  font-size: .9rem;
+  line-height: 1.4;
+}
+
+.term-display span {
+  color: var(--muted);
+  font-size: .84rem;
+}
+
+.term-warning {
+  margin: 14px 0;
+  padding: 10px 14px;
+  border: 1px solid #f2c38f;
+  border-left-width: 4px;
+  background: #fff8ee;
+  font-size: .9rem;
+  line-height: 1.5;
+}
+
 .cycle-form .short-input {
   max-width: 220px;
 }
@@ -1550,6 +1581,10 @@ ul.catalog-list {
 @media (max-width: 640px) {
   .form-grid.three {
     grid-template-columns: 1fr;
+  }
+
+  .term-display {
+    margin-top: 0;
   }
 
   .phase-timeline {

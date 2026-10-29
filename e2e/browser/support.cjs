@@ -127,6 +127,8 @@ async function createCycleInWizard(page, plan) {
     await page.getByLabel("Extra days for placing students").fill(String(plan.placing));
   }
   await page.getByRole("button", { name: "Next: Timeline" }).click();
+  // The wizard starts a plan inside the batch's semester, which may still be ahead; these checks plan from today.
+  await page.getByLabel("Start date").fill(dayFromToday(0));
   if (plan.teams !== undefined) await page.getByLabel("Days to form teams").fill(String(plan.teams));
   if (plan.ideas !== undefined) await page.getByLabel("Days for ideas").fill(String(plan.ideas));
   if (plan.finalDays !== undefined) await page.getByLabel("Final deadline").fill(dayFromToday(plan.finalDays));

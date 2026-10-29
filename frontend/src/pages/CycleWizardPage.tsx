@@ -17,10 +17,11 @@ import {
   TimelineStep,
   type Update,
 } from "../components/CycleWizardSteps";
-import { semesterFor } from "../cycle-plan";
 import {
   blankState,
   createPayload,
+  followTerm,
+  planWarnings,
   scheduleOf,
   stateFromCycle,
   stateFromTemplate,
@@ -31,6 +32,7 @@ import {
   type WizardState,
 } from "../cycle-wizard";
 import { readableError } from "../errors";
+import { currentSemester } from "../semester";
 import type { Cycle } from "../types";
 
 const STEP_HEADINGS = [
@@ -127,6 +129,7 @@ export function CycleWizardPage() {
     stepProblems(STEPS[index].key, state, mode, cycle, now);
   const shownProblems = checked.has(step) ? problemsFor(step) : {};
   const schedule = scheduleOf(state, mode, cycle, now);
+  const warnings = planWarnings(state, mode, schedule);
   const firstBlocked = STEPS.findIndex((_, index) => Object.keys(problemsFor(index)).length > 0);
 
   const goTo = (index: number) => {
@@ -156,18 +159,23 @@ export function CycleWizardPage() {
     setChecked(new Set());
   };
   const changeBatch = (batchYear: number) =>
-    update((current) => ({
-      ...current,
-      batchYear,
-      semester:
-        autoSemester && Number.isInteger(batchYear)
-          ? semesterFor(batchYear, now)
-          : current.semester,
-    }));
-  // A semester the faculty typed stays; until then it follows the batch.
+    update((current) =>
+      followTerm(
+        {
+          ...current,
+          batchYear,
+          semester:
+            autoSemester && Number.isInteger(batchYear)
+              ? currentSemester(batchYear, now)
+              : current.semester,
+        },
+        now,
+      ),
+    );
+  // A semester the faculty chose stays; until then it follows the batch. Either way an untouched plan follows the term.
   const changeSemester = (semester: number) => {
     setAutoSemester(false);
-    update((current) => ({ ...current, semester }));
+    update((current) => followTerm({ ...current, semester }, now));
   };
 
   /** Saves the cycle; with `publish`, also publishes it. Returns the saved cycle's id. */
@@ -249,9 +257,17 @@ export function CycleWizardPage() {
           )}
           {step === 1 && <TeamsStep {...stepProps} schedule={schedule} />}
           {step === 2 && (
-            <TimelineStep {...stepProps} schedule={schedule} cycle={cycle} now={now} />
+            <TimelineStep
+              {...stepProps}
+              schedule={schedule}
+              cycle={cycle}
+              now={now}
+              warnings={warnings}
+            />
           )}
-          {isReview && <ReviewStep state={state} schedule={schedule} onEdit={goTo} />}
+          {isReview && (
+            <ReviewStep state={state} schedule={schedule} warnings={warnings} onEdit={goTo} />
+          )}
           {error && (
             <p className="form-error" role="alert">
               {error}

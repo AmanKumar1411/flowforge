@@ -1,14 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  academicYearFor,
   buildSchedule,
   DEFAULT_DURATIONS,
   planSummary,
-  semesterFor,
   summaryText,
+  termWarnings,
   timelineFromCycle,
+  timelineInTerm,
   timelineProblems,
 } from "./cycle-plan";
+import { semesterTerm } from "./semester";
 
 const noWindow = { finalDeadline: "2026-12-12", placingWindow: false };
 
@@ -144,14 +145,49 @@ describe("timelineFromCycle", () => {
   });
 });
 
-describe("academic year and semester", () => {
-  it("starts the academic year and the odd semester in July", () => {
-    expect(academicYearFor(new Date(2026, 9, 28))).toBe("2026-27");
-    expect(academicYearFor(new Date(2027, 0, 10))).toBe("2026-27");
-    expect(semesterFor(2023, new Date(2026, 9, 28))).toBe(7);
-    expect(semesterFor(2023, new Date(2027, 0, 10))).toBe(8);
-    expect(semesterFor(2026, new Date(2026, 9, 28))).toBe(1);
-    expect(semesterFor(2030, new Date(2026, 9, 28))).toBe(1);
+describe("the plan and the semester's term", () => {
+  const plan = {
+    start: "2026-10-29",
+    durations: DEFAULT_DURATIONS,
+    finalDeadline: "2026-12-13",
+    placingWindow: false,
+  };
+  const autumn = semesterTerm(2023, 7); // Aug–Dec 2026
+  const spring = semesterTerm(2023, 8); // Jan–May 2027
+
+  it("starts a plan today inside the term, and on the first day of a term still ahead", () => {
+    expect(timelineInTerm(plan, autumn, "2026-10-29")).toEqual(plan);
+    expect(timelineInTerm(plan, spring, "2026-10-29")).toMatchObject({
+      start: "2027-01-01",
+      finalDeadline: "2027-02-15",
+    });
+  });
+
+  it("brings a final deadline past the term back to its last day, if the phases still fit", () => {
+    expect(timelineInTerm(plan, autumn, "2026-12-01").finalDeadline).toBe("2026-12-31");
+    // 7 + 7 days from 20 Dec leave no time for work before 31 Dec: the plan keeps its length.
+    expect(timelineInTerm(plan, autumn, "2026-12-20").finalDeadline).toBe("2027-02-03");
+  });
+
+  it("warns, in words, about dates outside the term", () => {
+    const schedule = (start: string, finalDeadline: string) => ({
+      start,
+      submissionDeadline: buildSchedule(start, DEFAULT_DURATIONS, { finalDeadline, placingWindow: false })
+        .submissionDeadline,
+    });
+    expect(termWarnings(autumn, schedule("2026-10-29", "2026-12-13"))).toEqual([]);
+    expect(termWarnings(autumn, schedule("2026-12-20", "2027-02-03"))).toEqual([
+      "The final deadline, Wed, 3 Feb 2027, is after semester 7 (Aug–Dec 2026) ends.",
+    ]);
+    expect(termWarnings(spring, schedule("2026-10-29", "2026-12-13"))).toEqual([
+      "It starts on Thu, 29 Oct 2026, before semester 8 (Jan–May 2027) begins.",
+      "The final deadline, Sun, 13 Dec 2026, is before semester 8 (Jan–May 2027) begins.",
+    ]);
+    expect(termWarnings(semesterTerm(2023, 6), schedule("2026-10-29", "2026-12-13"))).toEqual([
+      "It starts on Thu, 29 Oct 2026, after semester 6 (Jan–May 2026) has ended.",
+    ]);
+    // A published cycle's start is fixed; only its final deadline is checked.
+    expect(termWarnings(spring, { ...schedule("2026-10-29", "2026-12-13"), start: null })).toHaveLength(1);
   });
 });
 

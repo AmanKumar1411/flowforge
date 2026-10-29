@@ -46,6 +46,8 @@ const REGISTERED = [`yash.b27csai${DOMAIN}`, `ira.d27csai${DOMAIN}`];
       await faculty.getByLabel("Maximum team size").fill("3");
       await faculty.getByRole("button", { name: "Next: Timeline" }).click();
       const plan = { teams: 1, ideas: 1, finalDays: 30 };
+      // Batch 2027's first semester (Aug–Dec 2027) is still ahead, so the plan would start there.
+      await faculty.getByLabel("Start date").fill(dayFromToday(0));
       await faculty.getByLabel("Days to form teams").fill("1");
       await faculty.getByLabel("Days for ideas").fill("1");
       // A final deadline before submissions open stops the step, with the reason in words.

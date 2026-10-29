@@ -1,11 +1,12 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { planSummary, type BuiltSchedule, type SummaryPart } from "../cycle-plan";
+import { isValidDay, planSummary, type BuiltSchedule, type SummaryPart } from "../cycle-plan";
 import {
   deadlineIsOpen,
   EDITABLE_AFTER_PUBLISH,
   hasPlacingWindow,
   LOCKED_AFTER_PUBLISH,
   STEPS,
+  termOf,
   type Problems,
   type PublishedDeadlines,
   type WizardMode,
@@ -14,6 +15,7 @@ import {
 import { formatDate, formatFullDay, isoDate } from "../dates";
 import type { Cycle } from "../types";
 import { cyclePhases } from "../phases";
+import { SEMESTERS } from "../semester";
 import { PhaseTimeline } from "./PhaseTimeline";
 
 export type Update = (change: (state: WizardState) => WizardState) => void;
@@ -75,11 +77,14 @@ function Field({
   label,
   hint,
   problem,
+  describedBy,
   children,
 }: {
   label: ReactNode;
   hint?: ReactNode;
   problem?: string;
+  /** Another element that describes the control, besides its hint. */
+  describedBy?: string;
   children: (props: {
     id: string;
     "aria-describedby"?: string;
@@ -94,7 +99,7 @@ function Field({
       <label htmlFor={id}>{label}</label>
       {children({
         id,
-        "aria-describedby": note ? noteId : undefined,
+        "aria-describedby": [note ? noteId : "", describedBy ?? ""].join(" ").trim() || undefined,
         "aria-invalid": problem ? true : undefined,
       })}
       {note && (
@@ -127,6 +132,13 @@ export function BasicsStep({
 }) {
   const locked = mode === "published";
   const [advanced, setAdvanced] = useState(state.kind === "ELECTIVE");
+  const termId = useId();
+  const term = termOf(state);
+  // A semester outside 1–8 (from an older cycle) stays visible until changed.
+  const semesters = Array.from({ length: SEMESTERS }, (_, index) => index + 1);
+  if (Number.isInteger(state.semester) && !semesters.includes(state.semester)) {
+    semesters.push(state.semester);
+  }
   return (
     <>
       {mode === "create" && templates.length > 0 && (
@@ -230,36 +242,35 @@ export function BasicsStep({
           label="Semester"
           hint={locked ? LOCKED : "Worked out from the batch and today."}
           problem={problems.semester}
+          describedBy={termId}
         >
           {(props) => (
-            <input
+            <select
               {...props}
-              type="number"
-              inputMode="numeric"
               value={Number.isNaN(state.semester) ? "" : state.semester}
-              onChange={(event) => onSemesterChange(event.target.valueAsNumber)}
+              onChange={(event) => onSemesterChange(Number(event.target.value))}
               disabled={locked}
-              min={1}
-              max={12}
-            />
+            >
+              {semesters.map((semester) => (
+                <option key={semester} value={semester}>
+                  {semester}
+                </option>
+              ))}
+            </select>
           )}
         </Field>
-        <Field
-          label="Academic year"
-          hint={locked ? LOCKED : "Worked out from today, like 2026-27."}
-          problem={problems.academicYear}
-        >
-          {(props) => (
-            <input
-              {...props}
-              value={state.academicYear}
-              onChange={(event) =>
-                update((current) => ({ ...current, academicYear: event.target.value }))
-              }
-              disabled={locked}
-            />
+        <p className="term-display" id={termId}>
+          {term ? (
+            <>
+              <strong>
+                Semester {term.semester} · {term.label}
+              </strong>
+              <span>Academic year {term.academicYear}</span>
+            </>
+          ) : (
+            <span>Enter the batch to see the semester's dates.</span>
           )}
-        </Field>
+        </p>
       </div>
       <details
         className="wizard-advanced"
@@ -446,6 +457,20 @@ function startIso(day: string) {
   return new Date(`${day}T00:00`).toISOString();
 }
 
+/** Dates outside the semester's term: a warning only, so saving still works. */
+export function TermWarnings({ warnings }: { warnings: string[] }) {
+  return (
+    <div aria-live="polite">
+      {warnings.length > 0 && (
+        <div className="term-warning">
+          <strong>Outside the semester.</strong> {warnings.join(" ")} You can still save
+          this plan.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function TimelineStep({
   state,
   update,
@@ -454,10 +479,12 @@ export function TimelineStep({
   schedule,
   cycle,
   now,
+  warnings,
 }: StepProps & {
   schedule: BuiltSchedule | null;
   cycle: Cycle | null;
   now: Date;
+  warnings: string[];
 }) {
   if (mode === "published" && cycle) {
     return (
@@ -467,6 +494,7 @@ export function TimelineStep({
         problems={problems}
         cycle={cycle}
         now={now}
+        warnings={warnings}
       />
     );
   }
@@ -476,6 +504,7 @@ export function TimelineStep({
       ...current,
       timeline: { ...current.timeline, ...next },
       timelineTouched: true,
+      timelineAuto: false,
     }));
   const duration = (field: "teams" | "ideas", value: number) =>
     change({ durations: { ...timeline.durations, [field]: value } });
@@ -494,9 +523,10 @@ export function TimelineStep({
       <Field
         label="Start date"
         hint={
-          problems.start
-            ? undefined
-            : `${formatFullDay(`${timeline.start}T12:00`)}. Students can form teams from this day once you publish.`
+          // A cleared or half-typed date has nothing to spell out yet.
+          isValidDay(timeline.start)
+            ? `${formatFullDay(`${timeline.start}T12:00`)}. Students can form teams from this day once you publish.`
+            : undefined
         }
         problem={problems.start}
       >
@@ -577,6 +607,7 @@ export function TimelineStep({
           phases={cyclePhases(schedule, startIso(timeline.start))}
         />
       )}
+      <TermWarnings warnings={warnings} />
     </>
   );
 }
@@ -595,7 +626,8 @@ function PublishedTimeline({
   problems,
   cycle,
   now,
-}: Omit<StepProps, "mode"> & { cycle: Cycle; now: Date }) {
+  warnings,
+}: Omit<StepProps, "mode"> & { cycle: Cycle; now: Date; warnings: string[] }) {
   const fields = (Object.keys(DEADLINE_LABELS) as (keyof PublishedDeadlines)[]).filter(
     (field) => field !== "teamCompletionDeadline" || hasPlacingWindow(cycle),
   );
@@ -653,6 +685,7 @@ function PublishedTimeline({
           );
         })}
       </div>
+      <TermWarnings warnings={warnings} />
     </>
   );
 }
@@ -725,12 +758,15 @@ function ReviewSection({
 export function ReviewStep({
   state,
   schedule,
+  warnings,
   onEdit,
 }: {
   state: WizardState;
   schedule: BuiltSchedule | null;
+  warnings: string[];
   onEdit: (step: number) => void;
 }) {
+  const term = termOf(state);
   return (
     <>
       {schedule && (
@@ -738,6 +774,7 @@ export function ReviewStep({
           <Sentences sentences={planSummary({ ...state, schedule })} />
         </div>
       )}
+      <TermWarnings warnings={warnings} />
       <ReviewSection title="Basics" onEdit={() => onEdit(0)} editLabel="Edit the basics">
         <dt>Course</dt>
         <dd>{state.courseName || "—"}</dd>
@@ -745,7 +782,8 @@ export function ReviewStep({
         <dd>{state.title || "—"}</dd>
         <dt>Batch</dt>
         <dd>
-          {state.batchYear}, semester {state.semester}, {state.academicYear}
+          {state.batchYear}, semester {state.semester}
+          {term && ` (${term.label}), academic year ${term.academicYear}`}
         </dd>
         <dt>Course type</dt>
         <dd>{state.kind === "ELECTIVE" ? "Elective: enrolled students only" : "Core: the whole batch"}</dd>

@@ -58,6 +58,8 @@ async function fillBasics(user: ReturnType<typeof userEvent.setup>) {
 
 describe("CycleWizardPage", () => {
   beforeEach(() => {
+    // Today is Thu, 29 Oct 2026: semester 1 of batch 2026, and semester 7 of batch 2023 (both Aug–Dec 2026).
+    vi.useFakeTimers({ now: new Date(2026, 9, 29, 10, 0), toFake: ["Date"] });
     vi.clearAllMocks();
     vi.mocked(api.listMyCycles).mockResolvedValue([]);
     vi.mocked(api.createCycle).mockImplementation(async (input) => ({
@@ -70,7 +72,10 @@ describe("CycleWizardPage", () => {
     }));
     vi.mocked(api.publishCycle).mockResolvedValue({ ...previous, status: "PUBLISHED" });
   });
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
 
   it("checks a step before moving on, explains what to fix, and moves focus to the next step", async () => {
     const user = renderWizard();
@@ -145,9 +150,9 @@ describe("CycleWizardPage", () => {
       title: "Mid-semester project",
       description: "",
       kind: "CORE",
-      batchYear: new Date().getFullYear(),
-      semester: expect.any(Number),
-      academicYear: expect.stringMatching(/^\d{4}-\d{2}$/),
+      batchYear: 2026,
+      semester: 1,
+      academicYear: "2026-27",
       minTeamSize: 2,
       maxTeamSize: 4,
       ...buildSchedule(today, DEFAULT_DURATIONS, {
@@ -156,6 +161,39 @@ describe("CycleWizardPage", () => {
       }),
     });
     expect(api.publishCycle).toHaveBeenCalledWith("new-cycle");
+  });
+
+  it("shows the semester's term next to the picker, plans inside it, and only warns outside it", async () => {
+    const user = renderWizard();
+    await fillBasics(user);
+    const batch = screen.getByLabelText("Batch year");
+    await user.clear(batch);
+    await user.type(batch, "2023");
+    const semester = screen.getByLabelText("Semester");
+    expect(semester).toHaveValue("7");
+    expect(semester).toHaveAccessibleDescription(/Semester 7 · Aug–Dec 2026 Academic year 2026-27/);
+
+    // The plan has not been touched, so it moves into the term the faculty choose.
+    await user.selectOptions(semester, "8");
+    expect(screen.getByText("Semester 8 · Jan–May 2027")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Next: Teams" }));
+    await user.click(screen.getByRole("button", { name: "Next: Timeline" }));
+    expect(screen.getByLabelText("Start date")).toHaveValue("2027-01-01");
+    expect(screen.queryByText("Outside the semester.")).toBeNull();
+
+    // Dates the faculty pick outside the term are allowed, with a warning.
+    const start = screen.getByLabelText("Start date");
+    await user.clear(start);
+    await user.type(start, "2026-11-02");
+    expect(screen.getByText(/before semester 8 \(Jan–May 2027\) begins/)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Next: Review" }));
+    expect(screen.getByRole("heading", { name: /Check and save/ })).toBeVisible();
+    expect(screen.getByText(/before semester 8 \(Jan–May 2027\) begins/)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Save as draft" }));
+    expect(await screen.findByText("Cycle page")).toBeVisible();
+    expect(api.createCycle).toHaveBeenCalledWith(
+      expect.objectContaining({ batchYear: 2023, semester: 8, academicYear: "2026-27" }),
+    );
   });
 
   it("saves a draft without publishing it", async () => {
