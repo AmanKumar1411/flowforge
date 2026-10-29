@@ -114,12 +114,3 @@ export function EmptyState({ title, body }: { title: string; body: string }) {
     </div>
   );
 }
-
-export function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="info-block">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}

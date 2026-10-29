@@ -191,6 +191,21 @@ export class CycleWorkflow {
     }
   }
 
+  /**
+   * A faculty window has length: it ends after the students' deadline. No
+   * window at all is stored as an end equal to the students' deadline, which
+   * `assertValidSchedule` accepts; requests ask for it with null or by leaving
+   * the field out.
+   */
+  assertCompletionWindow(formation: Date, completion: Date): void {
+    if (completion <= formation) {
+      throw new CycleDomainError(
+        "INVALID_TEAM_COMPLETION_DEADLINE",
+        "Your time to place students must end after the students' team deadline; switch it off for no faculty window",
+      );
+    }
+  }
+
   validatePublishRules(schedule: CycleSchedule): void {
     this.assertValidSchedule(schedule);
   }

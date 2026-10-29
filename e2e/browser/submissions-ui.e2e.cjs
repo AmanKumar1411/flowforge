@@ -1,7 +1,15 @@
 // Browser end-to-end check of the Phase 7 UI (the faculty's idea list, picks, rounds after a rejection, submissions). See README.md.
 // Usage: node submissions-ui.e2e.cjs <chrome path> <frontend url> <api url> <out dir>
 const { chromium } = require("playwright-core");
-const { DOMAIN, assert, createRun, devSignIn, apiSession } = require("./support.cjs");
+const {
+  DOMAIN,
+  assert,
+  createRun,
+  devSignIn,
+  apiSession,
+  openSection,
+  openTeamPage,
+} = require("./support.cjs");
 const [chromePath, FRONTEND, API, OUT] = process.argv.slice(2);
 
 // Batch 2021 belongs to this script alone.
@@ -68,6 +76,7 @@ const SUBMISSIONS_OPEN_S = 55;
     const catalog = faculty.locator("section", { has: faculty.locator("#catalog-heading") });
 
     await run.check("Faculty add ideas to the cycle's list, and remove one nobody picked", async () => {
+      await openSection(faculty, "Idea list");
       for (const [title, description] of [
         ["Library seat finder", "Show which library seats are free right now"],
         ["Bus tracker", "Live campus bus positions"],
@@ -90,14 +99,15 @@ const SUBMISSIONS_OPEN_S = 55;
       const list = leader.getByRole("list", { name: "Ideas from your faculty" });
       await list.getByText("Show which library seats are free right now").waitFor();
       await list.getByRole("button", { name: "Pick Library seat finder" }).click();
-      await list.getByRole("button", { name: "Confirm: make it our project" }).click();
+      await list.getByRole("button", { name: "Confirm: make it our idea" }).click();
       await leader.locator(".idea-status", { hasText: "Picked from the list" }).waitFor();
-      await leader.getByText("Picked from your faculty's list. This is your team's project for the cycle.").waitFor();
+      await leader.getByText("Picked from your faculty's list. This is your team's idea for this project.").waitFor();
     }, leader);
 
     await run.check("Faculty see the pick, and a picked idea can no longer be removed", async () => {
       await faculty.reload();
-      await catalog.getByText("Picked by 1 team").waitFor();
+      await openSection(faculty, "Idea list");
+      await catalog.getByText("Picked by 1 team", { exact: true }).waitFor();
       assert(await catalog.getByRole("button", { name: "Remove Library seat finder" }).count() === 0, "a picked idea can be removed");
     }, faculty);
 
@@ -150,11 +160,14 @@ const SUBMISSIONS_OPEN_S = 55;
 
     await run.check("Faculty see each team's latest version and its history", async () => {
       await faculty.reload();
-      await faculty.getByRole("heading", { name: "1 of 2 teams submitted" }).waitFor();
-      await faculty.getByRole("button", { name: "Versions of Orbit" }).click();
-      const work = faculty.getByLabel("Work of Orbit");
+      await faculty.locator(".glance", { hasText: "1 of 2 teams submitted" }).waitFor();
+      await faculty.locator(".team-row", { hasText: "Orbit" }).getByText("2 submissions").waitFor();
+      await openTeamPage(faculty, "Orbit");
+      const work = faculty.getByRole("list", { name: "Submitted versions" });
       await work.getByText("Version 2").waitFor();
       await work.getByText("Version 1").waitFor();
+      // Submissions are still open, so the newest version is marked as the latest, not yet final.
+      await work.locator("li").first().locator(".final-tag", { hasText: "Latest" }).waitFor();
       const rows = (await facultyApi.call("GET", `/course-cycles/${cycleId}/submissions`)).body;
       const orbitRow = rows.find((row) => row.team.name === "Orbit");
       assert(orbitRow.versionCount === 2 && orbitRow.latest.demoUrl === "https://orbit.example.edu", JSON.stringify(orbitRow));

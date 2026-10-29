@@ -3,6 +3,7 @@
 const path = require("node:path");
 const fs = require("node:fs");
 const { chromium, request } = require("playwright-core");
+const { createCycleInWizard } = require("./support.cjs");
 const [chromePath, FRONTEND, API, OUT] = process.argv.slice(2);
 
 const DOMAIN = "@nst.rishihood.edu.in";
@@ -87,22 +88,18 @@ const teamPanel = (page) => page.locator(".team-panel");
     const cycleTitle = `Team formation ${Date.now()}`;
     let cycleId = "";
 
-    await check("Faculty sets team rules in the cycle editor and publishes the cycle", async () => {
-      await faculty.getByRole("button", { name: "+ New cycle" }).click();
-      await faculty.getByLabel("Course name").fill("Software Design");
-      await faculty.getByLabel("Cycle title").fill(cycleTitle);
-      await faculty.getByLabel("Batch year").fill("2026");
-      await faculty.getByLabel("Academic year").fill("2026-27");
-      await faculty.getByLabel("Submission opens").fill(localInput(minuteFromNow(24 * 60)));
-      await faculty.getByLabel("Submission deadline").fill(localInput(minuteFromNow(30 * 24 * 60)));
-      await faculty.getByLabel("Minimum team size").fill("2");
-      await faculty.getByLabel("Maximum team size").fill("3");
-      await faculty.getByLabel("Team formation deadline").fill(localInput(minuteFromNow(120)));
-      await faculty.getByRole("button", { name: "Create draft" }).click();
-      await faculty.waitForURL(/\/faculty\/cycles\/[0-9a-f-]{36}$/);
-      cycleId = faculty.url().split("/").pop();
-      await faculty.getByText("2 to 3 members").waitFor();
-      await faculty.getByRole("button", { name: "← Back to cycles" }).click();
+    await check("Faculty sets team rules in the cycle wizard and publishes the cycle", async () => {
+      cycleId = await createCycleInWizard(faculty, {
+        courseName: "Software Design",
+        title: cycleTitle,
+        batchYear: 2026,
+        minTeamSize: 2,
+        maxTeamSize: 3,
+        teams: 1,
+        ideas: 1,
+      });
+      await faculty.getByText(/· Teams of 2–3 ·/).waitFor();
+      await faculty.getByRole("button", { name: "← Back to projects" }).click();
       faculty.once("dialog", (dialog) => dialog.accept());
       const card = faculty.locator(".cycle-card", { hasText: cycleTitle });
       await card.getByRole("button", { name: "Publish" }).click();
@@ -113,10 +110,15 @@ const teamPanel = (page) => page.locator(".team-panel");
     await check("Faculty extends the formation deadline of the published cycle; team sizes are locked", async () => {
       const extended = minuteFromNow(180);
       await faculty.locator(".cycle-card", { hasText: cycleTitle }).getByRole("button", { name: "Edit" }).click();
-      await faculty.getByLabel("Team formation deadline").waitFor();
+      // The same wizard, with what publishing locked shown as locked.
+      assert(await faculty.getByLabel("Course name").isDisabled(), "course name is editable after publish");
+      await faculty.getByRole("button", { name: "Next: Teams" }).click();
       assert(await faculty.getByLabel("Minimum team size").isDisabled(), "minimum size is editable after publish");
       assert(await faculty.getByLabel("Maximum team size").isDisabled(), "maximum size is editable after publish");
-      await faculty.getByLabel("Team formation deadline").fill(localInput(extended));
+      await faculty.getByRole("button", { name: "Next: Timeline" }).click();
+      assert(await faculty.getByLabel("Submissions open").isDisabled(), "submissions open is editable after publish");
+      await faculty.getByLabel("Students form teams until").fill(localInput(extended));
+      await faculty.getByRole("button", { name: "Next: Review" }).click();
       await faculty.getByRole("button", { name: "Save changes" }).click();
       await faculty.waitForURL(new RegExp(`/faculty/cycles/${cycleId}$`));
       const cycle = await admin.call("GET", `/course-cycles/${cycleId}`);
@@ -200,12 +202,16 @@ const teamPanel = (page) => page.locator(".team-panel");
 
     await check("Faculty sees every team of the cycle with its leader and members", async () => {
       await faculty.reload();
-      // The faculty's table of teams; the ideas table below it lists the same team names.
-      const row = faculty.locator('section[aria-labelledby="teams-heading"] tbody tr', { hasText: "Falcon" });
-      await row.waitFor();
-      const cells = await row.locator("td").allInnerTexts();
-      assert(JSON.stringify(cells) === JSON.stringify(["Falcon", "Isha", "Zoya", "2", "Students"]), `row ${JSON.stringify(cells)}`);
-      return cells.join(" | ");
+      const row = faculty.locator(".team-row", { hasText: "Falcon" });
+      await row.getByText("Led by Isha").waitFor();
+      await row.getByText("2/3 members").waitFor();
+      await row.getByRole("link", { name: "View details of Falcon" }).click();
+      await faculty.getByRole("heading", { level: 1, name: "Falcon" }).waitFor();
+      await faculty.getByText(/Formed by the students/).waitFor();
+      const members = await faculty.locator(".member-list li").allInnerTexts();
+      const flat = members.map((member) => member.replace(/\s+/g, " ").trim());
+      assert(flat.length === 2 && /^Isha .*leader$/i.test(flat[0]) && flat[1].startsWith("Zoya"), `members ${JSON.stringify(flat)}`);
+      return flat.join(" | ");
     }, faculty);
 
     await check("Leader disbands the team after confirming; every member is free again", async () => {

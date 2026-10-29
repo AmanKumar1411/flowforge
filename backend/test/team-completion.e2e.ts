@@ -333,7 +333,18 @@ describe("Team completion and electives", () => {
       assert.equal(backwards.status, 400);
       assert.equal(backwards.body.code, "INVALID_TEAM_COMPLETION_DEADLINE");
 
-      const created = await owner.post("/course-cycles", { body: base });
+      // A window must have length: an end equal to the students' deadline is refused.
+      const empty = await owner.post("/course-cycles", {
+        body: { ...base, teamCompletionDeadline: at(DAY_MS) },
+      });
+      assert.equal(empty.status, 400);
+      assert.equal(empty.body.code, "INVALID_TEAM_COMPLETION_DEADLINE");
+
+      // Left out or null: no faculty window.
+      const created = await owner.post("/course-cycles", {
+        body: { ...base, teamCompletionDeadline: null },
+      });
+      assert.equal(created.status, 201, JSON.stringify(created.body));
       assert.equal(created.body.teamCompletionDeadline, at(DAY_MS));
       const cycleId = String(created.body.id);
       await owner.post(`/course-cycles/${cycleId}/publish`);
@@ -342,6 +353,25 @@ describe("Team completion and electives", () => {
       });
       assert.equal(extended.status, 200, JSON.stringify(extended.body));
       assert.equal(extended.body.teamCompletionDeadline, at(2 * DAY_MS));
+
+      // On a published cycle the window can be switched on while formation is open, and off again.
+      const windowOn = await owner.patch(`/course-cycles/${cycleId}`, {
+        body: { teamCompletionDeadline: at(2 * DAY_MS) },
+      });
+      assert.equal(windowOn.status, 400);
+      assert.equal(windowOn.body.code, "INVALID_TEAM_COMPLETION_DEADLINE");
+      const opened = await owner.patch(`/course-cycles/${cycleId}`, {
+        body: {
+          teamFormationDeadline: at(DAY_MS),
+          teamCompletionDeadline: at(2 * DAY_MS),
+        },
+      });
+      assert.equal(opened.status, 200, JSON.stringify(opened.body));
+      const closedAgain = await owner.patch(`/course-cycles/${cycleId}`, {
+        body: { teamCompletionDeadline: null },
+      });
+      assert.equal(closedAgain.status, 200, JSON.stringify(closedAgain.body));
+      assert.equal(closedAgain.body.teamCompletionDeadline, at(DAY_MS));
 
       await assert.rejects(
         app.prisma

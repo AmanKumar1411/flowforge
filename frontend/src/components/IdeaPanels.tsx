@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   getTeamIdea,
   listCatalog,
-  listCycleIdeas,
   pickIdea,
   reviewIdea,
   submitIdea,
@@ -14,13 +13,11 @@ import {
   ideaStatusLabel,
   isIdeaResubmissionOpen,
   isIdeaSubmissionOpen,
-  reviewOrder,
   type IdeaAction,
 } from "../ideas";
 import type {
   CatalogIdea,
   Cycle,
-  CycleIdea,
   Idea,
   IdeaContent,
   IdeaDecision,
@@ -180,7 +177,7 @@ function ideaNote(
         : "Waiting for your faculty's review.";
     case "REJECTED":
       if (!isIdeaResubmissionOpen(cycle)) {
-        return "Your faculty rejected this idea, and the cycle is closed, so it can no longer change.";
+        return "Your faculty rejected this idea, and the project is closed, so it can no longer change.";
       }
       return `Your faculty asked for a different idea. ${
         isLeader
@@ -189,12 +186,12 @@ function ideaNote(
       }; there is no deadline for these rounds.`;
     case "APPROVED":
       return idea.source === "CATALOG"
-        ? "Picked from your faculty's list. This is your team's project for the cycle."
-        : "Approved. This is your team's project for the cycle.";
+        ? "Picked from your faculty's list. This is your team's idea for this project."
+        : "Approved. This is your team's idea for this project.";
   }
 }
 
-function IdeaStatusBadge({ idea }: { idea: Pick<Idea, "status" | "source"> }) {
+export function IdeaStatusBadge({ idea }: { idea: Pick<Idea, "status" | "source"> }) {
   return (
     <span className={`idea-status idea-${idea.status.toLowerCase()}`}>
       {ideaStatusLabel(idea.status, idea.source)}
@@ -259,7 +256,7 @@ function CatalogList({
                     disabled={busy}
                     onClick={() => confirm(idea)}
                   >
-                    {busy ? "Picking…" : "Confirm: make it our project"}
+                    {busy ? "Picking…" : "Confirm: make it our idea"}
                   </button>
                 </div>
               ) : (
@@ -370,7 +367,7 @@ function IdeaForm({
   );
 }
 
-function IdeaDetails({ idea }: { idea: Idea }) {
+export function IdeaDetails({ idea }: { idea: Idea }) {
   const picked = idea.source === "CATALOG";
   return (
     <div className="idea-details">
@@ -416,146 +413,23 @@ function IdeaDetails({ idea }: { idea: Idea }) {
   );
 }
 
-/** Every team's idea in a cycle: the owning faculty review them; admins only read. */
-export function FacultyIdeasSection({
-  cycle,
-  canReview,
-}: {
-  cycle: Cycle;
-  canReview: boolean;
-}) {
-  const [rows, setRows] = useState<CycleIdea[] | null>(null);
-  const [openTeamId, setOpenTeamId] = useState<string | null>(null);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-
-  const load = useCallback(() => {
-    listCycleIdeas(cycle.id)
-      .then(setRows)
-      .catch((caught) => setError(readableError(caught)));
-  }, [cycle.id]);
-  useEffect(load, [load]);
-
-  const sorted = [...(rows ?? [])].sort(
-    (a, b) =>
-      reviewOrder(a.idea?.status ?? null) -
-        reviewOrder(b.idea?.status ?? null) ||
-      a.team.name.localeCompare(b.team.name),
-  );
-  const count = (status: Idea["status"] | null) =>
-    sorted.filter((row) => (row.idea?.status ?? null) === status).length;
-  const open = sorted.find((row) => row.team.id === openTeamId) ?? null;
-  // A failed review usually means the idea changed meanwhile, so reload either way.
-  const finishReview = (message: string, failed: boolean) => {
-    setNotice(failed ? "" : message);
-    setError(failed ? message : "");
-    load();
-  };
-
-  return (
-    <section className="team-panel" aria-labelledby="ideas-heading">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">Project ideas</p>
-          <h2 id="ideas-heading">
-            {rows
-              ? `${count("SUBMITTED")} waiting for review`
-              : "Loading…"}
-          </h2>
-        </div>
-      </div>
-      <p className="field-hint">
-        Ideas are due {formatDate(cycle.ideaDeadline)}. After a rejection the
-        team revises and resubmits, or picks from your list, for as many rounds
-        as it takes while the cycle is open.
-        {rows &&
-          ` ${count("APPROVED")} approved · ${count("REJECTED")} rejected · ${count(null)} without an idea.`}
-      </p>
-      {error && <p className="form-error">{error}</p>}
-      {notice && (
-        <p className="notice" role="status">
-          {notice}
-        </p>
-      )}
-      {rows && rows.length === 0 && (
-        <p className="muted">No team has been formed yet.</p>
-      )}
-      {sorted.length > 0 && (
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>Team</th>
-              <th>Leader</th>
-              <th>Idea</th>
-              <th>Status</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map(({ team, idea }) => (
-              <tr key={team.id}>
-                <td>{team.name}</td>
-                <td>{team.leader.name}</td>
-                <td>{idea?.title ?? <span className="muted">—</span>}</td>
-                <td>
-                  {idea
-                    ? ideaStatusLabel(idea.status, idea.source)
-                    : "No idea yet"}
-                </td>
-                <td className="row-actions">
-                  {idea && (
-                    <button
-                      className="text-button"
-                      aria-label={`Open the idea of ${team.name}`}
-                      onClick={() =>
-                        setOpenTeamId(openTeamId === team.id ? null : team.id)
-                      }
-                    >
-                      {openTeamId === team.id
-                        ? "Close"
-                        : canReview && idea.status === "SUBMITTED"
-                          ? "Review"
-                          : "View"}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      {open?.idea && (
-        <IdeaReviewPanel
-          key={`${open.team.id}-${open.idea.version}-${open.idea.status}`}
-          cycle={cycle}
-          teamName={open.team.name}
-          idea={open.idea}
-          canReview={canReview}
-          onDone={finishReview}
-        />
-      )}
-    </section>
-  );
-}
-
-function IdeaReviewPanel({
+/** The owning faculty's decision on a waiting proposal; a rejection needs feedback for the team. */
+export function IdeaReviewForm({
   cycle,
   teamName,
   idea,
-  canReview,
   onDone,
 }: {
   cycle: Cycle;
   teamName: string;
   idea: Idea;
-  canReview: boolean;
+  /** With the message to show; a failed review usually means the idea changed meanwhile. */
   onDone: (message: string, failed: boolean) => void;
 }) {
   const [decision, setDecision] = useState<IdeaDecision>("APPROVED");
   const [feedback, setFeedback] = useState("");
   const [busy, setBusy] = useState(false);
-  const reviewable =
-    canReview && idea.status === "SUBMITTED" && cycle.status === "PUBLISHED";
+  if (idea.status !== "SUBMITTED" || cycle.status !== "PUBLISHED") return null;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -578,55 +452,44 @@ function IdeaReviewPanel({
   };
 
   return (
-    <article className="idea-review" aria-label={`Idea of ${teamName}`}>
-      <div className="panel-heading">
-        <h3>
-          {teamName}: {idea.title}
-        </h3>
-        <IdeaStatusBadge idea={idea} />
+    <form className="team-editor" onSubmit={submit}>
+      <fieldset className="decision-options">
+        <legend>Decision on version {idea.version}</legend>
+        <label>
+          <input
+            type="radio"
+            name="decision"
+            checked={decision === "APPROVED"}
+            onChange={() => setDecision("APPROVED")}
+          />
+          Approve
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="decision"
+            checked={decision === "REJECTED"}
+            onChange={() => setDecision("REJECTED")}
+          />
+          Reject
+        </label>
+      </fieldset>
+      <label>
+        Feedback for the team
+        {decision === "REJECTED" ? " (required)" : " (optional)"}
+        <textarea
+          value={feedback}
+          onChange={(event) => setFeedback(event.target.value)}
+          maxLength={2000}
+          rows={3}
+          required={decision === "REJECTED"}
+        />
+      </label>
+      <div className="form-actions">
+        <button className="primary-button" disabled={busy}>
+          {decision === "APPROVED" ? "Approve idea" : "Reject idea"}
+        </button>
       </div>
-      <IdeaDetails idea={idea} />
-      {reviewable && (
-        <form className="team-editor" onSubmit={submit}>
-          <fieldset className="decision-options">
-            <legend>Decision on version {idea.version}</legend>
-            <label>
-              <input
-                type="radio"
-                name="decision"
-                checked={decision === "APPROVED"}
-                onChange={() => setDecision("APPROVED")}
-              />
-              Approve
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="decision"
-                checked={decision === "REJECTED"}
-                onChange={() => setDecision("REJECTED")}
-              />
-              Reject
-            </label>
-          </fieldset>
-          <label>
-            Feedback for the team
-            {decision === "REJECTED" ? " (required)" : " (optional)"}
-            <textarea
-              value={feedback}
-              onChange={(event) => setFeedback(event.target.value)}
-              maxLength={2000}
-              rows={3}
-              required={decision === "REJECTED"}
-            />
-          </label>
-          <div className="form-actions">
-            <button className="primary-button" disabled={busy}>
-              {decision === "APPROVED" ? "Approve idea" : "Reject idea"}
-            </button>
-          </div>
-        </form>
-      )}
-    </article>
+    </form>
   );
 }

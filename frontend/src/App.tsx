@@ -5,11 +5,13 @@ import { AppShell } from "./components/AppShell";
 import { AdminPage } from "./pages/AdminPage";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { CycleDetailPage } from "./pages/CycleDetailPage";
-import { CycleEditorPage } from "./pages/CycleEditorPage";
+import { CycleStudentsPage } from "./pages/CycleStudentsPage";
+import { CycleWizardPage } from "./pages/CycleWizardPage";
 import { FacultyCyclesPage } from "./pages/FacultyCyclesPage";
 import { LoginPage } from "./pages/LoginPage";
 import { PendingPage } from "./pages/PendingPage";
 import { StudentCyclesPage } from "./pages/StudentCyclesPage";
+import { TeamDetailPage } from "./pages/TeamDetailPage";
 import "./App.css";
 
 function Home() {
@@ -61,9 +63,11 @@ function App() {
               <Routes>
                 <Route index element={<Navigate to="cycles" replace />} />
                 <Route path="cycles" element={<FacultyCyclesPage />} />
-                <Route path="cycles/new" element={<CycleEditorPage />} />
+                <Route path="cycles/new" element={<CycleWizardPage />} />
                 <Route path="cycles/:cycleId" element={<CycleDetailPage faculty />} />
-                <Route path="cycles/:cycleId/edit" element={<CycleEditorPage />} />
+                <Route path="cycles/:cycleId/edit" element={<CycleWizardPage />} />
+                <Route path="cycles/:cycleId/students" element={<CycleStudentsPage />} />
+                <Route path="cycles/:cycleId/teams/:teamId" element={<TeamDetailPage />} />
               </Routes>
             </RequireRole>
           }

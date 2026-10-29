@@ -17,7 +17,7 @@ export function FacultyCyclesPage() {
   const transition = async (cycle: Cycle, action: "publish" | "close") => {
     if (
       !window.confirm(
-        `${action === "publish" ? "Publish" : "Close"} this cycle?`,
+        `${action === "publish" ? "Publish" : "Close"} this project?`,
       )
     )
       return;
@@ -36,21 +36,21 @@ export function FacultyCyclesPage() {
   return (
     <CycleListShell
       eyebrow="Faculty workspace"
-      title="Course cycles"
+      title="Course projects"
       action={
         <button
           className="primary-button compact"
           onClick={() => navigate("/faculty/cycles/new")}
         >
-          + New cycle
+          + New project
         </button>
       }
       error={error}
     >
       {cycles.length === 0 ? (
         <EmptyState
-          title="No cycles yet"
-          body="Create the academic context your students will work inside."
+          title="No projects yet"
+          body="Set up the first project your students will work on."
         />
       ) : (
         <div className="cycle-grid">

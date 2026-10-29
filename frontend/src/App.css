@@ -72,10 +72,12 @@
   color: var(--ink);
 }
 
+/* One page container for every page: up to 1280px wide, with side padding that shrinks to 16px. */
 .page-content {
-  width: min(1180px, calc(100% - 40px));
+  width: 100%;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 72px 0 100px;
+  padding: 72px clamp(16px, 4vw, 48px) 100px;
 }
 
 .eyebrow,
@@ -88,8 +90,7 @@
   text-transform: uppercase;
 }
 
-.section-heading,
-.detail-header {
+.section-heading {
   display: flex;
   justify-content: space-between;
   align-items: end;
@@ -113,8 +114,7 @@ h2 {
   font-weight: 400;
 }
 
-.page-lead,
-.detail-header p {
+.page-lead {
   max-width: 620px;
   color: var(--muted);
   font-size: 1.1rem;
@@ -422,58 +422,6 @@ h2 {
   border-top: 1px solid var(--line);
 }
 
-.detail-page {
-  max-width: 920px;
-}
-
-.detail-header {
-  align-items: start;
-  margin-top: 54px;
-}
-
-.detail-header h1 {
-  margin: 14px 0;
-}
-
-.detail-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-
-.detail-grid .info-block:nth-child(4n) {
-  border-right: 0;
-}
-
-.detail-grid .info-block:nth-child(n + 5) {
-  border-top: 1px solid var(--line);
-}
-
-.info-block {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 22px 18px;
-  border-right: 1px solid var(--line);
-}
-
-.info-block:last-child {
-  border-right: 0;
-}
-
-.info-block span {
-  color: var(--muted);
-  font-size: .75rem;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.info-block strong {
-  font-family: Georgia, serif;
-  font-size: 1.05rem;
-  font-weight: 400;
-}
 
 .loading {
   color: var(--muted);
@@ -491,16 +439,10 @@ h2 {
   }
 
   .page-content {
-    width: min(100% - 28px, 560px);
     padding-top: 44px;
   }
 
   .section-heading,
-  .detail-header {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
   .cycle-grid,
   .form-grid {
     grid-template-columns: 1fr;
@@ -508,14 +450,6 @@ h2 {
 
   .form-grid .wide {
     grid-column: auto;
-  }
-
-  .detail-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .info-block:nth-child(2) {
-    border-right: 0;
   }
 
   .login-layout {
@@ -862,17 +796,6 @@ td.row-actions {
 }
 
 @media (max-width: 760px) {
-  .detail-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .detail-grid .info-block {
-    border-right: 0;
-  }
-
-  .detail-grid .info-block + .info-block {
-    border-top: 1px solid var(--line);
-  }
 }
 
 /* Team completion and electives */
@@ -1195,4 +1118,958 @@ ul.catalog-list {
   flex-wrap: wrap;
   gap: 4px 12px;
   margin-top: 4px;
+}
+
+.field-problem {
+  display: block;
+  color: #a13d30;
+  font-size: .84rem;
+  font-weight: 700;
+}
+
+.cycle-form input[aria-invalid="true"] {
+  border-color: #a13d30;
+}
+
+.cycle-form .check-row {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--ink);
+  font-size: .9rem;
+  font-weight: 600;
+}
+
+.cycle-form .check-row input {
+  width: auto;
+  margin: 3px 0 0;
+}
+
+/* The cycle wizard. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.wizard-page {
+  max-width: 1180px;
+}
+
+.wizard-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin: 26px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wizard-step > span,
+.wizard-step > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: .92rem;
+  font-weight: 700;
+}
+
+.wizard-step > button {
+  cursor: pointer;
+}
+
+.wizard-step > button:hover {
+  color: var(--ink);
+}
+
+.wizard-step-number {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  font-size: .8rem;
+}
+
+.wizard-step.is-current > span {
+  color: var(--ink);
+}
+
+.wizard-step.is-current .wizard-step-number,
+.wizard-step.is-done .wizard-step-number {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.wizard-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 28px;
+  align-items: start;
+}
+
+.wizard-form {
+  margin-top: 22px;
+}
+
+.wizard-heading {
+  margin: 0 0 18px;
+  font-family: Georgia, serif;
+  font-size: 1.5rem;
+}
+
+.wizard-heading:focus {
+  outline: none;
+}
+
+.wizard-heading:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: 4px;
+}
+
+.wizard-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.cycle-form .wizard-field label {
+  margin-bottom: 0;
+}
+
+.wizard-field .field-hint,
+.wizard-field .field-problem,
+.team-size .field-hint,
+.team-size .field-problem {
+  margin: 0;
+  font-size: .84rem;
+  font-weight: 400;
+}
+
+.wizard-field .field-problem,
+.team-size .field-problem {
+  font-weight: 700;
+}
+
+.form-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* The semester's term, next to the semester picker. */
+.term-display {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-self: start;
+  gap: 2px;
+  /* Level with the inputs, below their labels. */
+  margin: 27px 0 18px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--lime);
+  background: white;
+  font-size: .9rem;
+  line-height: 1.4;
+}
+
+.term-display span {
+  color: var(--muted);
+  font-size: .84rem;
+}
+
+.term-warning {
+  margin: 14px 0;
+  padding: 10px 14px;
+  border: 1px solid #f2c38f;
+  border-left-width: 4px;
+  background: #fff8ee;
+  font-size: .9rem;
+  line-height: 1.5;
+}
+
+.cycle-form .short-input {
+  max-width: 220px;
+}
+
+.template-picker {
+  margin-bottom: 22px;
+  padding: 16px 18px 0;
+  border: 1px dashed var(--line);
+  background: white;
+}
+
+.wizard-advanced {
+  margin: 8px 0 18px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.wizard-advanced summary {
+  cursor: pointer;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.choice-list {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.cycle-form .choice-list label {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+  color: var(--ink);
+  font-size: .92rem;
+  font-weight: 400;
+}
+
+.cycle-form .choice-list input {
+  width: auto;
+  margin: 3px 0 0;
+}
+
+.team-size {
+  margin: 0 0 14px;
+  padding: 0;
+  border: 0;
+}
+
+.team-size legend {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: .84rem;
+  font-weight: 800;
+}
+
+.inline-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: .95rem;
+}
+
+.cycle-form .inline-fields label {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.cycle-form .inline-fields input {
+  width: 76px;
+}
+
+.wizard-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-top: 26px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.wizard-nav > .text-button:first-child {
+  margin-right: auto;
+}
+
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.review-actions > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.review-actions .field-hint {
+  margin: 0;
+  font-size: .8rem;
+}
+
+.wizard-panel {
+  position: sticky;
+  top: 20px;
+  margin-top: 22px;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--lime);
+  background: var(--paper);
+}
+
+.wizard-panel h2 {
+  margin: 0 0 10px;
+  font-family: Georgia, serif;
+  font-size: 1.15rem;
+}
+
+.wizard-panel p,
+.review-summary p {
+  margin: 0 0 10px;
+  line-height: 1.55;
+}
+
+.review-summary {
+  margin-bottom: 18px;
+  padding: 14px 18px;
+  border-left: 3px solid var(--lime);
+  background: white;
+}
+
+.review-section {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.review-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.review-heading h3 {
+  margin: 0 0 6px;
+  font-family: Georgia, serif;
+  font-size: 1.1rem;
+}
+
+.review-section dl {
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) 1fr;
+  gap: 6px 16px;
+  margin: 0;
+  font-size: .92rem;
+}
+
+.review-section dt {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.review-section dd {
+  margin: 0;
+}
+
+/* A cycle's phases: one bar where there is room, a list where it is narrow. */
+.phase-frame {
+  container-type: inline-size;
+  margin: 20px 0 8px;
+}
+
+.phase-timeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Room above the bar for the "Today" tag, clear of the phases' edges. */
+.phase-timeline.has-today {
+  padding-top: 24px;
+}
+
+.phase {
+  position: relative;
+  flex: 1 1 0;
+  /* Never narrower than its two lines of text. */
+  min-width: max-content;
+  padding: 8px 12px 10px;
+  border-top: 6px solid var(--line);
+  background: white;
+  font-size: .82rem;
+}
+
+.phase-teams { border-top-color: #9fc3e2; }
+.phase-placing { border-top-color: #c9b6e4; }
+.phase-ideas { border-top-color: #f2c38f; }
+.phase-work { border-top-color: var(--lime); }
+.phase-closed { border-top-color: #b9b9ad; }
+
+.phase-name,
+.phase-dates {
+  display: block;
+  white-space: nowrap;
+}
+
+.phase-name {
+  font-weight: 800;
+}
+
+.phase-state {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.phase-dates {
+  margin-top: 2px;
+  color: var(--muted);
+}
+
+.phase.is-current {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
+.phase.is-done {
+  opacity: .72;
+}
+
+.today-marker {
+  position: absolute;
+  /* Above the phase's coloured edge (6px) with a gap, never on it. */
+  bottom: calc(100% + 10px);
+  padding: 0 5px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: .68rem;
+  font-weight: 800;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.today-marker::after {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  border: 4px solid transparent;
+  border-top-color: var(--ink);
+  transform: translateX(-50%);
+  content: "";
+}
+
+@container (max-width: 34rem) {
+  .phase-timeline {
+    flex-direction: column;
+  }
+
+  .phase-timeline.has-today {
+    padding-top: 0;
+  }
+
+  .phase {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 2px 12px;
+    min-width: 0;
+    border-top: 0;
+    border-left: 6px solid var(--line);
+  }
+
+  .phase-name,
+  .phase-dates {
+    white-space: normal;
+  }
+
+  .phase-teams { border-left-color: #9fc3e2; }
+  .phase-placing { border-left-color: #c9b6e4; }
+  .phase-ideas { border-left-color: #f2c38f; }
+  .phase-work { border-left-color: var(--lime); }
+  .phase-closed { border-left-color: #b9b9ad; }
+
+  .today-marker {
+    position: static;
+    order: -1;
+    flex-basis: 100%;
+    max-width: max-content;
+    transform: none !important;
+  }
+
+  .today-marker::after {
+    display: none;
+  }
+}
+
+/* A dialog over the page. */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(30, 37, 34, .45);
+}
+
+.dialog {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 24px 26px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.dialog h2 {
+  margin: 0 0 12px;
+  font-family: Georgia, serif;
+}
+
+.dialog ul {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  line-height: 1.6;
+}
+
+@media (max-width: 900px) {
+  .wizard-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .wizard-panel {
+    position: static;
+    margin-top: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .form-grid.three {
+    grid-template-columns: 1fr;
+  }
+
+  .term-display {
+    margin-top: 0;
+  }
+
+  .review-section dl {
+    grid-template-columns: 1fr;
+  }
+
+  .wizard-nav {
+    justify-content: stretch;
+  }
+}
+
+/* The cycle page: a header across the page, then the main column (teams) and a side column. */
+.page-content:has(> .detail-page) {
+  padding-top: 32px;
+}
+
+.detail-page .back-button {
+  margin-bottom: 14px;
+}
+
+.cycle-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 14px 32px;
+}
+
+.cycle-heading {
+  flex: 1 1 520px;
+  min-width: 0;
+}
+
+.cycle-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin: 0 0 8px;
+}
+
+.cycle-kicker .eyebrow {
+  margin: 0;
+}
+
+.cycle-header h1 {
+  max-width: none;
+  margin: 0 0 8px;
+  font-size: clamp(2rem, 3.4vw, 2.75rem);
+  line-height: 1.1;
+  letter-spacing: -.02em;
+  overflow-wrap: anywhere;
+}
+
+.cycle-description {
+  max-width: 760px;
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+
+.cycle-facts {
+  margin: 0;
+  color: var(--muted);
+  font-size: .92rem;
+}
+
+.cycle-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+}
+
+.cycle-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  grid-template-areas:
+    "main attention"
+    "main side";
+  grid-template-rows: auto 1fr;
+  column-gap: 32px;
+  align-items: start;
+  margin-top: 22px;
+}
+
+.cycle-main {
+  grid-area: main;
+  min-width: 0;
+}
+
+.cycle-side {
+  grid-area: side;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.cycle-layout > .attention-card {
+  grid-area: attention;
+  margin: 0 0 16px;
+}
+
+.cycle-main > .cycle-section:first-child {
+  margin-top: 0;
+}
+
+@media (max-width: 1023px) {
+  .cycle-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "attention"
+      "main"
+      "side";
+    grid-template-rows: auto;
+  }
+
+  .cycle-side {
+    margin-top: 16px;
+  }
+}
+
+.attention-card {
+  margin: 0;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--coral);
+  background: white;
+}
+
+.side-card {
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.side-card h2 {
+  margin: 0 0 10px;
+  font-size: 1.15rem;
+}
+
+.glance {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: .92rem;
+}
+
+.glance li {
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.glance .text-button {
+  padding: 0;
+}
+
+.students-page > .team-panel {
+  max-width: 920px;
+}
+
+.attention-card h2 {
+  margin: 0 0 8px;
+  font-family: Georgia, serif;
+  font-size: 1.15rem;
+}
+
+.attention-card ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.attention-card li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px 16px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.cycle-section {
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.cycle-section > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  padding: 16px 20px;
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.cycle-section > summary:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: -2px;
+}
+
+.cycle-section-title {
+  font-family: Georgia, serif;
+  font-size: 1.2rem;
+}
+
+.cycle-section-summary {
+  color: var(--muted);
+  font-size: .92rem;
+}
+
+.cycle-section-body {
+  padding: 0 20px 18px;
+}
+
+.cycle-section-body > .team-panel,
+.cycle-section-body > section.team-panel {
+  margin-top: 0;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  background: none;
+}
+
+.cycle-section-body > .team-panel + .team-panel {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px dashed var(--line);
+}
+
+
+/* Inside a section, its summary already names it: the first panel keeps its title for screen readers only. */
+.cycle-section-body > .team-panel:first-child > .panel-heading > div:first-child {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.cycle-section-body > .team-panel:first-child > .panel-heading {
+  justify-content: flex-end;
+}
+
+/* The teams list: one row per team, a link to its page on the right. */
+.cycle-main > .team-panel:first-child {
+  margin-top: 0;
+}
+
+.teams-card {
+  container-type: inline-size;
+}
+
+.teams-card .panel-heading {
+  margin-bottom: 8px;
+}
+
+.teams-card h2:focus {
+  outline: none;
+}
+
+.teams-card h2:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: 4px;
+}
+
+.teams-empty p {
+  margin: 0;
+}
+
+.teams-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin: 4px 0 6px;
+}
+
+.teams-tools label {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: .8rem;
+  font-weight: 800;
+}
+
+.teams-tools input,
+.teams-tools select {
+  border: 1px solid #c6c9bd;
+  padding: 9px 12px;
+  background: white;
+  color: var(--ink);
+}
+
+.team-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.team-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) 6.5rem minmax(0, 1.7fr) 7.5rem max-content;
+  align-items: center;
+  gap: 6px 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  font-size: .9rem;
+}
+
+.team-row-team {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.team-row-team span,
+.team-row-size,
+.team-row-work {
+  color: var(--muted);
+}
+
+.team-row-idea {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.team-row-idea > span:first-child {
+  overflow-wrap: anywhere;
+}
+
+a.text-button {
+  text-decoration: none;
+}
+
+.team-row-link {
+  justify-self: end;
+  white-space: nowrap;
+}
+
+@container (max-width: 40rem) {
+  .team-row {
+    grid-template-columns: minmax(0, 1fr) max-content;
+    grid-template-areas:
+      "team link"
+      "idea idea"
+      "size work";
+  }
+
+  .team-row-team { grid-area: team; }
+  .team-row-idea { grid-area: idea; }
+  .team-row-size { grid-area: size; }
+  .team-row-work { grid-area: work; justify-self: end; }
+  .team-row-link { grid-area: link; }
+}
+
+.final-tag {
+  margin-left: 8px;
+  padding: 1px 7px;
+  background: var(--lime);
+  font-size: .72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+/* The team page. */
+.side-card .member-list {
+  margin-bottom: 8px;
+}
+
+.place-student {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.place-student label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: .84rem;
+  font-weight: 800;
+}
+
+.place-student select {
+  border: 1px solid #c6c9bd;
+  padding: 9px 12px;
+  background: white;
+  color: var(--ink);
+}
+
+.place-student .dark-button {
+  align-self: flex-start;
+}
+
+@media (max-width: 1023px) {
+  /* On the team page the members come first. */
+  .cycle-layout.side-first {
+    grid-template-areas:
+      "side"
+      "main";
+  }
+
+  .cycle-layout.side-first .cycle-side {
+    margin: 0 0 16px;
+  }
 }

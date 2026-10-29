@@ -1,15 +1,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import {
-  listCycleSubmissions,
-  listTeamSubmissions,
-  submitWork,
-} from "../api/submissions";
+import { listTeamSubmissions, submitWork } from "../api/submissions";
 import { formatDate } from "../dates";
 import { readableError } from "../errors";
-import { ideaStatusLabel, submissionWindow } from "../ideas";
+import { submissionWindow } from "../ideas";
 import type {
   Cycle,
-  CycleSubmission,
   Idea,
   Submission,
   SubmissionContent,
@@ -215,13 +210,21 @@ function ExternalLink({ href, label }: { href: string | null; label: string }) {
   );
 }
 
-function SubmissionHistory({ versions }: { versions: Submission[] }) {
+/** Versions, newest first; with `latestLabel`, the newest is marked ("Final" once submissions close). */
+export function SubmissionHistory({
+  versions,
+  latestLabel,
+}: {
+  versions: Submission[];
+  latestLabel?: string;
+}) {
   return (
     <ol className="submission-history" aria-label="Submitted versions">
-      {versions.map((version) => (
+      {versions.map((version, index) => (
         <li key={version.id}>
-          <strong>Version {version.version}</strong> · {version.submittedBy.name}{" "}
-          · {formatDate(version.submittedAt)}
+          <strong>Version {version.version}</strong>
+          {latestLabel && index === 0 && <span className="final-tag">{latestLabel}</span>} ·{" "}
+          {version.submittedBy.name} · {formatDate(version.submittedAt)}
           <div className="submission-links">
             <ExternalLink href={version.repositoryUrl} label="Repository" />
             <ExternalLink href={version.demoUrl} label="Demo" />
@@ -231,133 +234,5 @@ function SubmissionHistory({ versions }: { versions: Submission[] }) {
         </li>
       ))}
     </ol>
-  );
-}
-
-/** Every team's work in a cycle, for the owning faculty (and admins, read-only like them). */
-export function FacultySubmissionsSection({ cycle }: { cycle: Cycle }) {
-  const [rows, setRows] = useState<CycleSubmission[] | null>(null);
-  const [openTeamId, setOpenTeamId] = useState<string | null>(null);
-  const [history, setHistory] = useState<Submission[] | null>(null);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    listCycleSubmissions(cycle.id)
-      .then(setRows)
-      .catch((caught) => setError(readableError(caught)));
-  }, [cycle.id]);
-
-  const toggle = (teamId: string) => {
-    if (openTeamId === teamId) {
-      setOpenTeamId(null);
-      return;
-    }
-    setOpenTeamId(teamId);
-    setHistory(null);
-    listTeamSubmissions(teamId)
-      .then(setHistory)
-      .catch((caught) => setError(readableError(caught)));
-  };
-
-  const sorted = [...(rows ?? [])].sort((a, b) =>
-    a.team.name.localeCompare(b.team.name),
-  );
-  const submitted = sorted.filter((row) => row.latest).length;
-  const open = sorted.find((row) => row.team.id === openTeamId) ?? null;
-
-  return (
-    <section className="team-panel" aria-labelledby="submissions-heading">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">Submissions</p>
-          <h2 id="submissions-heading">
-            {rows
-              ? `${submitted} of ${rows.length} ${rows.length === 1 ? "team" : "teams"} submitted`
-              : "Loading…"}
-          </h2>
-        </div>
-      </div>
-      <p className="field-hint">
-        Open from {formatDate(cycle.submissionStartAt)} until{" "}
-        {formatDate(cycle.submissionDeadline)}. Teams with an approved or picked
-        idea submit links; every submission is a new version.
-      </p>
-      {error && <p className="form-error">{error}</p>}
-      {rows && rows.length === 0 && (
-        <p className="muted">No team has been formed yet.</p>
-      )}
-      {sorted.length > 0 && (
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>Team</th>
-              <th>Idea</th>
-              <th>Latest version</th>
-              <th>Links</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map(({ team, idea, latest, versionCount }) => (
-              <tr key={team.id}>
-                <td>{team.name}</td>
-                <td>
-                  {idea ? (
-                    <>
-                      {idea.title}
-                      <span className="muted">
-                        {" "}
-                        · {ideaStatusLabel(idea.status, idea.source)}
-                      </span>
-                    </>
-                  ) : (
-                    <span className="muted">No idea yet</span>
-                  )}
-                </td>
-                <td>
-                  {latest ? (
-                    `Version ${latest.version} · ${latest.submittedBy.name} · ${formatDate(latest.submittedAt)}`
-                  ) : (
-                    <span className="muted">Nothing yet</span>
-                  )}
-                </td>
-                <td>
-                  {latest && (
-                    <div className="submission-links">
-                      <ExternalLink href={latest.repositoryUrl} label="Repository" />
-                      <ExternalLink href={latest.demoUrl} label="Demo" />
-                      <ExternalLink href={latest.reportUrl} label="Report" />
-                    </div>
-                  )}
-                </td>
-                <td className="row-actions">
-                  {versionCount > 0 && (
-                    <button
-                      className="text-button"
-                      aria-label={`Versions of ${team.name}`}
-                      onClick={() => toggle(team.id)}
-                    >
-                      {openTeamId === team.id
-                        ? "Close"
-                        : `${versionCount} ${versionCount === 1 ? "version" : "versions"}`}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      {open && (
-        <article className="idea-review" aria-label={`Work of ${open.team.name}`}>
-          <h3>{open.team.name}: every version</h3>
-          {history ? (
-            <SubmissionHistory versions={history} />
-          ) : (
-            <p className="loading">Loading…</p>
-          )}
-        </article>
-      )}
-    </section>
   );
 }

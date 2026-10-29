@@ -36,13 +36,13 @@ export function StudentCyclesPage() {
   return (
     <CycleListShell
       eyebrow={`Student workspace / Batch ${batchYear ?? "unassigned"}`}
-      title="Open cycles"
+      title="Open projects"
       error={error}
     >
       {cycles.length === 0 ? (
         <EmptyState
           title="Nothing open for your batch"
-          body="Published course cycles for your cohort will appear here."
+          body="Published course projects for your batch will appear here."
         />
       ) : (
         <div className="cycle-grid">

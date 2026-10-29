@@ -26,7 +26,7 @@ export function PendingPage() {
         <p>
           {rejected
             ? "Your faculty access request was not approved. Contact the course coordinator if you think this is a mistake."
-            : `Signed in as ${state.user.email}. A FlowForge admin needs to confirm that you are faculty before you can manage course cycles.`}
+            : `Signed in as ${state.user.email}. A FlowForge admin needs to confirm that you are faculty before you can manage course projects.`}
         </p>
       </section>
       <div className="login-card">

@@ -1,18 +1,20 @@
 # Browser end-to-end checks
 
-Five scripts drive the real React app in headless Chrome against the real API:
+Six scripts drive the real React app in headless Chrome against the real API:
 
 - `auth-ui.e2e.cjs` (Phase 3) runs 20 checks: the Google redirect (state, nonce, PKCE), token
   storage, single-flight refresh, the student / pending staff / admin / faculty journeys,
   deactivation, and sign out on one or every device.
 - `teams-ui.e2e.cjs` (Phase 4) runs 11 checks:
-  - team rules in the cycle editor, and extending the deadline of a published cycle;
+  - team rules in the cycle wizard, and extending the deadline of a published cycle in the same
+    wizard, with what publishing locked shown as locked;
   - creating a team with the size counter, and the added member seeing it without acting;
   - "already in a team" in another leader's search;
-  - swapping a member, the faculty's team table, disbanding;
+  - swapping a member, the team in the faculty's teams list and on its page, disbanding;
   - a team fixed after its deadline.
 - `completion-ui.e2e.cjs` (Phase 5) runs 11 checks:
-  - creating an elective in the editor, enrolling students by pasted emails and by CSV, and only
+  - creating an elective with extra placing time in the wizard, enrolling students by pasted
+    emails and by CSV, and only
     enrolled students seeing it;
   - "Looking for a team" with a note, seen by a leader;
   - after the students' deadline: the student told the faculty will place them, the faculty's list
@@ -21,7 +23,8 @@ Five scripts drive the real React app in headless Chrome against the real API:
   - auto-group preview, re-roll and confirmation, and the auto-grouped student seeing their team.
   It waits 45 seconds for a formation deadline to pass.
 - `ideas-ui.e2e.cjs` (Phase 6) runs 9 checks:
-  - the idea deadline in the cycle editor, with later dates following an earlier one;
+  - planning the cycle in the wizard: a final deadline before submissions open is explained and
+    stops the step, and publishing is confirmed in a dialog;
   - registering a core batch's students who have not signed in, and a leader adding one
     (tagged "Not signed in yet") who then finds the team at their first sign-in;
   - the leader submitting and editing the idea, the faculty rejecting it with feedback, the
@@ -33,12 +36,22 @@ Five scripts drive the real React app in headless Chrome against the real API:
   - a member submitting version 1, the leader version 2 (links carried over), and the faculty
     seeing each team's latest version and its history.
   It waits about 55 seconds for the idea deadline to pass and submissions to open.
+- `cycles-ui.e2e.cjs` runs 9 checks of the cycle wizard and the cycle page:
+  - setting up a cycle from blank and saving a draft that students cannot see; editing the draft
+    in the same wizard and publishing it after the confirmation; a student of the batch seeing it;
+    starting a new cycle from a previous one; the wizard with the keyboard alone at 375px wide;
+  - the page's phase timeline with "Today", its one primary action and the empty teams list;
+    "Needs your attention" for a waiting idea, whose link opens that team's page to review it;
+    publishing a draft from its page; a closed cycle in the past tense with nothing left to do.
+  `openSection` in `support.cjs` opens a collapsible section of the cycle page, and `openTeamPage`
+  opens a team's page from the teams list.
 
-The Phase 4 to 7 scripts set up their faculty member and students through the API, so all five
-run one after another on the same database. Each owns a batch, so their counts never mix:
+The Phase 4 to 7 scripts and `cycles-ui` set up their faculty member and students through the
+API, so all six run one after another on the same database. Each owns a batch, so their counts never mix:
 `auth-ui` uses 2023 (its batch-correction check moves a student to 2025), `teams-ui` 2026,
-`completion-ui` 2024 (its elective's newcomer is in 2022), `ideas-ui` 2027 and
-`submissions-ui` 2021. Shared helpers
+`completion-ui` 2024 (its elective's newcomer is in 2022), `ideas-ui` 2027, `submissions-ui`
+2021 and `cycles-ui` 2020. `support.cjs` also holds `createCycleInWizard`, which walks the wizard,
+and `plannedDates`, which computes the dates the wizard stores. Shared helpers
 (dev sign-in, API sessions, dates) are in `support.cjs`.
 
 It uses `playwright-core` with your installed Google Chrome, so nothing is downloaded and the app
@@ -74,6 +87,8 @@ node ideas-ui.e2e.cjs "/Applications/Google Chrome.app/Contents/MacOS/Google Chr
   http://localhost:5173 http://localhost:3100/api ./out
 node submissions-ui.e2e.cjs "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   http://localhost:5173 http://localhost:3100/api ./out
+node cycles-ui.e2e.cjs "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  http://localhost:5173 http://localhost:3100/api ./out
 ```
 
 To keep a development frontend on 5173 running, start this one on another port (for example
@@ -81,6 +96,6 @@ To keep a development frontend on 5173 running, start this one on another port (
 `http://localhost:5174` to the scripts.
 
 Each check prints `PASS` or `FAIL`. Results are written to `out/browser-e2e.json`,
-`out/teams-browser-e2e.json`, `out/completion-browser-e2e.json`, `out/ideas-browser-e2e.json` and
-`out/submissions-browser-e2e.json`,
+`out/teams-browser-e2e.json`, `out/completion-browser-e2e.json`, `out/ideas-browser-e2e.json`,
+`out/submissions-browser-e2e.json` and `out/cycles-browser-e2e.json`,
 with a screenshot of the page for every failure. Each script exits with code 1 if any check fails.

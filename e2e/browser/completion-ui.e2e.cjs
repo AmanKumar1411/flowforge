@@ -7,8 +7,8 @@ const {
   createRun,
   devSignIn,
   apiSession,
-  localInput,
-  minuteFromNow,
+  createCycleInWizard,
+  plannedDates,
 } = require("./support.cjs");
 const [chromePath, FRONTEND, API, OUT] = process.argv.slice(2);
 
@@ -25,8 +25,8 @@ const STUDENTS = {
 const name = (key) => key[0].toUpperCase() + key.slice(1);
 const email = (key) => `${STUDENTS[key]}${DOMAIN}`;
 const FORMATION_SECONDS = 45;
-// The faculty's table of teams (the ideas table below it lists the same team names).
-const teamsTable = (page) => page.locator('section[aria-labelledby="teams-heading"] tbody');
+// A team's row in the faculty's teams list.
+const teamRow = (page, name) => page.locator(".team-row", { hasText: name });
 
 (async () => {
   const run = createRun(OUT, "completion-browser-e2e");
@@ -55,29 +55,26 @@ const teamsTable = (page) => page.locator('section[aria-labelledby="teams-headin
     let electiveId = "";
 
     // --- Electives ---
-    await run.check("Faculty creates an elective with a team completion deadline in the editor", async () => {
-      await faculty.getByRole("button", { name: "+ New cycle" }).click();
-      await faculty.getByLabel("Course name").fill("Machine Learning");
-      await faculty.getByLabel("Cycle title").fill(electiveTitle);
-      await faculty.getByLabel("Course type").selectOption("ELECTIVE");
-      await faculty.getByLabel("Batch year").fill("2024");
-      await faculty.getByLabel("Academic year").fill("2026-27");
-      await faculty.getByLabel("Submission opens").fill(localInput(minuteFromNow(3 * 24 * 60)));
-      await faculty.getByLabel("Submission deadline").fill(localInput(minuteFromNow(30 * 24 * 60)));
-      await faculty.getByLabel("Minimum team size").fill("2");
-      await faculty.getByLabel("Maximum team size").fill("3");
-      const formation = minuteFromNow(24 * 60);
-      const completion = minuteFromNow(2 * 24 * 60);
-      await faculty.getByLabel("Team formation deadline").fill(localInput(formation));
-      await faculty.getByLabel("Team completion deadline").fill(localInput(completion));
-      await faculty.getByRole("button", { name: "Create draft" }).click();
-      await faculty.waitForURL(/\/faculty\/cycles\/[0-9a-f-]{36}$/);
-      electiveId = faculty.url().split("/").pop();
-      await faculty.getByText(/ \/ Elective/).waitFor();
+    await run.check("Faculty creates an elective with extra time to place students in the wizard", async () => {
+      // The faculty's own window appears only when they ask for it, under "Advanced".
+      const plan = { teams: 1, placing: 1, ideas: 1, finalDays: 30 };
+      electiveId = await createCycleInWizard(faculty, {
+        courseName: "Machine Learning",
+        title: electiveTitle,
+        kind: "ELECTIVE",
+        batchYear: 2024,
+        minTeamSize: 2,
+        maxTeamSize: 3,
+        ...plan,
+      });
+      const completion = plannedDates(plan).teamCompletionDeadline;
+      await faculty.getByText(/^Elective · open to enrolled students · Teams of 2–3 · Semester /).waitFor();
+      // An elective's page links to its students; enrolling happens there.
+      await faculty.getByRole("link", { name: "Manage" }).click();
       await faculty.getByRole("heading", { name: /Enrolled students/ }).waitFor();
       const saved = (await facultyApi.call("GET", `/course-cycles/${electiveId}`)).body;
       assert(saved.kind === "ELECTIVE", `kind ${saved.kind}`);
-      assert(saved.teamCompletionDeadline === completion.toISOString(), `completion ${saved.teamCompletionDeadline}`);
+      assert(saved.teamCompletionDeadline === completion, `completion ${saved.teamCompletionDeadline}, expected ${completion}`);
       return `elective ${electiveId}`;
     }, faculty);
 
@@ -181,9 +178,12 @@ const teamsTable = (page) => page.locator('section[aria-labelledby="teams-headin
       await faculty.getByLabel("Leader").selectOption({ label: "Dia" });
       await faculty.getByRole("button", { name: "Create team" }).click();
       await faculty.getByText("Created Kestrel.").waitFor();
-      const row = teamsTable(faculty).locator("tr", { hasText: "Kestrel" });
-      const cells = await row.locator("td").allInnerTexts();
-      assert(JSON.stringify(cells) === JSON.stringify(["Kestrel", "Dia", "Chen", "2", "Faculty"]), `row ${JSON.stringify(cells)}`);
+      const row = teamRow(faculty, "Kestrel");
+      await row.getByText("Led by Dia").waitFor();
+      await row.getByText("2/3 members").waitFor();
+      const kestrel = (await facultyApi.call("GET", `/course-cycles/${cycleId}/teams`)).body.find((team) => team.name === "Kestrel");
+      const members = kestrel.members.map((member) => `${member.name}${member.isLeader ? " (leader)" : ""}`);
+      assert(kestrel.origin === "FACULTY" && JSON.stringify(members) === '["Dia (leader)","Chen"]', `Kestrel ${kestrel.origin} ${members}`);
       await faculty.getByRole("heading", { name: "Students without a team (3)" }).waitFor();
     }, faculty);
 
@@ -206,7 +206,7 @@ const teamsTable = (page) => page.locator('section[aria-labelledby="teams-headin
       await proposal.getByRole("button", { name: "Create these teams" }).click();
       await faculty.getByText("Created 1 team.").waitFor();
       await faculty.getByText("Every student is in a team.").waitFor();
-      await teamsTable(faculty).locator("tr", { hasText: "Auto-group" }).waitFor();
+      await teamRow(faculty, /Auto team \d+/).waitFor();
     }, faculty);
 
     await run.check("An auto-grouped student sees their new team without doing anything", async () => {

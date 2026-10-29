@@ -100,6 +100,24 @@ describe("CycleWorkflow", () => {
     ).toBe("INVALID_TEAM_SIZE");
   });
 
+  it("gives a faculty window length: it must end after the students' deadline", () => {
+    const formation = new Date("2026-11-01T09:00:00.000Z");
+    expect(() =>
+      workflow.assertCompletionWindow(
+        formation,
+        new Date("2026-11-01T09:01:00.000Z"),
+      ),
+    ).not.toThrow();
+    for (const completion of [
+      formation,
+      new Date("2026-10-31T09:00:00.000Z"),
+    ]) {
+      expect(
+        codeOf(() => workflow.assertCompletionWindow(formation, completion)),
+      ).toBe("INVALID_TEAM_COMPLETION_DEADLINE");
+    }
+  });
+
   it("requires team formation to end by the time submissions open", () => {
     const later = new Date("2026-11-15T09:00:00.000Z");
     expect(

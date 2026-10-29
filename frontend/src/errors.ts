@@ -35,17 +35,17 @@ const messages: Record<string, string> = {
   CANNOT_DEACTIVATE_SELF: "You cannot deactivate your own account.",
   USER_NOT_A_STUDENT: "Only students have a batch year.",
   // Course cycles (CYCLE_FIELD_LOCKED keeps the API's message, which names the reason)
-  CYCLE_ALREADY_CLOSED: "Closed cycles are immutable.",
+  CYCLE_ALREADY_CLOSED: "This project is closed, so it can no longer change.",
   INVALID_DEADLINE: "The submission start must be before the deadline.",
   INVALID_ACADEMIC_YEAR: "Use consecutive years in the form 2026-27.",
-  CYCLE_NOT_FOUND: "That cycle is not available.",
+  CYCLE_NOT_FOUND: "That project is not available.",
   INVALID_TEAM_SIZE:
     "Team size must be between 1 and 10, and the minimum cannot exceed the maximum.",
   // Teams (size, eligibility and "already in a team" keep the API's message, which names the numbers or people)
   TEAM_NOT_FOUND: "That team is not available.",
   NOT_TEAM_LEADER: "Only the team leader can change the team.",
   TEAM_FORMATION_CLOSED:
-    "Team formation has closed for this cycle, so teams can no longer change.",
+    "Team formation has closed for this project, so teams can no longer change.",
   DUPLICATE_TEAM_MEMBER: "A student appears in more than one proposed team.",
   // Electives (completion-window messages keep the API's wording, which says which window)
   CYCLE_NOT_ELECTIVE: "Only electives have an enrollment list.",
@@ -58,9 +58,19 @@ export function messageForCode(code: string | null | undefined): string | null {
   return code ? (messages[code] ?? "Something went wrong. Please try again.") : null;
 }
 
+/**
+ * The API calls a course project a "cycle"; the screen says "project". Messages
+ * passed through from the API get the screen's word, keeping the case.
+ */
+export function inScreenWords(message: string) {
+  return message.replace(/\b(c)ycle(s?)\b/gi, (_, c: string, s: string) =>
+    `${c === "C" ? "P" : "p"}roject${s}`,
+  );
+}
+
 export function readableError(error: unknown): string {
   if (!(error instanceof ApiError)) {
     return "Something went wrong. Check the API and try again.";
   }
-  return (error.code && messages[error.code]) || error.message;
+  return (error.code && messages[error.code]) || inScreenWords(error.message);
 }

@@ -1,19 +1,15 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import {
   addTeamMember,
   applyAutoGroup,
   createFacultyTeam,
-  getCompletionOverview,
-  listCycleTeams,
   previewAutoGroup,
 } from "../api/teams";
-import { formatDate } from "../dates";
 import { readableError } from "../errors";
 import {
   describeTeamSize,
   hasCompletionWindow,
   isFormationOpen,
-  originLabel,
 } from "../teams";
 import type {
   AutoGroupPreview,
@@ -22,88 +18,9 @@ import type {
   Team,
   UnassignedStudent,
 } from "../types";
-import { FormationNote, NotSignedInTag } from "./TeamPanels";
+import { NotSignedInTag } from "./TeamPanels";
 
-/** The owning faculty's view of a cycle's teams, and their tools for students left without one. */
-export function FacultyTeamsSection({ cycle }: { cycle: Cycle }) {
-  const [teams, setTeams] = useState<Team[] | null>(null);
-  const [overview, setOverview] = useState<CompletionOverview | null>(null);
-  const [error, setError] = useState("");
-  const [now] = useState(() => Date.now());
-
-  const load = useCallback(() => {
-    Promise.all([listCycleTeams(cycle.id), getCompletionOverview(cycle.id)])
-      .then(([loadedTeams, loadedOverview]) => {
-        setTeams(loadedTeams);
-        setOverview(loadedOverview);
-      })
-      .catch((caught) => setError(readableError(caught)));
-  }, [cycle.id]);
-  useEffect(load, [load]);
-
-  return (
-    <>
-      <section className="team-panel" aria-labelledby="teams-heading">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">Teams</p>
-            <h2 id="teams-heading">
-              {teams
-                ? `${teams.length} team${teams.length === 1 ? "" : "s"}`
-                : "Loading…"}
-            </h2>
-          </div>
-        </div>
-        <FormationNote cycle={cycle} now={now} />
-        {error && <p className="form-error">{error}</p>}
-        {teams && teams.length === 0 && (
-          <p className="muted">No team has been formed yet.</p>
-        )}
-        {teams && teams.length > 0 && (
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Team</th>
-                <th>Leader</th>
-                <th>Members</th>
-                <th>Size</th>
-                <th>Formed by</th>
-              </tr>
-            </thead>
-            <tbody>
-              {teams.map((team) => (
-                <tr key={team.id}>
-                  <td>{team.name}</td>
-                  <td>
-                    {team.members.find((member) => member.isLeader)?.name}
-                  </td>
-                  <td>
-                    {team.members
-                      .filter((member) => !member.isLeader)
-                      .map((member) => member.name)
-                      .join(", ") || "—"}
-                  </td>
-                  <td>{team.members.length}</td>
-                  <td>{originLabel(team.origin)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-      {teams && overview && (
-        <CompletionPanel
-          cycle={cycle}
-          teams={teams}
-          overview={overview}
-          now={now}
-          onChanged={load}
-        />
-      )}
-    </>
-  );
-}
-
+/** Where team completion stands, without dates: the phase bar states them. */
 function CompletionStatus({
   cycle,
   open,
@@ -113,22 +30,22 @@ function CompletionStatus({
   open: boolean;
   now: number;
 }) {
-  const formationEnds = formatDate(cycle.teamFormationDeadline);
-  const completionEnds = formatDate(cycle.teamCompletionDeadline);
   let text: string;
   if (open) {
-    text = `Students can no longer change teams. Place everyone still without a team by ${completionEnds}: build a team from selected students, add a student to a team with room, or auto-group the rest at random.`;
+    text =
+      "Students can no longer change teams. Place everyone still without a team: build a team from selected students, add a student to a team with room, or auto-group the rest at random.";
   } else if (cycle.status === "PUBLISHED" && isFormationOpen(cycle, now)) {
     text = hasCompletionWindow(cycle)
-      ? `Students are forming their own teams until ${formationEnds}. From then until ${completionEnds} you can place everyone still without a team.`
-      : `Students are forming their own teams until ${formationEnds}. To place students left without a team afterwards, set a team completion deadline later than that.`;
+      ? "Students are still forming their own teams. When they stop, you place everyone still without a team."
+      : "Students are still forming their own teams; anyone without one is listed here.";
   } else {
     text = "Teams are final.";
   }
   return <p className="field-hint">{text}</p>;
 }
 
-function CompletionPanel({
+/** Students left without a team, and the owning faculty's tools to place them during their window. */
+export function CompletionPanel({
   cycle,
   teams,
   overview,

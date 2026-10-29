@@ -3,7 +3,7 @@
 const path = require("node:path");
 const fs = require("node:fs");
 const { chromium } = require("playwright-core");
-const { localInput, minuteFromNow } = require("./support.cjs");
+const { createCycleInWizard } = require("./support.cjs");
 const [chromePath, FRONTEND, API, OUT] = process.argv.slice(2);
 
 const DOMAIN = "@nst.rishihood.edu.in";
@@ -189,17 +189,9 @@ const panel = (page, heading) =>
 
     // --- Phase 2 screens still work behind the new auth ---
     await check("Faculty creates and publishes a cycle for batch 2023", async () => {
-      await staff.getByRole("button", { name: "+ New cycle" }).click();
-      await staff.getByLabel("Course name").fill("Software Design");
-      await staff.getByLabel("Cycle title").fill("Browser E2E cycle");
-      await staff.getByLabel("Batch year").fill("2023");
-      await staff.getByLabel("Academic year").fill("2026-27");
-      // Team and idea dates default to now, so submissions must open later than that.
-      await staff.getByLabel("Submission opens").fill(localInput(minuteFromNow(7 * 24 * 60)));
-      await staff.getByLabel("Submission deadline").fill(localInput(minuteFromNow(30 * 24 * 60)));
-      await staff.getByRole("button", { name: "Create draft" }).click();
-      await staff.waitForURL(/\/faculty\/cycles\/[0-9a-f-]{36}$/);
-      await staff.getByRole("button", { name: "← Back to cycles" }).click();
+      // The wizard's default plan is valid as it is.
+      await createCycleInWizard(staff, { courseName: "Software Design", title: "Browser E2E cycle", batchYear: 2023 });
+      await staff.getByRole("button", { name: "← Back to projects" }).click();
       staff.once("dialog", (dialog) => dialog.accept());
       await staff.locator(".cycle-card", { hasText: "Browser E2E cycle" }).getByRole("button", { name: "Publish" }).click();
       await staff.locator(".cycle-card", { hasText: "Browser E2E cycle" }).locator(".status", { hasText: "Open" }).waitFor();

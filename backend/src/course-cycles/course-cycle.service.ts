@@ -40,7 +40,7 @@ export class CourseCycleService {
     const formationDeadline = dto.teamFormationDeadline
       ? new Date(dto.teamFormationDeadline)
       : dates.start;
-    // By default there is no faculty completion window, and ideas are due when it ends.
+    // Left out or null: no faculty completion window. Ideas are due when teams are settled by default.
     const completionDeadline = dto.teamCompletionDeadline
       ? new Date(dto.teamCompletionDeadline)
       : formationDeadline;
@@ -64,6 +64,13 @@ export class CourseCycleService {
       createdByFacultyId: actor.id,
     };
     this.workflow.assertValidSchedule(data);
+    // Checked after the order of stages, so a stage out of order is reported first.
+    if (dto.teamCompletionDeadline) {
+      this.workflow.assertCompletionWindow(
+        formationDeadline,
+        completionDeadline,
+      );
+    }
     this.assertAcademicYear(dto.academicYear);
     const cycle = await this.repository.create(data);
     return CycleResponseDto.fromCycle(cycle);
@@ -115,6 +122,11 @@ export class CourseCycleService {
     const cycle = await this.getById(id);
     this.policy.assertOwner(actor, cycle);
     const patch = this.toPatch(dto);
+    // null switches the faculty window off: it ends with the students' deadline again.
+    if (dto.teamCompletionDeadline === null) {
+      patch.teamCompletionDeadline =
+        patch.teamFormationDeadline ?? cycle.teamFormationDeadline;
+    }
     this.workflow.assertEditable(
       cycle.status,
       Object.keys(patch) as (keyof CyclePatch)[],
@@ -139,6 +151,18 @@ export class CourseCycleService {
     };
     this.assertAcademicYear(merged.academicYear);
     this.workflow.assertValidSchedule(merged);
+    // A window that is named in the request, or that the cycle already had, keeps its length.
+    const hadWindow =
+      cycle.teamCompletionDeadline > cycle.teamFormationDeadline;
+    if (
+      dto.teamCompletionDeadline !== null &&
+      (dto.teamCompletionDeadline !== undefined || hadWindow)
+    ) {
+      this.workflow.assertCompletionWindow(
+        merged.teamFormationDeadline,
+        merged.teamCompletionDeadline,
+      );
+    }
     const updated = await this.repository.updateFields(id, cycle.status, patch);
     if (!updated) {
       throw new CycleDomainError(
@@ -236,7 +260,7 @@ export class CourseCycleService {
     if (dto.teamFormationDeadline !== undefined) {
       patch.teamFormationDeadline = new Date(dto.teamFormationDeadline);
     }
-    if (dto.teamCompletionDeadline !== undefined) {
+    if (dto.teamCompletionDeadline) {
       patch.teamCompletionDeadline = new Date(dto.teamCompletionDeadline);
     }
     if (dto.ideaDeadline !== undefined) {

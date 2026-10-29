@@ -44,17 +44,6 @@ export function ideaAction(
   return null;
 }
 
-/** Waiting ideas first, then rejected ones, teams without one, and approved ones last. */
-export function reviewOrder(status: IdeaStatus | null) {
-  return status === "SUBMITTED"
-    ? 0
-    : status === "REJECTED"
-      ? 1
-      : status === null
-        ? 2
-        : 3;
-}
-
 export type SubmissionWindow = "NOT_OPEN" | "OPEN" | "CLOSED";
 
 /** Mirrors the API: open from `submissionStartAt` until `submissionDeadline`, while published. */

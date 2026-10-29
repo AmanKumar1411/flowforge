@@ -1,6 +1,8 @@
 # ADR 011: Faculty complete teams in a second window; auto-group is preview-then-confirm
 
-**Status:** Accepted (Phase 5)
+**Status:** Accepted (Phase 5). Amended after Phase 7: a faculty window must have length. A request
+that names `teamCompletionDeadline` must put it after `teamFormationDeadline`; `null` (or leaving
+it out) means no window, still stored as `D2 = D1`.
 
 ## Context
 

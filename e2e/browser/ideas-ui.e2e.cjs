@@ -7,8 +7,9 @@ const {
   createRun,
   devSignIn,
   apiSession,
-  localInput,
-  minuteFromNow,
+  dayFromToday,
+  plannedDates,
+  openTeamPage,
 } = require("./support.cjs");
 const [chromePath, FRONTEND, API, OUT] = process.argv.slice(2);
 
@@ -35,38 +36,48 @@ const REGISTERED = [`yash.b27csai${DOMAIN}`, `ira.d27csai${DOMAIN}`];
     const title = `Ideas ${Date.now()}`;
     let cycleId = "";
 
-    await run.check("Faculty sets an idea deadline in the editor; later stages follow an earlier one", async () => {
-      await faculty.getByRole("button", { name: "+ New cycle" }).click();
+    await run.check("Faculty plan the cycle in the wizard; a deadline out of order is explained, publishing is confirmed", async () => {
+      await faculty.getByRole("button", { name: "+ New project" }).click();
       await faculty.getByLabel("Course name").fill("Product Studio");
-      await faculty.getByLabel("Cycle title").fill(title);
+      await faculty.getByLabel("Project title").fill(title);
       await faculty.getByLabel("Batch year").fill("2027");
-      await faculty.getByLabel("Academic year").fill("2026-27");
-      await faculty.getByLabel("Submission opens").fill(localInput(minuteFromNow(3 * 24 * 60)));
-      await faculty.getByLabel("Submission deadline").fill(localInput(minuteFromNow(30 * 24 * 60)));
-      await faculty.getByLabel("Minimum team size").fill("1");
+      await faculty.getByRole("button", { name: "Next: Teams" }).click();
+      await faculty.getByLabel("Allow solo projects").check();
       await faculty.getByLabel("Maximum team size").fill("3");
-      const formation = minuteFromNow(24 * 60);
-      const ideas = minuteFromNow(2 * 24 * 60);
-      // Only the formation and idea deadlines are set: completion follows formation (no faculty window).
-      await faculty.getByLabel("Team formation deadline").fill(localInput(formation));
-      assert(
-        (await faculty.getByLabel("Idea deadline").inputValue()) === localInput(formation),
-        "the idea deadline did not follow the formation deadline",
-      );
-      await faculty.getByLabel("Idea deadline").fill(localInput(ideas));
-      await faculty.getByRole("button", { name: "Create draft" }).click();
+      await faculty.getByRole("button", { name: "Next: Timeline" }).click();
+      const plan = { teams: 1, ideas: 1, finalDays: 30 };
+      // Batch 2027's first semester (Aug–Dec 2027) is still ahead, so the plan would start there.
+      await faculty.getByLabel("Start date").fill(dayFromToday(0));
+      await faculty.getByLabel("Days to form teams").fill("1");
+      await faculty.getByLabel("Days for ideas").fill("1");
+      // A final deadline before submissions open stops the step, with the reason in words.
+      await faculty.getByLabel("Final deadline").fill(dayFromToday(2));
+      await faculty.getByRole("button", { name: "Next: Review" }).click();
+      await faculty.getByText(/The final deadline is before submissions open/).waitFor();
+      await faculty.getByText("One thing needs fixing on this step.").waitFor();
+      await faculty.getByLabel("Final deadline").fill(dayFromToday(plan.finalDays));
+      await faculty.getByRole("button", { name: "Next: Review" }).click();
+      await faculty.getByText(/Batch 2027 students work alone or form teams of up to 3 until/).first().waitFor();
+      await faculty.getByRole("button", { name: "Publish to students" }).click();
+      const dialog = faculty.getByRole("dialog", { name: "Publish to students?" });
+      await dialog.getByText(/the team sizes, and whether you keep extra time/).waitFor();
+      await dialog.getByRole("button", { name: "Publish to students" }).click();
       await faculty.waitForURL(/\/faculty\/cycles\/[0-9a-f-]{36}$/);
       cycleId = faculty.url().split("/").pop();
-      await faculty.locator(".info-block", { hasText: "Ideas due" }).waitFor();
       const saved = (await facultyApi.call("GET", `/course-cycles/${cycleId}`)).body;
-      assert(saved.teamCompletionDeadline === formation.toISOString(), `completion ${saved.teamCompletionDeadline}`);
-      assert(saved.ideaDeadline === ideas.toISOString(), `ideas ${saved.ideaDeadline}`);
-      assert((await facultyApi.call("POST", `/course-cycles/${cycleId}/publish`)).status === 200, "publish");
+      const expected = plannedDates(plan);
+      assert(saved.status === "PUBLISHED", `status ${saved.status}`);
+      // No faculty window: the completion deadline stays with the students' deadline.
+      assert(saved.teamCompletionDeadline === expected.teamFormationDeadline, `completion ${saved.teamCompletionDeadline}`);
+      assert(saved.ideaDeadline === expected.ideaDeadline, `ideas ${saved.ideaDeadline}, expected ${expected.ideaDeadline}`);
+      assert(saved.minTeamSize === 1 && saved.maxTeamSize === 3, `sizes ${saved.minTeamSize}-${saved.maxTeamSize}`);
       return `cycle ${cycleId}`;
     }, faculty);
 
     await run.check("Faculty registers batch students who have not signed in yet", async () => {
       await faculty.reload();
+      await faculty.getByRole("link", { name: "Manage" }).click();
+      await faculty.getByRole("heading", { level: 1, name: "Students" }).waitFor();
       await faculty.getByLabel("Batch student emails").fill([...REGISTERED, `tara.n26csai${DOMAIN}`].join("\n"));
       await faculty.getByRole("button", { name: "Register 3" }).click();
       await faculty.getByText("Registered 2 · already registered 0 · not added 1").waitFor();
@@ -123,16 +134,15 @@ const REGISTERED = [`yash.b27csai${DOMAIN}`, `ira.d27csai${DOMAIN}`];
     }, leader);
 
     await run.check("Faculty see the waiting idea and reject it with feedback", async () => {
-      await faculty.reload();
-      const ideas = faculty.locator(".team-panel", { has: faculty.getByRole("heading", { name: "1 waiting for review" }) });
-      await ideas.getByRole("button", { name: "Open the idea of Nimbus" }).click();
-      const review = faculty.getByLabel("Idea of Nimbus");
-      await review.getByText("A live map of free rooms from the timetable.").waitFor();
-      await review.getByLabel("Reject").check();
-      await review.getByLabel(/Feedback for the team/).fill("Timetables change weekly; show how you keep it current.");
-      await review.getByRole("button", { name: "Reject idea" }).click();
+      await faculty.goto(`${FRONTEND}/faculty/cycles/${cycleId}`);
+      await faculty.locator(".team-row", { hasText: "Nimbus" }).getByText("Waiting for review").waitFor();
+      await openTeamPage(faculty, "Nimbus");
+      await faculty.getByText("A live map of free rooms from the timetable.").waitFor();
+      await faculty.getByLabel("Reject").check();
+      await faculty.getByLabel(/Feedback for the team/).fill("Timetables change weekly; show how you keep it current.");
+      await faculty.getByRole("button", { name: "Reject idea" }).click();
       await faculty.getByText("Rejected the idea of Nimbus.").waitFor();
-      await faculty.getByRole("heading", { name: "0 waiting for review" }).waitFor();
+      await faculty.locator(".idea-status", { hasText: "Rejected" }).waitFor();
     }, faculty);
 
     await run.check("The leader sees the feedback, revises and resubmits", async () => {
@@ -147,15 +157,16 @@ const REGISTERED = [`yash.b27csai${DOMAIN}`, `ira.d27csai${DOMAIN}`];
     }, leader);
 
     await run.check("Faculty approve the new version; the team sees it approved and final", async () => {
-      await faculty.reload();
-      await faculty.getByRole("button", { name: "Open the idea of Nimbus" }).click();
-      const review = faculty.getByLabel("Idea of Nimbus");
-      await review.getByText("Decision on version 3").waitFor();
-      await review.getByRole("button", { name: "Approve idea" }).click();
+      // The one waiting proposal: the header's button opens its team.
+      await faculty.goto(`${FRONTEND}/faculty/cycles/${cycleId}`);
+      await faculty.getByRole("button", { name: "Review 1 proposal" }).click();
+      await faculty.getByRole("heading", { level: 1, name: "Nimbus" }).waitFor();
+      await faculty.getByText("Decision on version 3").waitFor();
+      await faculty.getByRole("button", { name: "Approve idea" }).click();
       await faculty.getByText("Approved the idea of Nimbus.").waitFor();
       await leader.reload();
       await leader.locator(".idea-status", { hasText: "Approved" }).waitFor();
-      await leader.getByText("This is your team's project for the cycle.").waitFor();
+      await leader.getByText("This is your team's idea for this project.").waitFor();
       assert(await leader.getByRole("button", { name: /Edit idea|Revise/ }).count() === 0, "an approved idea can still change");
       const idea = (await facultyApi.call("GET", `/teams/${teamId}/idea`)).body.idea;
       assert(JSON.stringify(idea.reviews.map((entry) => entry.decision)) === '["APPROVED","REJECTED"]', `reviews ${JSON.stringify(idea.reviews)}`);

@@ -44,6 +44,27 @@ low-severity ones in the backend's test tooling (see [npm audit](#npm-audit)).
 | Faculty and admins list every team with its idea and latest version | `submission.service.spec.ts`; Integration; Browser submissions check 7 | Pass |
 | Every change is audited (catalog, pick, submission) | Unit and integration audit assertions | Pass |
 
+## Cycle editor: a simpler schedule
+
+Faculty found the cycle editor's dates confusing. The two submission dates came first, the three
+team and idea dates came later in a separate box, every date started at "now", and skipping the
+faculty's own window meant entering the same date twice. A wrong order was reported only after
+saving, for example "Team formation must end by the time submissions open". The rules did not
+change; the form did (`CycleEditorPage.tsx`, `schedule.ts`):
+
+- One **Schedule** section with three numbered steps in the order they happen (teams, project
+  ideas, project work), each with one sentence on what happens and the team sizes inside step 1.
+- The faculty's placing window is a checkbox ("Give me time after that to place students who are
+  still without a team"); its date appears only when ticked, and unticking ends it with the
+  students' deadline as before.
+- New cycles start with a valid schedule (teams in a week, ideas a week later, submissions open
+  the next morning for a month), so faculty adjust dates instead of building the order.
+- Each date is checked as it changes, with the conflicting date named ("Must be on or after the
+  idea deadline (11 Nov 2026, 23:59)"); "Create draft" stays disabled until the schedule is in
+  order, and a one-line summary describes the plan once it is.
+- The old hint still said a rejected idea could be resubmitted only until submissions open; the
+  new text follows ADR 014.
+
 ## Bugs found and fixed during the phase
 
 | # | Where | Bug | Fix |
@@ -61,6 +82,8 @@ Both were found by checking screenshots of the new screens; no automated check f
 | `idea.service.spec.ts`: "ends resubmission when submissions open" | Replaced by "keeps the rounds going after submissions open and close, until the cycle closes". |
 | Integration `ideas.e2e.ts`: "keeps a rejection final once submissions are open" | Replaced by "keeps the feedback rounds going after submissions open and close". |
 | Browser `ideas-ui` check 4 | The leader's button is now "Write our own idea", next to the faculty's list. |
+| Browser `auth-ui`, `teams-ui`, `completion-ui` (cycle creation) and `teams-ui` check 2 | The editor's date labels changed ("Students form teams until", "Ideas due by", "Submissions open", "Final submission deadline"); `auth-ui` now relies on the default schedule; `completion-ui` ticks the placing checkbox. |
+| Browser `ideas-ui` check 1 | Later dates no longer start equal to the formation deadline, so the check now covers the live warning: a date out of order is named and "Create draft" stays disabled until it is fixed. |
 
 ## npm audit
 
