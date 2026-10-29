@@ -2,6 +2,8 @@
 
 **Status:** Accepted (Phase 7)
 
+**Amended (Phase 8, [ADRs 016](016-milestones-replace-the-submission-window.md) and [018](018-configurable-link-requirements.md)):** submissions belong to a milestone and are numbered per team and milestone; each milestone has its own window and link requirement, and `repositoryUrl`/`demoUrl`/`reportUrl` became `links`.
+
 ## Context
 
 FlowForge's goal is that "students form teams, submit versioned work and receive private

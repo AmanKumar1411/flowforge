@@ -6,6 +6,17 @@ follow. The rules and decisions are in ADRs [007](../decisions/007-leader-forms-
 [008](../decisions/008-one-team-per-student-enforced-by-database.md) and
 [009](../decisions/009-team-rules-and-formation-deadline.md).
 
+## Phase 8: one team deadline, then the faculty until the idea deadline
+
+- `teamFormationDeadline` is now `teamDeadline`, and `teamCompletionDeadline` is gone
+  ([ADR 016](../decisions/016-milestones-replace-the-submission-window.md)).
+- `TeamRules.isFormationOpen`: published and `now < teamDeadline`.
+- `TeamRules.isPlacementOpen` (was `isCompletionOpen`): published and
+  `teamDeadline <= now < ideaDeadline` (A1). Manual teams, added members and auto-group all need
+  it; outside it they get `409 TEAM_COMPLETION_CLOSED`. The idea deadline must come strictly
+  after the team deadline, so the window always has length.
+- Wherever the sections below say "completion deadline", read "idea deadline".
+
 ## Rules in one place
 
 | Rule | Where it is enforced |

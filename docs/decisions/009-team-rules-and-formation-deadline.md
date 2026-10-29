@@ -4,6 +4,8 @@
 deadline, and formation must now end by the time submissions open. The faculty completion window
 is [ADR 011](011-faculty-team-completion-and-auto-group.md).
 
+**Amended (Phase 8, [ADR 016](016-milestones-replace-the-submission-window.md)):** `teamFormationDeadline` is now `teamDeadline`; it is required and must come strictly before the idea deadline.
+
 ## Context
 
 Different courses want different team sizes. Teams must stop changing at some point, so ideas,

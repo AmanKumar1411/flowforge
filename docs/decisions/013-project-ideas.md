@@ -4,6 +4,8 @@
 Amended by [ADR 014](014-idea-catalog-and-open-ended-rounds.md): teams can also pick from the
 faculty's idea list, and rounds after a rejection no longer stop when submissions open.
 
+**Amended (Phase 8, [ADRs 016](016-milestones-replace-the-submission-window.md) and [018](018-configurable-link-requirements.md)):** a cycle's `ideaSource` decides whether teams propose (`STUDENT_PROPOSALS`), pick (`FACULTY_LIST`) or both (`BOTH`), refused with `409 PROPOSALS_NOT_ALLOWED` / `409 CATALOG_NOT_ALLOWED`; a proposal's `link` is now `links`, checked against the cycle's idea link requirement.
+
 ## Context
 
 Each team proposes a project idea; the faculty approve or reject it. ADR 009 tied ideas to the
