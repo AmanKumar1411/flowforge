@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { listBatchStudents, listEnrollments } from "./api/cycles";
 import { listCatalog, listCycleIdeas } from "./api/ideas";
+import { getGrading } from "./api/evaluations";
 import { listCycleSubmissions } from "./api/submissions";
 import { getCompletionOverview, listCycleTeams } from "./api/teams";
 import type { CycleCounts, SectionKey } from "./cycle-page";
@@ -10,6 +11,7 @@ import type {
   Cycle,
   CycleIdea,
   CycleSubmission,
+  Grading,
   Team,
 } from "./types";
 
@@ -24,6 +26,8 @@ export interface CycleData {
   /** Every milestone's rows together, for the teams list. */
   submissions?: CycleSubmission[];
   overview?: CompletionOverview;
+  /** The grading of every milestone that is due (Phase 9). */
+  gradings?: Grading[];
   /** Parts that could not be loaded, by the summary they feed. */
   failed: Partial<Record<SectionKey, true>>;
 }
@@ -68,6 +72,13 @@ export function useCycleData(cycle: Cycle | null, version: number): CycleData {
           merge({ milestoneWork, submissions: milestoneWork.flatMap((work) => work.rows) }),
         )
         .catch(fail("submissions"));
+      Promise.all(
+        cycle.milestones
+          .filter((milestone) => Date.parse(milestone.submissionDueAt) <= Date.now())
+          .map((milestone) => getGrading(cycle.id, milestone.id)),
+      )
+        .then((gradings) => merge({ gradings }))
+        .catch(fail("submissions"));
       getCompletionOverview(cycle.id)
         .then((overview) => merge({ overview }))
         .catch(fail("teams"));
@@ -81,7 +92,7 @@ export function useCycleData(cycle: Cycle | null, version: number): CycleData {
 
 /** The counts the summaries, the primary action and the attention card use. */
 export function countsOf(data: CycleData, cycle?: Cycle, now = Date.now()): CycleCounts {
-  const { roster, catalog, teams, ideas, milestoneWork, overview } = data;
+  const { roster, catalog, teams, ideas, milestoneWork, overview, gradings } = data;
   const ideaCount = (status: string | null) =>
     ideas?.filter((row) => (row.idea?.status ?? null) === status).length ?? 0;
   return {
@@ -101,6 +112,16 @@ export function countsOf(data: CycleData, cycle?: Cycle, now = Date.now()): Cycl
       rejected: ideaCount("REJECTED"),
       none: ideaCount(null),
     },
+    // Due milestones: teams still to grade, and whether the results are out (Phase 9).
+    gradingQueue: gradings?.map((grading) => {
+      const graded = grading.rows.filter((row) => row.evaluation).length;
+      return {
+        milestone: grading.milestone,
+        graded,
+        ungraded: grading.rows.length - graded,
+        released: grading.releasedAt !== null,
+      };
+    }),
     // Milestones open now, and how many teams have handed something in for each.
     openMilestones:
       cycle && milestoneWork

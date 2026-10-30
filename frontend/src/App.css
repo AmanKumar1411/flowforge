@@ -2267,3 +2267,144 @@ a.text-button {
 .notice.warning ul {
   margin: 6px 0 0;
 }
+
+/* Phase 9: the student dashboard, project page and faculty grading. */
+.dashboard-page h1 {
+  margin: 4px 0 20px;
+  font-family: Georgia, serif;
+}
+
+.up-next li.is-action a {
+  font-weight: 700;
+}
+
+.event-list a {
+  color: var(--ink);
+}
+
+.project-card .card-todo {
+  margin: 8px 0 0;
+  font-weight: 700;
+}
+
+.card-results {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: .9rem;
+}
+
+.past-projects {
+  margin-top: 24px;
+}
+
+.past-projects > summary {
+  cursor: pointer;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.evaluation-block {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.evaluation-block h3,
+.grading-head h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.evaluation-marks {
+  margin: 0;
+  font-family: Georgia, serif;
+  font-size: 1.6rem;
+}
+
+.evaluation-feedback {
+  white-space: pre-line;
+}
+
+.grading {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.grading-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.grading-max {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.grading-max input {
+  width: 7rem;
+}
+
+.grading-rows {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grading-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) 8rem minmax(180px, 2fr);
+  gap: 8px 12px;
+  align-items: start;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.grading-row label {
+  display: grid;
+  gap: 4px;
+  font-size: .9rem;
+}
+
+.grading-row .row-actions,
+.grading-row .form-error {
+  grid-column: 1 / -1;
+}
+
+.grading-team {
+  display: grid;
+  gap: 4px;
+}
+
+.warning-tag {
+  justify-self: start;
+  padding: 2px 8px;
+  border: 1px solid #e9b9a9;
+  background: #fdf1ec;
+  font-size: .8rem;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .grading-row {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-layout,
+  .student-project .tab-body {
+    min-width: 0;
+  }
+
+  .tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+}

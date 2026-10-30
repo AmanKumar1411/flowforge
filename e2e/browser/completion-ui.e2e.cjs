@@ -107,7 +107,8 @@ const teamRow = (page, name) => page.locator(".team-row", { hasText: name });
       const published = await facultyApi.call("POST", `/course-cycles/${electiveId}/publish`);
       assert(published.status === 200, `publish ${published.status}`);
       const anya = await devSignIn(await fresh(), FRONTEND, email("anya"), "Anya");
-      await anya.locator(".cycle-card", { hasText: electiveTitle }).getByText("Elective · Batch 2024").waitFor();
+      // Phase 9: the dashboard's project card.
+      await anya.locator(".cycle-card", { hasText: electiveTitle }).getByText("No team yet").waitFor();
       const bilal = await devSignIn(await fresh(), FRONTEND, email("bilal"), "Bilal");
       await bilal.locator(".cycle-grid, .empty-state").first().waitFor();
       assert(await bilal.locator(".cycle-card", { hasText: electiveTitle }).count() === 0, "Bilal sees the elective");

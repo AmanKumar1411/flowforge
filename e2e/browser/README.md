@@ -48,6 +48,10 @@ Six scripts drive the real React app in headless Chrome against the real API:
   `openTab` in `support.cjs` opens a tab of the project page, and `openTeamPage` opens a team's
   page from the teams list.
 
+- `student-ui.e2e.cjs` (Phase 9) runs 5 checks at 375px: the dashboard leading to the Team tab, an
+  idea rejected then resubmitted, M1 submitted, the faculty grading and releasing (the team sees
+  its marks), and a correction shown as updated; another student gets 404. Batch 2022.
+
 The Phase 4 to 7 scripts and `cycles-ui` set up their faculty member and students through the
 API, so all six run one after another on the same database. Each owns a batch, so their counts never mix:
 `auth-ui` uses 2023 (its batch-correction check moves a student to 2025), `teams-ui` 2026,

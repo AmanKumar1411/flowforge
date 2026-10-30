@@ -14,6 +14,7 @@ import {
   type LinkValues,
 } from "../links";
 import type { Cycle, Idea, Link, LinkRequirement, Milestone, Submission, Team } from "../types";
+import { EvaluationBlock } from "./student/EvaluationBlock";
 
 const LIMITS = { url: 500, notes: 4000 };
 
@@ -112,6 +113,7 @@ function MilestoneCard({
       {versions && versions.length > 0 && (
         <SubmissionHistory versions={versions} latestLabel={stage === "CLOSED" ? "Final" : "Latest"} />
       )}
+      <EvaluationBlock cycle={cycle} milestone={milestone} teamId={team.id} now={now} />
     </section>
   );
 }

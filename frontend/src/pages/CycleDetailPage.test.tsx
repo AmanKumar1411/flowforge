@@ -17,6 +17,8 @@ vi.mock("../api/cycles", () => ({
 }));
 vi.mock("../api/ideas", () => ({ listCatalog: vi.fn(), listCycleIdeas: vi.fn() }));
 vi.mock("../api/submissions", () => ({ listCycleSubmissions: vi.fn() }));
+// Phase 9: the Milestones tab shows each milestone's grading; it stays loading here.
+vi.mock("../api/evaluations", () => ({ getGrading: vi.fn(() => new Promise(() => undefined)) }));
 vi.mock("../api/teams", () => ({ listCycleTeams: vi.fn(), getCompletionOverview: vi.fn() }));
 
 // Today is Thu, 29 Oct 2026: the cycle is in its teams phase. Phase 8: milestones and a computed stage.

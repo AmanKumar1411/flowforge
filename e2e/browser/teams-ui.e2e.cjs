@@ -129,15 +129,17 @@ const teamPanel = (page) => page.locator(".team-panel");
     const kabir = await devSignIn(await fresh(), `kabir.m26csai${DOMAIN}`, "Kabir");
     const tara = await devSignIn(await fresh(), `tara.s26csai${DOMAIN}`, "Tara");
     const zoya = await devSignIn(await fresh(), `zoya.k26csai${DOMAIN}`, "Zoya");
+    // Phase 9: the dashboard card opens the project page; its Team tab holds the team panel.
     const openCycle = async (page) => {
-      await page.goto(`${FRONTEND}/student/cycles`);
+      await page.goto(`${FRONTEND}/student`);
       await page.getByRole("heading", { name: cycleTitle }).click();
-      await page.waitForURL(new RegExp(`/student/cycles/${cycleId}$`));
+      await page.waitForURL(new RegExp(`/student/projects/${cycleId}$`));
+      await openTab(page, "Team");
     };
 
     await check("Student sees the team rules and an invitation to create a team", async () => {
-      await isha.goto(`${FRONTEND}/student/cycles`);
-      await isha.locator(".cycle-card", { hasText: cycleTitle }).locator(".card-tag", { hasText: "No team yet" }).waitFor();
+      await isha.goto(`${FRONTEND}/student`);
+      await isha.locator(".cycle-card", { hasText: cycleTitle }).getByText("No team yet").waitFor();
       await openCycle(isha);
       await isha.getByText("2 to 3 members").first().waitFor();
       await teamPanel(isha).getByRole("heading", { name: "No team yet" }).waitFor();
@@ -165,7 +167,7 @@ const teamPanel = (page) => page.locator(".team-panel");
     }, isha);
 
     await check("The added member sees the team at once, without accepting anything, and cannot edit it", async () => {
-      await kabir.goto(`${FRONTEND}/student/cycles`);
+      await kabir.goto(`${FRONTEND}/student`);
       await kabir.locator(".cycle-card", { hasText: cycleTitle }).locator(".card-tag", { hasText: "Team Falcon" }).waitFor();
       await openCycle(kabir);
       await teamPanel(kabir).getByRole("heading", { name: "Falcon" }).waitFor();

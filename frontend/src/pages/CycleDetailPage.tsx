@@ -59,7 +59,7 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
   const [filter, setFilter] = useState<TeamFilter>("all");
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
-  const backTo = faculty ? "/faculty/cycles" : "/student/cycles";
+  const backTo = faculty ? "/faculty/cycles" : "/student";
   const tab = (TABS.some((entry) => entry.key === search.get("tab")) ? search.get("tab") : "overview") as TabKey;
 
   const load = useCallback(() => {
@@ -312,7 +312,13 @@ export function CycleDetailPage({ faculty }: { faculty: boolean }) {
           </>
         );
       case "milestones":
-        return <MilestonesTab cycle={cycle} work={data.milestoneWork} failed={Boolean(data.failed.submissions)} now={now} />;
+        return <MilestonesTab
+            cycle={cycle}
+            work={data.milestoneWork}
+            failed={Boolean(data.failed.submissions)}
+            now={now}
+            onChanged={() => setVersion((current) => current + 1)}
+          />;
     }
   };
 

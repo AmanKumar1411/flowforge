@@ -58,6 +58,13 @@ export interface CycleCounts {
   /** Students without a team, from the team-completion list. */
   unplaced?: number;
   ideas?: { waiting: number; approved: number; rejected: number; none: number };
+  /** Due milestones: how many teams are graded, and whether the results are released. */
+  gradingQueue?: {
+    milestone: { id: string; position: number; name: string };
+    graded: number;
+    ungraded: number;
+    released: boolean;
+  }[];
   /** Milestones taking submissions now. */
   openMilestones?: OpenMilestone[];
   /** Parts whose counts could not be loaded. */
@@ -209,6 +216,25 @@ export function attentionItems(cycle: Cycle, phase: CyclePhase, counts: CycleCou
       action: "Review",
       target: "review",
     });
+  }
+  for (const due of counts.gradingQueue ?? []) {
+    if (phase === "draft") break;
+    if (due.ungraded > 0) {
+      items.push({
+        key: `grade-${due.milestone.id}`,
+        text: `${milestoneLabel(due.milestone)} due: ${plural(due.ungraded, "team")} to grade`,
+        action: "Grade",
+        target: "milestones",
+      });
+    }
+    if (due.graded > 0 && !due.released) {
+      items.push({
+        key: `release-${due.milestone.id}`,
+        text: `${milestoneLabel(due.milestone)} graded, not released`,
+        action: "Release",
+        target: "milestones",
+      });
+    }
   }
   for (const open of counts.openMilestones ?? []) {
     const missing = open.teams - open.submitted;
