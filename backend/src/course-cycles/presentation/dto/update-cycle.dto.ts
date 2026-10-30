@@ -19,11 +19,12 @@ import {
   TEAM_SIZE_LIMIT,
 } from "../../domain/cycle.types";
 import { IDEA_SOURCES } from "./create-cycle.dto";
+import { UpdateCycleCommand } from "../../application/cycle-commands";
 import { LinkRequirementDto, MilestoneDto } from "./milestone.dto";
 
 const COURSE_KINDS: CourseKind[] = ["CORE", "ELECTIVE"];
 
-export class UpdateCycleDto {
+export class UpdateCycleDto implements UpdateCycleCommand {
   @ApiPropertyOptional({ example: "Software Design & System Development" })
   @IsOptional()
   @IsString()

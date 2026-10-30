@@ -19,9 +19,11 @@ export class MeController {
       "Deadlines, submission windows and evaluations of the student's visible cycles, soonest first, at most 10. Computed from the dates; nothing is stored.",
   })
   @ApiOkResponse({ type: UpcomingEventDto, isArray: true })
-  upcoming(
+  async upcoming(
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<UpcomingEventDto[]> {
-    return this.cycles.upcomingFor(user);
+    return (await this.cycles.upcomingFor(user)).map((event) =>
+      UpcomingEventDto.fromStudentEvent(event),
+    );
   }
 }

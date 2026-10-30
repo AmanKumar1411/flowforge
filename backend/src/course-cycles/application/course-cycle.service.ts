@@ -25,17 +25,19 @@ import {
   planMilestones,
   unknownIds,
 } from "../domain/milestone";
-import { CreateCycleDto } from "../presentation/dto/create-cycle.dto";
 import {
-  CycleResponseDto,
-  PublishChecksDto,
-  PublishResponseDto,
-  UpcomingEventDto,
-} from "../presentation/dto/cycle-response.dto";
-import { MilestoneDto } from "../presentation/dto/milestone.dto";
-import { UpdateCycleDto } from "../presentation/dto/update-cycle.dto";
+  CreateCycleCommand,
+  MilestoneCommand,
+  UpdateCycleCommand,
+} from "./cycle-commands";
+import {
+  CycleView,
+  NEXT_EVENTS,
+  PublishedCycle,
+  StudentEvent,
+} from "./cycle-views";
 import { CycleRepository } from "./ports/cycle.repository";
-import { PublishChecks } from "./publish-checks";
+import { PublishChecks, PublishReport } from "./publish-checks";
 
 /** How many events `GET /me/upcoming` returns. */
 const UPCOMING_LIMIT = 10;
@@ -57,10 +59,7 @@ export class CourseCycleService {
     private readonly clock: Clock,
   ) {}
 
-  async create(
-    actor: CycleActor,
-    dto: CreateCycleDto,
-  ): Promise<CycleResponseDto> {
+  async create(actor: CycleActor, dto: CreateCycleCommand): Promise<CycleView> {
     this.policy.assertFaculty(actor);
     const data: CycleCreateData = {
       courseName: dto.courseName.trim(),
@@ -95,21 +94,19 @@ export class CourseCycleService {
       });
       return created;
     });
-    return this.toResponse(cycle);
+    return this.toView(cycle);
   }
 
   /**
    * Students see published core cycles of their batch and published electives
    * they are enrolled in; admins see every cycle that has been published.
    */
-  async listVisible(actor: CycleActor): Promise<CycleResponseDto[]> {
-    return (await this.visibleCycles(actor)).map((cycle) =>
-      this.toResponse(cycle),
-    );
+  async listVisible(actor: CycleActor): Promise<CycleView[]> {
+    return (await this.visibleCycles(actor)).map((cycle) => this.toView(cycle));
   }
 
   /** What comes next across the student's visible cycles, soonest first (computed, ADR 017). */
-  async upcomingFor(actor: CycleActor): Promise<UpcomingEventDto[]> {
+  async upcomingFor(actor: CycleActor): Promise<StudentEvent[]> {
     if (actor.role !== "STUDENT") return [];
     const cycles = await this.visibleCycles(actor);
     return cycles
@@ -120,17 +117,24 @@ export class CourseCycleService {
       )
       .sort((a, b) => byTime(a.event, b.event))
       .slice(0, UPCOMING_LIMIT)
-      .map(({ event, cycle }) => UpcomingEventDto.fromEvent(event, cycle));
+      .map(({ event, cycle }) => ({
+        ...event,
+        cycle: {
+          id: cycle.id,
+          courseName: cycle.courseName,
+          title: cycle.title,
+        },
+      }));
   }
 
-  async listMine(actor: CycleActor): Promise<CycleResponseDto[]> {
+  async listMine(actor: CycleActor): Promise<CycleView[]> {
     this.policy.assertFaculty(actor);
     const cycles = await this.repository.listByOwner(actor.id);
-    return cycles.map((cycle) => this.toResponse(cycle));
+    return cycles.map((cycle) => this.toView(cycle));
   }
 
-  async findById(actor: CycleActor, id: string): Promise<CycleResponseDto> {
-    return this.toResponse(await this.getVisibleCycle(actor, id));
+  async findById(actor: CycleActor, id: string): Promise<CycleView> {
+    return this.toView(await this.getVisibleCycle(actor, id));
   }
 
   /** For modules that build on cycles (teams): the cycle, or CYCLE_NOT_FOUND when the actor may not see it. */
@@ -147,8 +151,8 @@ export class CourseCycleService {
   async update(
     actor: CycleActor,
     id: string,
-    dto: UpdateCycleDto,
-  ): Promise<CycleResponseDto> {
+    dto: UpdateCycleCommand,
+  ): Promise<CycleView> {
     const patch = this.toPatch(dto);
     const fields: EditableField[] = [
       ...(Object.keys(patch) as (keyof CyclePatch)[]),
@@ -203,20 +207,20 @@ export class CourseCycleService {
       await this.record("CYCLE_UPDATED", actor, saved, tx, { fields });
       return saved;
     });
-    return this.toResponse(updated);
+    return this.toView(updated);
   }
 
   /** What publishing would report now, without publishing: for the faculty's review step. */
-  async checkPublish(actor: CycleActor, id: string): Promise<PublishChecksDto> {
+  async checkPublish(actor: CycleActor, id: string): Promise<PublishReport> {
     return this.transactions.run(async (tx) => {
       const cycle = await this.lockOwned(actor, id, tx);
       this.workflow.transition(cycle.status, "PUBLISH");
-      return PublishChecksDto.from(await this.publishChecks.run(cycle, tx));
+      return this.publishChecks.run(cycle, tx);
     });
   }
 
   /** Runs every publish check; any blocking one stops it, and all of them are reported (409 PUBLISH_BLOCKED). */
-  async publish(actor: CycleActor, id: string): Promise<PublishResponseDto> {
+  async publish(actor: CycleActor, id: string): Promise<PublishedCycle> {
     return this.transactions.run(async (tx) => {
       const cycle = await this.lockOwned(actor, id, tx);
       const nextStatus = this.workflow.transition(cycle.status, "PUBLISH");
@@ -232,13 +236,11 @@ export class CourseCycleService {
       await this.record("CYCLE_PUBLISHED", actor, published, tx, {
         warnings: report.warnings.map((warning) => warning.code),
       });
-      return Object.assign(this.toResponse(published), {
-        warnings: report.warnings,
-      });
+      return { ...this.toView(published), warnings: report.warnings };
     });
   }
 
-  async close(actor: CycleActor, id: string): Promise<CycleResponseDto> {
+  async close(actor: CycleActor, id: string): Promise<CycleView> {
     const closed = await this.transactions.run(async (tx) => {
       const cycle = await this.lockOwned(actor, id, tx);
       const nextStatus = this.workflow.transition(cycle.status, "CLOSE");
@@ -246,7 +248,7 @@ export class CourseCycleService {
       await this.record("CYCLE_CLOSED", actor, saved, tx);
       return saved;
     });
-    return this.toResponse(closed);
+    return this.toView(closed);
   }
 
   /** For modules that build on cycles, when the rule does not depend on the caller (a team's own cycle). */
@@ -320,8 +322,13 @@ export class CourseCycleService {
     });
   }
 
-  private toResponse(cycle: Cycle): CycleResponseDto {
-    return CycleResponseDto.fromCycle(cycle, this.timeline);
+  /** The cycle with its stage and next events, as of now. */
+  private toView(cycle: Cycle): CycleView {
+    return {
+      ...cycle,
+      currentStage: this.timeline.currentStage(cycle),
+      nextEvents: this.timeline.upcomingEvents(cycle, NEXT_EVENTS),
+    };
   }
 
   /**
@@ -330,7 +337,7 @@ export class CourseCycleService {
    * refused before anything is saved.
    */
   private milestoneInputs(
-    items: readonly MilestoneDto[],
+    items: readonly MilestoneCommand[],
     current: readonly Milestone[],
   ): MilestoneInput[] {
     const byId = new Map(current.map((milestone) => [milestone.id, milestone]));
@@ -360,7 +367,7 @@ export class CourseCycleService {
     return inputs;
   }
 
-  private toPatch(dto: UpdateCycleDto): CyclePatch {
+  private toPatch(dto: UpdateCycleCommand): CyclePatch {
     const patch: CyclePatch = {};
     if (dto.batchYear !== undefined) patch.batchYear = dto.batchYear;
     if (dto.semester !== undefined) patch.semester = dto.semester;

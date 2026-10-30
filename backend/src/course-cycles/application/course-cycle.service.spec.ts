@@ -11,21 +11,14 @@ import {
   CycleAuthorizationPolicy,
 } from "../domain/cycle-authorization-policy";
 import { InMemoryCycleRepository } from "../testing/in-memory-cycle.repository";
-import { CreateCycleDto } from "../presentation/dto/create-cycle.dto";
-import { MilestoneDto } from "../presentation/dto/milestone.dto";
+import { CreateCycleCommand, MilestoneCommand } from "./cycle-commands";
 import { CourseCycleService } from "./course-cycle.service";
 import { CyclePublishChecks } from "./cycle-publish-checks";
 import { PublishChecks } from "./publish-checks";
 
-// Jest cannot load NestJS 12's ES modules on Node 22; stub the decorators the classes use.
-// Nested DTOs use class-transformer's @Type, which needs reflect-metadata at load time.
-jest.mock("class-transformer", () => ({ Type: () => () => undefined }));
+// Jest cannot load NestJS 12's ES modules on Node 22; stub the decorator the services use.
 jest.mock("@nestjs/common", () => ({
   Injectable: () => (target: unknown) => target,
-}));
-jest.mock("@nestjs/swagger", () => ({
-  ApiProperty: () => () => undefined,
-  ApiPropertyOptional: () => () => undefined,
 }));
 
 const faculty = (id: string): CycleActor => ({
@@ -63,7 +56,7 @@ const milestone = (
   opens: number,
   due: number,
   evaluation = due,
-): MilestoneDto => ({
+): MilestoneCommand => ({
   name,
   submissionOpensAt: nov(opens),
   submissionDueAt: nov(due),
@@ -73,8 +66,8 @@ const milestone = (
 // Phase 8: team and idea deadlines plus milestones replace the single submission window.
 const createDto = (
   batchYear = 2026,
-  overrides: Partial<CreateCycleDto> = {},
-): CreateCycleDto => ({
+  overrides: Partial<CreateCycleCommand> = {},
+): CreateCycleCommand => ({
   courseName: "Software Design",
   title: "Software Development Projects",
   description: "Build and ship a useful system.",
@@ -130,12 +123,12 @@ describe("CourseCycleService", () => {
       [1, "Design review"],
       [2, "Final"],
     ]);
-    expect(created.milestones[0].linkRequirement).toEqual({
+    expect(created.milestones[0].linkRequirement.toJSON()).toEqual({
       required: ["GITHUB"],
       optional: ["DEMO", "REPORT"],
     });
     expect(created.ideaSource).toBe("BOTH");
-    expect(created.ideaLinkRequirement).toEqual({
+    expect(created.ideaLinkRequirement.toJSON()).toEqual({
       required: [],
       optional: ["GITHUB", "DRIVE"],
     });
@@ -211,7 +204,15 @@ describe("CourseCycleService", () => {
     const created = await service.create(owner, createDto());
     await service.publish(owner, created.id);
     const [design, final] = created.milestones;
-    const keep = (m: typeof design) => ({ ...m, linkRequirement: undefined });
+    // A stored milestone as a request item: same id and dates, links left out (kept).
+    const keep = (m: typeof design): MilestoneCommand => ({
+      id: m.id,
+      name: m.name,
+      description: m.description,
+      submissionOpensAt: m.submissionOpensAt.toISOString(),
+      submissionDueAt: m.submissionDueAt.toISOString(),
+      evaluationAt: m.evaluationAt.toISOString(),
+    });
     clock.advance(Date.parse(nov(10)) - Date.parse(NOW));
     const moved = await service.update(owner, created.id, {
       milestones: [
@@ -219,7 +220,7 @@ describe("CourseCycleService", () => {
         { ...keep(final), submissionDueAt: nov(29), evaluationAt: nov(29) },
       ],
     });
-    expect(moved.milestones[1].submissionDueAt).toBe(nov(29));
+    expect(moved.milestones[1].submissionDueAt.toISOString()).toBe(nov(29));
     await expect(
       service.update(owner, created.id, {
         milestones: [
@@ -322,9 +323,8 @@ describe("CourseCycleService", () => {
     expect(new Set(upcoming.map((event) => event.cycle.id))).toEqual(
       new Set([mine.id]),
     );
-    expect(upcoming.map((event) => event.at)).toEqual(
-      [...upcoming.map((event) => event.at)].sort(),
-    );
+    const times = upcoming.map((event) => event.at.toISOString());
+    expect(times).toEqual([...times].sort());
     expect(await service.upcomingFor(owner)).toEqual([]);
   });
 
@@ -368,7 +368,7 @@ describe("CourseCycleService", () => {
     const extended = await service.update(owner, created.id, {
       teamDeadline: nov(5),
     });
-    expect(extended.teamDeadline).toBe(nov(5));
+    expect(extended.teamDeadline.toISOString()).toBe(nov(5));
     await expect(
       service.update(owner, created.id, { minTeamSize: 2 }),
     ).rejects.toMatchObject({ code: "CYCLE_FIELD_LOCKED" });

@@ -11,10 +11,12 @@ import {
   MaxLength,
   ValidateNested,
 } from "class-validator";
+import { LinkRequirementShape } from "../../../common/links/link-requirement";
 import { LINK_TYPES, LinkType } from "../../../common/links/link-type";
+import { MilestoneCommand } from "../../application/cycle-commands";
 
 /** Which links are required and which are optional; any other type is not allowed. */
-export class LinkRequirementDto {
+export class LinkRequirementDto implements LinkRequirementShape {
   @ApiProperty({ enum: LINK_TYPES, isArray: true, example: ["GITHUB"] })
   @IsArray()
   @IsIn(LINK_TYPES, { each: true })
@@ -26,7 +28,7 @@ export class LinkRequirementDto {
   optional!: LinkType[];
 }
 
-export class MilestoneDto {
+export class MilestoneDto implements MilestoneCommand {
   @ApiPropertyOptional({
     description:
       "An existing milestone's id, to keep it (and its submissions). Leave out for a new milestone.",

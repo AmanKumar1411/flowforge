@@ -20,6 +20,7 @@ import {
   DEFAULT_TEAM_SIZE,
   TEAM_SIZE_LIMIT,
 } from "../../domain/cycle.types";
+import { CreateCycleCommand } from "../../application/cycle-commands";
 import { LinkRequirementDto, MilestoneDto } from "./milestone.dto";
 
 const COURSE_KINDS: CourseKind[] = ["CORE", "ELECTIVE"];
@@ -29,7 +30,7 @@ export const IDEA_SOURCES: CycleIdeaSource[] = [
   "BOTH",
 ];
 
-export class CreateCycleDto {
+export class CreateCycleDto implements CreateCycleCommand {
   @ApiProperty({ example: "Software Design & System Development" })
   @IsString()
   @IsNotEmpty()

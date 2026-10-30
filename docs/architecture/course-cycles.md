@@ -19,6 +19,13 @@ backend/src/course-cycles/
 backend/src/common/links/   link-type, link-requirement, link-validators (ADR 018)
 ```
 
+Dependencies point inward: presentation → application → domain. `CourseCycleService` takes plain
+commands (`cycle-commands.ts`, dates as ISO strings) and returns read models (`cycle-views.ts`:
+the cycle with its `currentStage` and `nextEvents`, a published cycle with its warnings, a
+student's upcoming events). The request DTOs implement the commands, and the controllers map the
+views to response DTOs, so nothing HTTP-shaped (Swagger or class-transformer decorators) reaches
+the use cases or their unit tests.
+
 ## Component flow
 
 ```mermaid
@@ -195,7 +202,7 @@ cycle the caller may not see is `404 CYCLE_NOT_FOUND`, so its existence is not r
 | Why can status not be set directly? | Transitions need rules, timestamps, checks and an audit row | `cycle-workflow.ts: transition`, `course-cycle.service.ts: publish` |
 | How do other modules add publish rules? | They register a check; course-cycles never imports them | `publish-checks.ts`, `ideas/application/idea-publish-check.ts` |
 | Why compute stages instead of storing them? | Always right, nothing to sync | `cycle-timeline.ts`, ADR 017 |
-| Where are SOLID and patterns? | SRP per layer; OCP in the link validator and publish-check registries; DIP through `CycleRepository`; Strategy for link validators; Value Object for `LinkRequirement` | `common/links`, `application/ports` |
+| Where are SOLID and patterns? | SRP per layer, with commands in and views out of the application layer; OCP in the link validator and publish-check registries; DIP through `CycleRepository`; Strategy for link validators; Value Object for `LinkRequirement` | `common/links`, `application/ports` |
 | What happens on a race? | The cycle row lock serializes edits and publishes; the second publish sees `PUBLISHED` and gets `409` | `lockById` |
 
 ## Limitations
