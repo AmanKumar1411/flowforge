@@ -73,7 +73,7 @@ with `@@unique([cycleId, position])`.
 ## The schedule
 
 ```
-teamDeadline < ideaDeadline <= M1.opens < M1.due <= M1.evaluation
+teamDeadline <= ideaDeadline <= M1.opens < M1.due <= M1.evaluation
                                M1.due <= M2.opens < M2.due <= M2.evaluation …
 ```
 
@@ -149,7 +149,7 @@ cycle the caller may not see is `404 CYCLE_NOT_FOUND`, so its existence is not r
 | --- | --- | --- | --- |
 | Faculty owner | `/my`, all statuses | Own cycles, publish checks | Create, edit by state, publish, close |
 | Other faculty | None for another owner | `404 CYCLE_NOT_FOUND` | `404 CYCLE_NOT_FOUND` |
-| Student with batch | Published core cycles of their batch, published electives they are enrolled in; `/me/upcoming` from those only | The same cycles (else 404) | `403 FORBIDDEN_ROLE` |
+| Student with batch | Published core cycles of their batch, published electives they are enrolled in; `/me/upcoming` from those only | The same cycles, plus closed ones they were in a team of (S4, ADR 022); else 404 | `403 FORBIDDEN_ROLE` |
 | Student without batch | Enrolled electives only | The same | `403 FORBIDDEN_ROLE` |
 | Admin | Every published or closed cycle | Non-draft cycles (drafts 404) | `403 FORBIDDEN_ROLE` |
 | Pending staff | `403 FACULTY_APPROVAL_PENDING` | `403 FACULTY_APPROVAL_PENDING` | `403 FACULTY_APPROVAL_PENDING` |
@@ -167,7 +167,7 @@ cycle the caller may not see is `404 CYCLE_NOT_FOUND`, so its existence is not r
 | `INVALID_ACADEMIC_YEAR` | 400 | Not consecutive `YYYY-YY` |
 | `INVALID_TEAM_SIZE` | 400 | Not `1 <= min <= max <= 10` |
 | `INVALID_TEAM_DEADLINE` | 400 | A moved team deadline is in the past |
-| `INVALID_IDEA_DEADLINE` | 400 | The idea deadline is not after the team deadline, or moved into the past |
+| `INVALID_IDEA_DEADLINE` | 400 | The idea deadline is before the team deadline (equal is allowed since Phase 9, S5, and leaves no placement window), or moved into the past |
 | `INVALID_MILESTONE_SCHEDULE` | 400 | A milestone opens before the idea deadline or the previous one is due, opens at or after its due date, is evaluated before it, or moves into the past |
 | `INVALID_MILESTONE_COUNT` | 400 | More than 10 milestones |
 | `INVALID_MILESTONE` | 400 | An empty or too-long name or description |

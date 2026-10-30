@@ -34,6 +34,10 @@ Implemented so far:
   students without a team until the idea deadline, choose where ideas come from, and see every
   publish problem at once. Students see their project's stage, what comes next, and one
   submission card per milestone.
+- **Phase 9:** the student side and private evaluations. Students land on a dashboard (up next,
+  updates, active and past projects) and work in a tabbed project page. Faculty mark each
+  milestone out of a scale, give feedback and release the results to all teams at once; only the
+  team sees its own result, and corrections show as updated.
 
 Evaluations come later.
 
@@ -208,6 +212,11 @@ All routes use the `/api` prefix and every error is `{ code, message }`. Interac
 | POST | `/course-cycles/:id/publish` | FACULTY owner; `409 PUBLISH_BLOCKED` lists every problem in `details`; warnings come back with the cycle |
 | POST | `/course-cycles/:id/close` | FACULTY owner |
 | GET | `/me/upcoming` | STUDENT: the next 10 events of their visible projects |
+| GET | `/me/dashboard` | STUDENT: up next, updates, active and past projects |
+| GET, PUT | `/course-cycles/:id/milestones/:mid/grading` | GET: FACULTY owner, ADMIN; PUT `{ maxMarks }`: owner |
+| POST | `/course-cycles/:id/milestones/:mid/grading/release` | FACULTY owner: release to all teams, one-way |
+| PUT | `/course-cycles/:id/milestones/:mid/teams/:tid/evaluation` | FACULTY owner: `{ marks?, feedback?, expectedVersion? }` |
+| GET | `/course-cycles/:id/milestones/:mid/teams/:tid/evaluations` | Team members (released only), owner, ADMIN; others 404 |
 | POST | `/course-cycles/:id/teams` | STUDENT of the batch, while formation is open; caller becomes leader |
 | GET | `/course-cycles/:id/teams` | STUDENT (own team), FACULTY owner, ADMIN (all teams) |
 | GET | `/course-cycles/:id/team-candidates?q=` | STUDENT, while formation is open |
@@ -269,6 +278,9 @@ reads the allowlist through `FacultyDirectory`, so `SignInService` and `RoleReso
 - [Phase 8 baseline analysis](docs/analysis/phase8-faculty-lifecycle-baseline.md),
   [plan](docs/plans/phase8-plan.md) and [test report](docs/testing/phase8-test-report.md)
   (milestones, link requirements, guided creation)
+- [Phase 9 baseline analysis](docs/analysis/phase9-student-baseline.md), [plan](docs/plans/phase9-plan.md),
+  [evaluations](docs/architecture/evaluations.md), [student experience](docs/architecture/student-experience.md),
+  [viva notes](docs/viva/student-side.md)
 - [Architecture: foundation](docs/architecture/foundation.md),
   [course cycles](docs/architecture/course-cycles.md),
   [authentication and RBAC](docs/architecture/auth-and-rbac.md),
@@ -293,4 +305,7 @@ reads the allowlist through `FacultyDirectory`, so `SignInService` and `RoleReso
   [016 milestones](docs/decisions/016-milestones-replace-the-submission-window.md),
   [017 computed events](docs/decisions/017-computed-dashboard-events.md),
   [018 link requirements](docs/decisions/018-configurable-link-requirements.md),
-  [019 publish checks](docs/decisions/019-publish-checks-registry.md)
+  [019 publish checks](docs/decisions/019-publish-checks-registry.md),
+  [020 private evaluations](docs/decisions/020-private-evaluations.md),
+  [021 dashboard read model](docs/decisions/021-student-dashboard-read-model.md),
+  [022 past projects](docs/decisions/022-past-projects.md)
