@@ -177,7 +177,8 @@ describe("Ideas", () => {
       });
       assert.equal(created.body.ideaDeadline, at(2 * HOUR_MS));
       for (const [ideaDeadline, code] of [
-        [at(HOUR_MS), "INVALID_IDEA_DEADLINE"],
+        // S5: equal to the team deadline is fine; before it is not.
+        [at(HOUR_MS - MINUTE_MS), "INVALID_IDEA_DEADLINE"],
         [at(DAY_MS + MINUTE_MS), "INVALID_MILESTONE_SCHEDULE"],
       ]) {
         const refused = await owner.post("/course-cycles", {

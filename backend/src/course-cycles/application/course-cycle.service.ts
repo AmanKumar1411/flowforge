@@ -37,6 +37,7 @@ import {
   StudentEvent,
 } from "./cycle-views";
 import { CycleRepository } from "./ports/cycle.repository";
+import { CycleMembership } from "./cycle-membership";
 import { PublishChecks, PublishReport } from "./publish-checks";
 
 /** How many events `GET /me/upcoming` returns. */
@@ -57,6 +58,7 @@ export class CourseCycleService {
     private readonly audit: AuditService,
     private readonly transactions: TransactionRunner,
     private readonly clock: Clock,
+    private readonly membership: CycleMembership,
   ) {}
 
   async create(actor: CycleActor, dto: CreateCycleCommand): Promise<CycleView> {
@@ -127,6 +129,16 @@ export class CourseCycleService {
       }));
   }
 
+  /** A student's closed projects: those in which they were in a team (S4), newest first. */
+  async listPastForStudent(actor: CycleActor): Promise<CycleView[]> {
+    if (actor.role !== "STUDENT") return [];
+    const ids = await this.membership.cyclesOf(actor.id);
+    if (ids.length === 0) return [];
+    return (await this.repository.listClosedByIds(ids)).map((cycle) =>
+      this.toView(cycle),
+    );
+  }
+
   async listMine(actor: CycleActor): Promise<CycleView[]> {
     this.policy.assertFaculty(actor);
     const cycles = await this.repository.listByOwner(actor.id);
@@ -144,7 +156,11 @@ export class CourseCycleService {
       actor.role === "STUDENT" &&
       cycle.kind === "ELECTIVE" &&
       (await this.repository.isEnrolled(cycle.id, actor.email));
-    this.policy.assertCanRead(actor, cycle, enrolled);
+    const formerMember =
+      actor.role === "STUDENT" &&
+      cycle.status === "CLOSED" &&
+      (await this.membership.cyclesOf(actor.id)).includes(cycle.id);
+    this.policy.assertCanRead(actor, cycle, enrolled, formerMember);
     return cycle;
   }
 

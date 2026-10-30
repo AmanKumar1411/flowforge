@@ -341,10 +341,15 @@ describe("Team completion and electives", () => {
         ideaDeadline: at(DAY_MS),
         milestones: [milestone("Final", at(2 * DAY_MS), at(10 * DAY_MS))],
       };
-      // Equal deadlines would leave the faculty no time to place anyone.
+      // S5 (Phase 9): equal deadlines are allowed and leave no placement window;
+      // an idea deadline before the team deadline is refused.
       const equal = await owner.post("/course-cycles", { body: base });
-      assert.equal(equal.status, 400);
-      assert.equal(equal.body.code, "INVALID_IDEA_DEADLINE");
+      assert.equal(equal.status, 201, JSON.stringify(equal.body));
+      const before = await owner.post("/course-cycles", {
+        body: { ...base, ideaDeadline: at(DAY_MS - HOUR_MS) },
+      });
+      assert.equal(before.status, 400);
+      assert.equal(before.body.code, "INVALID_IDEA_DEADLINE");
       // The separate completion deadline is gone (Phase 8).
       const removed = await owner.post("/course-cycles", {
         body: {

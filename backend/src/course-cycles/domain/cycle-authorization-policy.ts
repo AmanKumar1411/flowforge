@@ -30,12 +30,22 @@ export class CycleAuthorizationPolicy {
     }
   }
 
-  /** `enrolled`: whether a student actor is on the cycle's elective roster (ignored for core courses). */
-  canRead(actor: CycleActor, cycle: Cycle, enrolled: boolean): boolean {
+  /**
+   * `enrolled`: whether a student actor is on the cycle's elective roster
+   * (ignored for core courses). `formerMember`: whether they were in one of
+   * its teams, which keeps a closed cycle readable to them (S4, ADR 022).
+   */
+  canRead(
+    actor: CycleActor,
+    cycle: Cycle,
+    enrolled: boolean,
+    formerMember = false,
+  ): boolean {
     switch (actor.role) {
       case "FACULTY":
         return cycle.createdByFacultyId === actor.id;
       case "STUDENT":
+        if (cycle.status === "CLOSED") return formerMember;
         if (cycle.status !== "PUBLISHED") return false;
         return cycle.kind === "ELECTIVE"
           ? enrolled
@@ -47,8 +57,13 @@ export class CycleAuthorizationPolicy {
     }
   }
 
-  assertCanRead(actor: CycleActor, cycle: Cycle, enrolled: boolean): void {
-    if (!this.canRead(actor, cycle, enrolled)) {
+  assertCanRead(
+    actor: CycleActor,
+    cycle: Cycle,
+    enrolled: boolean,
+    formerMember = false,
+  ): void {
+    if (!this.canRead(actor, cycle, enrolled, formerMember)) {
       throw this.notFound();
     }
   }

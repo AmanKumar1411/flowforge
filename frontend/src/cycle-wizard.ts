@@ -321,8 +321,8 @@ export function teamsProblems(state: WizardState, mode: WizardMode, cycle: Cycle
       problems[field] = "Choose a time in the future.";
     }
   }
-  if (!problems.teamDeadline && !problems.ideaDeadline && time(state.ideaDeadline) <= time(state.teamDeadline)) {
-    problems.ideaDeadline = `Must be after the team deadline (${formatDate(isoDate(state.teamDeadline))}), so there is time to place students without a team.`;
+  if (!problems.teamDeadline && !problems.ideaDeadline && time(state.ideaDeadline) < time(state.teamDeadline)) {
+    problems.ideaDeadline = `Can't be before the team deadline (${formatDate(isoDate(state.teamDeadline))}).`;
   }
   const both = new Set([...state.ideaRequired, ...state.ideaOptional]);
   if (both.size !== state.ideaRequired.length + state.ideaOptional.length) {

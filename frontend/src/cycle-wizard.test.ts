@@ -95,9 +95,12 @@ describe("cycle-wizard", () => {
     expect(withIdeaDeadline(state, state.teamDeadline, "draft").milestones).toEqual(state.milestones);
   });
 
-  it("needs the idea deadline after the team deadline", () => {
-    const state = { ...blank(), ideaDeadline: blank().teamDeadline };
-    expect(teamsProblems(state, "create", null, today).ideaDeadline).toMatch(/after the team deadline/);
+  // S5 (Phase 9): equal deadlines are allowed (no placement window); earlier is not.
+  it("accepts an idea deadline equal to the team deadline, not one before it", () => {
+    const state = blank();
+    expect(teamsProblems({ ...state, ideaDeadline: state.teamDeadline }, "create", null, today).ideaDeadline).toBeUndefined();
+    const before = { ...state, ideaDeadline: "2026-11-01T10:00" };
+    expect(teamsProblems(before, "create", null, today).ideaDeadline).toMatch(/before the team deadline/);
   });
 
   it("flags overlapping milestones, a first one before the idea deadline, and bad dates", () => {

@@ -5,6 +5,7 @@ import { Clock } from "../common/clock";
 import { UsersModule } from "../users/users.module";
 import { CourseCycleService } from "./application/course-cycle.service";
 import { CycleEnrollmentService } from "./application/cycle-enrollment.service";
+import { CycleMembership } from "./application/cycle-membership";
 import { CyclePublishChecks } from "./application/cycle-publish-checks";
 import { EnrollmentRemovalChecks } from "./application/enrollment-removal-checks";
 import { CycleRepository } from "./application/ports/cycle.repository";
@@ -32,6 +33,7 @@ import { MeController } from "./presentation/me.controller";
     EnrollmentRemovalChecks,
     PublishChecks,
     CyclePublishChecks,
+    CycleMembership,
     CycleWorkflow,
     CycleAuthorizationPolicy,
     {
@@ -46,6 +48,7 @@ import { MeController } from "./presentation/me.controller";
   ],
   exports: [
     CourseCycleService,
+    CycleMembership,
     CycleEnrollmentService,
     EnrollmentRemovalChecks,
     PublishChecks,

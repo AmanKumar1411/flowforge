@@ -113,7 +113,7 @@ describe("CycleWorkflow", () => {
     ).toBeUndefined();
     expect(
       codeOf(() =>
-        workflow.assertValidSchedule({ ...schedule, ideaDeadline: day(4) }),
+        workflow.assertValidSchedule({ ...schedule, ideaDeadline: day(3) }),
       ),
     ).toBe("INVALID_IDEA_DEADLINE");
     expect(

@@ -26,6 +26,8 @@ export abstract class CycleRepository {
     email: string,
   ): Promise<Cycle[]>;
   abstract listPublishedOrClosed(): Promise<Cycle[]>;
+  /** Closed cycles among these ids, most recently closed first. */
+  abstract listClosedByIds(ids: readonly string[]): Promise<Cycle[]>;
   /** Saves the fields and, if given, the milestone plan; null when the cycle is no longer in `expectedStatus`. */
   abstract update(
     id: string,

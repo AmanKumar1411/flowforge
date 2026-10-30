@@ -37,6 +37,14 @@ export class InMemoryCycleRepository extends CycleRepository {
     return this.cycles.get(id) ?? null;
   }
 
+  async listClosedByIds(ids: readonly string[]): Promise<Cycle[]> {
+    return [...this.cycles.values()]
+      .filter((cycle) => ids.includes(cycle.id) && cycle.status === "CLOSED")
+      .sort(
+        (a, b) => (b.closedAt?.getTime() ?? 0) - (a.closedAt?.getTime() ?? 0),
+      );
+  }
+
   async lockById(id: string): Promise<Cycle | null> {
     return this.findById(id);
   }
