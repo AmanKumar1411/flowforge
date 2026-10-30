@@ -47,6 +47,16 @@ export class PrismaSubmissionRepository extends SubmissionRepository {
     return rows.map(toDomain);
   }
 
+  async listSubmittedMilestones(
+    teamIds: readonly string[],
+  ): Promise<{ teamId: string; milestoneId: string }[]> {
+    return this.prisma.submission.findMany({
+      where: { teamId: { in: [...teamIds] } },
+      select: { teamId: true, milestoneId: true },
+      distinct: ["teamId", "milestoneId"],
+    });
+  }
+
   async listByMilestone(milestoneId: string): Promise<Submission[]> {
     const rows = await this.prisma.submission.findMany({
       where: { milestoneId },

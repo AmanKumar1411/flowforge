@@ -78,6 +78,14 @@ export class InMemoryIdeaRepository extends IdeaRepository {
     ).length;
   }
 
+  listByTeams(teamIds: readonly string[]): Promise<Idea[]> {
+    return Promise.resolve(
+      [...this.ideas.values()]
+        .filter((idea) => teamIds.includes(idea.teamId))
+        .map((idea) => this.copy(idea)!),
+    );
+  }
+
   listByCycle(cycleId: string): Promise<Idea[]> {
     return Promise.resolve(
       [...this.ideas.values()]

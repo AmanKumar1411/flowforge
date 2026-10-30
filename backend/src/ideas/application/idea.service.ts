@@ -170,6 +170,16 @@ export class IdeaService {
     });
   }
 
+  /**
+   * The ideas of the caller's own teams, in one query (the student dashboard).
+   * Callers pass ids from the caller's memberships, never ids from a request.
+   */
+  listForOwnTeams(teamIds: readonly string[]): Promise<Idea[]> {
+    return teamIds.length === 0
+      ? Promise.resolve([])
+      : this.ideas.listByTeams(teamIds);
+  }
+
   /** Every team of the cycle with its idea, for the owning faculty and admins. */
   async listForCycle(actor: TeamActor, cycleId: string): Promise<CycleIdea[]> {
     const { cycle, teams } = await this.teams.listForCycle(actor, cycleId);

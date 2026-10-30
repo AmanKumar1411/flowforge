@@ -25,4 +25,6 @@ export abstract class IdeaRepository {
     tx: Transaction,
   ): Promise<Idea>;
   abstract listByCycle(cycleId: string): Promise<Idea[]>;
+  /** The ideas of these teams, with their reviews, in one query. */
+  abstract listByTeams(teamIds: readonly string[]): Promise<Idea[]>;
 }

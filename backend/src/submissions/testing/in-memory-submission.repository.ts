@@ -18,6 +18,20 @@ export class InMemorySubmissionRepository extends SubmissionRepository {
     );
   }
 
+  listSubmittedMilestones(
+    teamIds: readonly string[],
+  ): Promise<{ teamId: string; milestoneId: string }[]> {
+    const pairs = new Map(
+      this.rows
+        .filter((row) => teamIds.includes(row.teamId))
+        .map((row) => [
+          `${row.teamId}:${row.milestoneId}`,
+          { teamId: row.teamId, milestoneId: row.milestoneId },
+        ]),
+    );
+    return Promise.resolve([...pairs.values()]);
+  }
+
   listByMilestone(milestoneId: string): Promise<Submission[]> {
     return Promise.resolve(
       this.newestFirst((row) => row.milestoneId === milestoneId),
