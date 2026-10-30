@@ -15,15 +15,9 @@ import {
 import { TeamFormationService } from "./team-formation.service";
 import { TeamQueryService } from "./team-query.service";
 
-// Jest cannot load NestJS 12's ES modules on Node 22; stub the decorators the classes use.
-// Nested DTOs use class-transformer's @Type, which needs reflect-metadata at load time.
-jest.mock("class-transformer", () => ({ Type: () => () => undefined }));
+// Jest cannot load NestJS 12's ES modules on Node 22; stub the decorator the services use.
 jest.mock("@nestjs/common", () => ({
   Injectable: () => (target: unknown) => target,
-}));
-jest.mock("@nestjs/swagger", () => ({
-  ApiProperty: () => () => undefined,
-  ApiPropertyOptional: () => () => undefined,
 }));
 
 const aman = student("aman");

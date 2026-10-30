@@ -36,11 +36,11 @@ export class CourseCycleController {
   @Roles("FACULTY")
   @ApiOperation({ summary: "Create a draft cycle owned by the caller" })
   @ApiCreatedResponse({ type: CycleResponseDto })
-  create(
+  async create(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateCycleDto,
   ): Promise<CycleResponseDto> {
-    return this.cycles.create(user, dto);
+    return CycleResponseDto.from(await this.cycles.create(user, dto));
   }
 
   @Get()
@@ -51,18 +51,24 @@ export class CourseCycleController {
       "Students: published cycles of their own batch. Admins: every published or closed cycle, read-only.",
   })
   @ApiOkResponse({ type: CycleResponseDto, isArray: true })
-  list(@CurrentUser() user: AuthenticatedUser): Promise<CycleResponseDto[]> {
-    return this.cycles.listVisible(user);
+  async list(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<CycleResponseDto[]> {
+    return (await this.cycles.listVisible(user)).map((cycle) =>
+      CycleResponseDto.from(cycle),
+    );
   }
 
   @Get("my")
   @Roles("FACULTY")
   @ApiOperation({ summary: "The caller's own cycles in every state" })
   @ApiOkResponse({ type: CycleResponseDto, isArray: true })
-  listMine(
+  async listMine(
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<CycleResponseDto[]> {
-    return this.cycles.listMine(user);
+    return (await this.cycles.listMine(user)).map((cycle) =>
+      CycleResponseDto.from(cycle),
+    );
   }
 
   @Get(":id")
@@ -73,23 +79,23 @@ export class CourseCycleController {
       "404 CYCLE_NOT_FOUND when the caller may not see it: another faculty's cycle, another batch, or a draft.",
   })
   @ApiOkResponse({ type: CycleResponseDto })
-  findById(
+  async findById(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id", new ParseUUIDPipe()) id: string,
   ): Promise<CycleResponseDto> {
-    return this.cycles.findById(user, id);
+    return CycleResponseDto.from(await this.cycles.findById(user, id));
   }
 
   @Patch(":id")
   @Roles("FACULTY")
   @ApiOperation({ summary: "Edit the fields the cycle's state allows" })
   @ApiOkResponse({ type: CycleResponseDto })
-  update(
+  async update(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateCycleDto,
   ): Promise<CycleResponseDto> {
-    return this.cycles.update(user, id, dto);
+    return CycleResponseDto.from(await this.cycles.update(user, id, dto));
   }
 
   @Get(":id/publish-checks")
@@ -100,11 +106,11 @@ export class CourseCycleController {
       "Runs every publish check without publishing: blocking problems and warnings, each with a code.",
   })
   @ApiOkResponse({ type: PublishChecksDto })
-  checkPublish(
+  async checkPublish(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id", new ParseUUIDPipe()) id: string,
   ): Promise<PublishChecksDto> {
-    return this.cycles.checkPublish(user, id);
+    return PublishChecksDto.from(await this.cycles.checkPublish(user, id));
   }
 
   @Post(":id/publish")
@@ -116,11 +122,13 @@ export class CourseCycleController {
       "Runs every publish check. Any blocking one stops it with 409 PUBLISH_BLOCKED, listing all of them in details ({ code, message }). Warnings come back with the published cycle.",
   })
   @ApiOkResponse({ type: PublishResponseDto })
-  publish(
+  async publish(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id", new ParseUUIDPipe()) id: string,
   ): Promise<PublishResponseDto> {
-    return this.cycles.publish(user, id);
+    return PublishResponseDto.fromPublished(
+      await this.cycles.publish(user, id),
+    );
   }
 
   @Post(":id/close")
@@ -128,10 +136,10 @@ export class CourseCycleController {
   @Roles("FACULTY")
   @ApiOperation({ summary: "Close an owned published cycle" })
   @ApiOkResponse({ type: CycleResponseDto })
-  close(
+  async close(
     @CurrentUser() user: AuthenticatedUser,
     @Param("id", new ParseUUIDPipe()) id: string,
   ): Promise<CycleResponseDto> {
-    return this.cycles.close(user, id);
+    return CycleResponseDto.from(await this.cycles.close(user, id));
   }
 }

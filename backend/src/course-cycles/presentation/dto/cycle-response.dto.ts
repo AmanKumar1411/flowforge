@@ -1,20 +1,22 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { ErrorDetail } from "../../../common/errors/domain-error";
+import {
+  CycleView,
+  NEXT_EVENTS,
+  PublishedCycle,
+  StudentEvent,
+} from "../../application/cycle-views";
 import { PublishReport } from "../../application/publish-checks";
 import {
   CycleEvent,
   CycleEventKind,
   CycleStage,
-  CycleTimeline,
   MilestonePhase,
   TimelineMilestone,
 } from "../../domain/cycle-timeline";
 import { Cycle, CycleIdeaSource } from "../../domain/cycle.types";
 import { Milestone } from "../../domain/milestone";
 import { LinkRequirementDto } from "./milestone.dto";
-
-/** How many upcoming events a cycle carries. */
-export const NEXT_EVENTS = 3;
 
 export class MilestoneResponseDto {
   @ApiProperty()
@@ -181,8 +183,16 @@ export class CycleResponseDto {
   @ApiProperty()
   updatedAt!: string;
 
-  static fromCycle(cycle: Cycle, timeline: CycleTimeline): CycleResponseDto {
-    return Object.assign(new CycleResponseDto(), {
+  static from(cycle: CycleView): CycleResponseDto {
+    return Object.assign(
+      new CycleResponseDto(),
+      CycleResponseDto.fields(cycle),
+    );
+  }
+
+  /** The plain fields of a cycle view, for this DTO and its subclasses. */
+  protected static fields(cycle: CycleView) {
+    return {
       id: cycle.id,
       courseName: cycle.courseName,
       title: cycle.title,
@@ -199,15 +209,13 @@ export class CycleResponseDto {
       milestones: cycle.milestones.map(MilestoneResponseDto.from),
       kind: cycle.kind,
       status: cycle.status,
-      currentStage: CycleStageDto.from(timeline.currentStage(cycle)),
-      nextEvents: timeline
-        .upcomingEvents(cycle, NEXT_EVENTS)
-        .map(CycleEventDto.from),
+      currentStage: CycleStageDto.from(cycle.currentStage),
+      nextEvents: cycle.nextEvents.map(CycleEventDto.from),
       publishedAt: cycle.publishedAt?.toISOString() ?? null,
       closedAt: cycle.closedAt?.toISOString() ?? null,
       createdAt: cycle.createdAt.toISOString(),
       updatedAt: cycle.updatedAt.toISOString(),
-    });
+    };
   }
 }
 
@@ -242,6 +250,16 @@ export class PublishResponseDto extends CycleResponseDto {
       "Published anyway, but worth knowing (a core course with no students yet)",
   })
   warnings!: ErrorDetail[];
+
+  static fromPublished(cycle: PublishedCycle): PublishResponseDto {
+    return Object.assign(
+      new PublishResponseDto(),
+      CycleResponseDto.fields(cycle),
+      {
+        warnings: cycle.warnings,
+      },
+    );
+  }
 }
 
 export class CycleRefDto {
@@ -258,9 +276,9 @@ export class UpcomingEventDto extends CycleEventDto {
   @ApiProperty({ type: CycleRefDto })
   cycle!: CycleRefDto;
 
-  static fromEvent(event: CycleEvent, cycle: Cycle): UpcomingEventDto {
+  static fromStudentEvent(event: StudentEvent): UpcomingEventDto {
     return Object.assign(new UpcomingEventDto(), CycleEventDto.from(event), {
-      cycle: { id: cycle.id, courseName: cycle.courseName, title: cycle.title },
+      cycle: { ...event.cycle },
     });
   }
 }

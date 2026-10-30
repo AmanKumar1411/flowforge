@@ -67,7 +67,7 @@ accounts, roster, allocator, team rows, and the like) were not rerun.
 | --- | --- | --- |
 | Browser: completion and ideas checks 1 | Saving the first wizard step moves to the project's edit URL; the same page instance then loaded the project again and replaced a date the faculty had just typed | The wizard remembers which project it holds (`heldId`) and ignores replies of a stale load |
 | Integration: A3 test | The test moved a milestone's due date past its evaluation (its offset ignored the advanced clock) | Test offset corrected; the API was right to refuse |
-| Unit: three specs failed to load | `class-transformer`'s `@Type` needs `reflect-metadata`, which the Jest specs do not load | Stubbed like `@nestjs/common` |
+| Unit: three specs failed to load | `class-transformer`'s `@Type` needs `reflect-metadata`, which Jest does not load. The real cause: `CourseCycleService` imported its request and response DTOs from `presentation/`, so the specs loaded HTTP decorators | First stubbed; then fixed at the source (branch `phase8-cycle-layering`): the service takes commands and returns views, controllers map DTOs, and the `class-transformer` and `@nestjs/swagger` stubs are gone from the cycle and team specs |
 | Browser: submissions and cycles checks | The scripts read the overview while another tab was open, and opened the wizard from a project page | Scripts open the right tab or page first |
 | Lint | Formatting of new files; an impure `Date.now()` in render; a synchronous `setState` in an effect | `eslint --fix` on the changed backend files; `now` passed in; review checks keyed by visit |
 
