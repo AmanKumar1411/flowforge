@@ -2,6 +2,7 @@ import { HttpStatus } from "@nestjs/common";
 import type { AdminErrorCode } from "../../admin/admin.errors";
 import type { AuthErrorCode } from "../../auth/domain/auth.errors";
 import type { CycleErrorCode } from "../../course-cycles/domain/cycle.errors";
+import type { EvaluationErrorCode } from "../../evaluations/domain/evaluation.errors";
 import type { IdeaErrorCode } from "../../ideas/domain/idea.errors";
 import type { SubmissionErrorCode } from "../../submissions/domain/submission.errors";
 import type { TeamErrorCode } from "../../teams/domain/team.errors";
@@ -16,7 +17,8 @@ type DomainErrorCode =
   | TeamErrorCode
   | IdeaErrorCode
   | SubmissionErrorCode
-  | LinkErrorCode;
+  | LinkErrorCode
+  | EvaluationErrorCode;
 
 // `satisfies` makes the build fail when a new error code has no HTTP status.
 const statusByCode = {
@@ -107,6 +109,17 @@ const statusByCode = {
   LINK_NOT_ALLOWED: HttpStatus.BAD_REQUEST,
   INVALID_LINK: HttpStatus.BAD_REQUEST,
   INVALID_LINK_REQUIREMENT: HttpStatus.BAD_REQUEST,
+
+  GRADING_NOT_OPEN: HttpStatus.CONFLICT,
+  GRADING_CLOSED: HttpStatus.CONFLICT,
+  INVALID_MAX_MARKS: HttpStatus.BAD_REQUEST,
+  MAX_MARKS_BELOW_EXISTING: HttpStatus.CONFLICT,
+  MAX_MARKS_NOT_SET: HttpStatus.CONFLICT,
+  INVALID_MARKS: HttpStatus.BAD_REQUEST,
+  EMPTY_EVALUATION: HttpStatus.BAD_REQUEST,
+  EVALUATION_CHANGED: HttpStatus.CONFLICT,
+  ALREADY_RELEASED: HttpStatus.CONFLICT,
+  NOTHING_TO_RELEASE: HttpStatus.CONFLICT,
 } satisfies Record<DomainErrorCode, HttpStatus>;
 
 export const statusForCode = (code: string): HttpStatus =>

@@ -20,5 +20,6 @@ import { SubmissionsController } from "./presentation/submissions.controller";
     { provide: SubmissionRepository, useClass: PrismaSubmissionRepository },
     { provide: SubmissionTeams, useClass: IdeasSubmissionTeams },
   ],
+  exports: [SubmissionService],
 })
 export class SubmissionsModule {}
