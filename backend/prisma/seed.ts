@@ -1,14 +1,18 @@
 // Creates the demo accounts (see src/auth/application/demo-accounts.ts) in the
 // database from DATABASE_URL, and one published demo project with three
-// milestones. Run with `npm run seed:demo`; safe to run again.
+// milestones, plus a lived-through project and a closed one (Phase 9, seed-journey.ts).
+// Run with `npm run seed:demo`; safe to run again.
 import { INestApplicationContext } from "@nestjs/common";
-import { NestFactory } from "@nestjs/core";
+import { Test } from "@nestjs/testing";
 import { AppModule } from "../src/app.module";
+import { Clock } from "../src/common/clock";
+import { FixedClock } from "../src/common/testing/fixed-clock";
 import {
   DemoAccountsService,
   SeededDemoAccount,
 } from "../src/auth/application/demo-accounts.service";
 import { CourseCycleService } from "../src/course-cycles/application/course-cycle.service";
+import { seedJourney } from "./seed-journey";
 import { UsersService } from "../src/users/users.service";
 
 const DEMO_TITLE = "AIML demo project";
@@ -75,9 +79,14 @@ async function seedDemoCycle(
 }
 
 async function main(): Promise<void> {
-  const app = await NestFactory.createApplicationContext(AppModule, {
-    logger: ["error", "warn"],
-  });
+  // A clock the journey seed can move through the past (Phase 9); it reads real time otherwise.
+  const clock = new FixedClock(new Date());
+  const app = await Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(Clock)
+    .useValue(clock)
+    .compile();
+  app.useLogger(["error", "warn"]);
+  await app.init();
   try {
     const seeded = await app.get(DemoAccountsService).seed();
     console.table(
@@ -89,6 +98,17 @@ async function main(): Promise<void> {
       })),
     );
     console.log(`${DEMO_TITLE}: ${await seedDemoCycle(app, seeded)}`);
+    const faculty = seeded.find((account) => account.role === "FACULTY" && account.outcome !== "SKIPPED");
+    const batch2023 = seeded.filter((account) => account.role === "STUDENT" && account.batchYear === 2023);
+    if (faculty && batch2023.length >= 2) {
+      for (const line of await seedJourney(app, clock, {
+        faculty: faculty.email,
+        leader: batch2023[0].email,
+        member: batch2023[1].email,
+      })) {
+        console.log(line);
+      }
+    }
     console.log("Sign in with any of them through dev login on /login.");
   } finally {
     await app.close();

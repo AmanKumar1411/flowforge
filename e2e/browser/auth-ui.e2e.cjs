@@ -113,7 +113,7 @@ const panel = (page, heading) =>
       await page.getByLabel("Name", { exact: true }).fill("Aman");
       const before = refreshes.count;
       await page.getByRole("button", { name: "Dev sign in" }).click();
-      await page.waitForURL(`${FRONTEND}/student/cycles`);
+      await page.waitForURL(`${FRONTEND}/student`);
       await page.locator(".role-chip", { hasText: "STUDENT" }).waitFor();
       await page.getByText("Student workspace / Batch 2023").waitFor();
       student = page;
@@ -135,12 +135,12 @@ const panel = (page, heading) =>
     await check("Reloading restores the session from the refresh cookie", async () => {
       await student.reload();
       await student.locator(".role-chip", { hasText: "STUDENT" }).waitFor();
-      assert(new URL(student.url()).pathname === "/student/cycles", student.url());
+      assert(new URL(student.url()).pathname === "/student", student.url());
     }, student);
 
     await check("Two tabs refreshing at the same moment stay signed in (no false reuse alarm)", async () => {
       const second = await studentContext.newPage();
-      await second.goto(`${FRONTEND}/student/cycles`);
+      await second.goto(`${FRONTEND}/student`);
       await second.locator(".role-chip").waitFor();
       await Promise.all([student.reload(), second.reload()]);
       await Promise.all([student, second].map((p) => p.locator(".role-chip", { hasText: "STUDENT" }).waitFor()));
@@ -150,7 +150,7 @@ const panel = (page, heading) =>
 
     await check("A student is sent back to their own dashboard from /admin", async () => {
       await student.goto(`${FRONTEND}/admin`);
-      await student.waitForURL(`${FRONTEND}/student/cycles`);
+      await student.waitForURL(`${FRONTEND}/student`);
     }, student);
 
     // --- Pending staff and admin approval ---
@@ -198,7 +198,7 @@ const panel = (page, heading) =>
     }, staff);
 
     await check("Student of batch 2023 sees the published cycle", async () => {
-      await student.goto(`${FRONTEND}/student/cycles`);
+      await student.goto(`${FRONTEND}/student`);
       await student.getByRole("heading", { name: "Browser E2E cycle" }).waitFor();
     }, student);
 
@@ -218,7 +218,8 @@ const panel = (page, heading) =>
       await row.getByRole("button", { name: "Save" }).waitFor({ state: "detached" });
       await student.reload();
       await student.getByText("Student workspace / Batch 2025").waitFor();
-      await student.getByText("Nothing open for your batch").waitFor();
+      // Phase 9: the dashboard's empty state.
+      await student.getByText("No open projects yet").waitFor();
     }, student);
 
     await check("Deactivation ends the user's session at their next request", async () => {

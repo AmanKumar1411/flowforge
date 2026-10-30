@@ -2,6 +2,8 @@
 
 **Status:** Accepted (Phase 8). Amends ADRs 009, 011, 013 and 015.
 
+**Amended (Phase 9, S5):** `teamDeadline <= ideaDeadline`; equal dates are allowed and leave the faculty no placement window. The database CHECK was already `<=`, so no migration was needed.
+
 ## Context
 
 Until Phase 7 a cycle had one schedule: team formation, an optional faculty completion window,

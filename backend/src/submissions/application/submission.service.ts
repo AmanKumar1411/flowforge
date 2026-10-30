@@ -90,6 +90,15 @@ export class SubmissionService {
     });
   }
 
+  /** The milestones each of the caller's own teams has handed work in for (the student dashboard). */
+  submittedMilestones(
+    teamIds: readonly string[],
+  ): Promise<{ teamId: string; milestoneId: string }[]> {
+    return teamIds.length === 0
+      ? Promise.resolve([])
+      : this.submissions.listSubmittedMilestones(teamIds);
+  }
+
   /** Every team of the cycle with its idea and its versions for the milestone, for the owning faculty and admins. */
   async listForCycle(
     actor: TeamActor,

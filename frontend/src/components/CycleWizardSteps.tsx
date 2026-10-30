@@ -405,7 +405,7 @@ export function TeamsStep({ state, update, problems, mode, cycle, now }: StepPro
         {deadline(
           "ideaDeadline",
           "Idea deadline",
-          "Each team proposes or picks its first idea by then. Until then you also place students left without a team. Milestones that would open earlier move later with it.",
+          "Each team proposes or picks its first idea by then. Between the team deadline and this one you place students left without a team; equal dates leave no placement window. Milestones that would open earlier move later with it.",
         )}
       </div>
       <fieldset className="choice-list" disabled={locked}>

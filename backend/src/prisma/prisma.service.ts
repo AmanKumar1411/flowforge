@@ -26,7 +26,11 @@ export class PrismaService
       connectionString,
       connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
     });
-    super({ adapter: new PrismaPg(pool) });
+    super({
+      adapter: new PrismaPg(pool),
+      // Emitted only to listeners: the dashboard test counts queries (ADR 021).
+      log: [{ emit: "event", level: "query" }],
+    });
     this.pool = pool;
     const url = new URL(connectionString);
     this.target = `${url.hostname}:${url.port || 5432}${url.pathname}`;

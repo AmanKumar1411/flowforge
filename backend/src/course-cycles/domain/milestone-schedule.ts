@@ -32,11 +32,11 @@ const DESCRIPTION_LIMIT = 2000;
 /**
  * The order of a cycle, free of I/O:
  *
- *   teamDeadline < ideaDeadline <= M1.opens < M1.due <= M1.evaluation
+ *   teamDeadline <= ideaDeadline <= M1.opens < M1.due <= M1.evaluation
  *                                  M1.due <= M2.opens < M2.due <= …
  *
  * Teams settle, then ideas, then each milestone in turn. The faculty's
- * placement window is teamDeadline…ideaDeadline, so the two cannot be equal.
+ * placement window is teamDeadline…ideaDeadline; equal deadlines leave none (S5).
  * The database checks each milestone's own order too; the order between
  * milestones and the cycle's deadlines is checked only here.
  */
@@ -49,10 +49,11 @@ export class MilestoneSchedule {
     const problems: ScheduleProblem[] = [];
     const add = (code: CycleErrorCode, message: string) =>
       problems.push({ code, message });
-    if (!(schedule.teamDeadline < schedule.ideaDeadline)) {
+    // S5 (Phase 9): equal deadlines are allowed; they leave the faculty no time to place students.
+    if (schedule.teamDeadline > schedule.ideaDeadline) {
       add(
         "INVALID_IDEA_DEADLINE",
-        "The idea deadline must come after the team deadline, so there is time to place students without a team",
+        "The idea deadline cannot come before the team deadline (equal dates leave no time to place students without a team)",
       );
     }
     const { milestones } = schedule;

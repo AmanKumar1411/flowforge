@@ -10,7 +10,8 @@ import { CycleWizardPage } from "./pages/CycleWizardPage";
 import { FacultyCyclesPage } from "./pages/FacultyCyclesPage";
 import { LoginPage } from "./pages/LoginPage";
 import { PendingPage } from "./pages/PendingPage";
-import { StudentCyclesPage } from "./pages/StudentCyclesPage";
+import { StudentDashboardPage } from "./pages/StudentDashboardPage";
+import { OldProjectLink, StudentProjectPage } from "./pages/StudentProjectPage";
 import { TeamDetailPage } from "./pages/TeamDetailPage";
 import "./App.css";
 
@@ -46,12 +47,11 @@ function App() {
           element={
             <RequireRole roles={["STUDENT"]}>
               <Routes>
-                <Route index element={<Navigate to="cycles" replace />} />
-                <Route path="cycles" element={<StudentCyclesPage />} />
-                <Route
-                  path="cycles/:cycleId"
-                  element={<CycleDetailPage faculty={false} />}
-                />
+                <Route index element={<StudentDashboardPage />} />
+                <Route path="projects/:cycleId" element={<StudentProjectPage />} />
+                {/* Phase 9: the old project links still work. */}
+                <Route path="cycles" element={<Navigate to="/student" replace />} />
+                <Route path="cycles/:cycleId" element={<OldProjectLink />} />
               </Routes>
             </RequireRole>
           }

@@ -74,6 +74,9 @@ enum AuditAction {
   CYCLE_UPDATED
   CYCLE_PUBLISHED
   CYCLE_CLOSED
+  EVALUATION_SAVED
+  EVALUATION_RELEASED
+  GRADING_SCALE_SET
 }
 
 model User {
@@ -106,6 +109,9 @@ model User {
   ideaReviews            IdeaReview[]            @relation("IdeaReviewer")
   catalogIdeas           CatalogIdea[]           @relation("CatalogIdeaAuthor")
   submissions            Submission[]            @relation("SubmissionAuthor")
+  releasedGradings       MilestoneGrading[]      @relation("GradingReleaser")
+  evaluations            Evaluation[]            @relation("Evaluator")
+  evaluationRevisions    EvaluationRevision[]    @relation("EvaluationRevisionAuthor")
 
   @@index([role])
   @@index([batchYear])
@@ -245,6 +251,8 @@ model Milestone {
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   submissions       Submission[]
+  grading           MilestoneGrading?
+  evaluations       Evaluation[]
 
   @@unique([cycleId, position])
   // Target of Submission's composite foreign key (and a later Evaluation's).
@@ -287,6 +295,7 @@ model Team {
   members     TeamMember[]
   idea        ProjectIdea?
   submissions Submission[]
+  evaluations Evaluation[]
 
   // Target of TeamMember's composite foreign key, which keeps every member row in its team's cycle.
   @@unique([id, cycleId])
@@ -438,4 +447,57 @@ model Submission {
 
   @@unique([teamId, milestoneId, version])
   @@index([cycleId, milestoneId, submittedAt])
+}
+
+// Evaluations (ADR 020)
+
+// A milestone's grading settings: the scale and the one-way release to every team (S2, S3).
+// The migration adds a CHECK: maxMarks from 1 to 1000.
+model MilestoneGrading {
+  milestoneId  String    @id
+  milestone    Milestone @relation(fields: [milestoneId], references: [id], onDelete: Restrict)
+  maxMarks     Int?
+  releasedAt   DateTime?
+  releasedById String?
+  releasedBy   User?     @relation("GradingReleaser", fields: [releasedById], references: [id], onDelete: Restrict)
+  updatedAt    DateTime  @updatedAt
+}
+
+// One team's current mark and feedback for one milestone (S1). Both composite foreign keys keep
+// the milestone and the team in the same cycle. The migration adds CHECKs: marks >= 0, marks or
+// feedback given, version >= 1.
+model Evaluation {
+  id            String               @id @default(uuid())
+  milestoneId   String
+  teamId        String
+  cycleId       String
+  milestone     Milestone            @relation(fields: [milestoneId, cycleId], references: [id, cycleId], onDelete: Restrict)
+  team          Team                 @relation(fields: [teamId, cycleId], references: [id, cycleId], onDelete: Restrict)
+  marks         Decimal?             @db.Decimal(6, 2)
+  feedback      String?
+  version       Int                  @default(1)
+  evaluatedById String
+  evaluatedBy   User                 @relation("Evaluator", fields: [evaluatedById], references: [id], onDelete: Restrict)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  revisions     EvaluationRevision[]
+
+  @@unique([milestoneId, teamId])
+  @@index([teamId])
+}
+
+// Every saved version of an evaluation. Append-only: the migration adds a trigger that rejects
+// UPDATE and DELETE.
+model EvaluationRevision {
+  id            String     @id @default(uuid())
+  evaluationId  String
+  evaluation    Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Restrict)
+  version       Int
+  marks         Decimal?   @db.Decimal(6, 2)
+  feedback      String?
+  evaluatedById String
+  evaluatedBy   User       @relation("EvaluationRevisionAuthor", fields: [evaluatedById], references: [id], onDelete: Restrict)
+  createdAt     DateTime   @default(now())
+
+  @@unique([evaluationId, version])
 }

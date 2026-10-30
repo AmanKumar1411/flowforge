@@ -122,6 +122,14 @@ export class PrismaIdeaRepository extends IdeaRepository {
     return toDomain(row);
   }
 
+  async listByTeams(teamIds: readonly string[]): Promise<Idea[]> {
+    const rows = await this.prisma.projectIdea.findMany({
+      where: { teamId: { in: [...teamIds] } },
+      include: withPeople,
+    });
+    return rows.map(toDomain);
+  }
+
   async listByCycle(cycleId: string): Promise<Idea[]> {
     const rows = await this.prisma.projectIdea.findMany({
       where: { cycleId },

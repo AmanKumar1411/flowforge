@@ -382,3 +382,82 @@ export interface FacultyRequest {
   decidedAt: string | null;
   createdAt: string;
 }
+
+/** A milestone's grading for its faculty (Phase 9, ADR 020). */
+export interface Grading {
+  milestone: { id: string; position: number; name: string; submissionDueAt: string };
+  maxMarks: number | null;
+  releasedAt: string | null;
+  /** Marks can be given now: from the due date while the project is published. */
+  open: boolean;
+  rows: GradingRow[];
+}
+
+export interface GradingRow {
+  team: { id: string; name: string; memberCount: number };
+  evaluation: { id: string; marks: number | null; feedback: string | null; version: number; updatedAt: string } | null;
+  /** Null when the team submitted nothing. */
+  latestWork: { version: number; submittedAt: string } | null;
+}
+
+/** A team's evaluation as the team (or its faculty) reads it. */
+export interface TeamEvaluation {
+  milestoneId: string;
+  marks: number | null;
+  maxMarks: number | null;
+  feedback: string | null;
+  releasedAt: string | null;
+  updatedAt: string;
+  updatedAfterRelease: boolean;
+}
+
+export interface CycleSummary {
+  id: string;
+  courseName: string;
+  title: string;
+  kind: CourseKind;
+  status: CycleStatus;
+}
+
+/** "all" is the single-page view old links (/student/cycles/:id) open; it has no tab of its own. */
+export type ProjectTab = "overview" | "team" | "idea" | "milestones" | "all";
+
+export interface UpNextItem {
+  cycle: CycleSummary;
+  kind: string;
+  at: string | null;
+  text: string;
+  action?: { tab: "team" | "idea" | "milestones"; actionable: boolean };
+}
+
+export interface DashboardUpdate {
+  cycle: CycleSummary;
+  kind: "JOINED_TEAM" | "IDEA_APPROVED" | "IDEA_REJECTED" | "RESULTS_RELEASED" | "RESULTS_UPDATED";
+  at: string;
+  text: string;
+  tab: "team" | "idea" | "milestones";
+}
+
+export interface ProjectCard {
+  cycle: CycleSummary;
+  currentStage: CycleStage;
+  nextEvent: CycleEvent | null;
+  myTeam: { id: string; name: string; memberCount: number } | null;
+  myRole: "LEADER" | "MEMBER" | "NO_TEAM";
+  todo: string | null;
+  results: {
+    milestoneId: string;
+    label: string;
+    marks: number | null;
+    maxMarks: number | null;
+    feedback: string | null;
+    releasedAt: string;
+    updatedAfterRelease: boolean;
+  }[];
+}
+
+export interface StudentDashboard {
+  upNext: UpNextItem[];
+  updates: DashboardUpdate[];
+  projects: { active: ProjectCard[]; past: ProjectCard[] };
+}

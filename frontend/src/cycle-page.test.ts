@@ -140,6 +140,24 @@ describe("what the page asks of the faculty", () => {
   });
 });
 
+// Phase 9: due milestones ask the faculty to grade, then to release.
+describe("grading in needs-attention", () => {
+  it("lists teams still to grade, then a graded milestone not released yet", () => {
+    const base: CycleCounts = { roster: { total: 5, notSignedIn: 0 }, openMilestones: [] };
+    const queue = (graded: number, ungraded: number, released: boolean): CycleCounts => ({
+      ...base,
+      gradingQueue: [{ milestone: { id: "m1", position: 1, name: "Design review" }, graded, ungraded, released }],
+    });
+    expect(attentionItems(cycle, "milestones", queue(0, 12, false)).map((item) => item.text)).toEqual([
+      "M1 · Design review due: 12 teams to grade",
+    ]);
+    expect(attentionItems(cycle, "milestones", queue(12, 0, false)).map((item) => item.text)).toEqual([
+      "M1 · Design review graded, not released",
+    ]);
+    expect(attentionItems(cycle, "milestones", queue(12, 0, true))).toEqual([]);
+  });
+});
+
 describe("team completion and empty states", () => {
   it("shows no team completion for a cycle with no students, a draft or an elective", () => {
     expect(showsCompletion(cycle, "teams", { roster: { total: 0, notSignedIn: 0 } })).toBe(false);

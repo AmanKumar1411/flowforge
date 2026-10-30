@@ -7,6 +7,7 @@ import { TeamCycles } from "./application/ports/team-cycles";
 import { TeamSeekerRepository } from "./application/ports/team-seeker.repository";
 import { TeamRepository } from "./application/ports/team.repository";
 import { TeamCompletionService } from "./application/team-completion.service";
+import { TeamCycleMembership } from "./application/team-cycle-membership";
 import { TeamEnrollmentGuard } from "./application/team-enrollment-guard";
 import { TeamFormationService } from "./application/team-formation.service";
 import { TeamQueryService } from "./application/team-query.service";
@@ -32,6 +33,7 @@ import { TeamsController } from "./presentation/teams.controller";
     TeamQueryService,
     TeamCompletionService,
     TeamEnrollmentGuard,
+    TeamCycleMembership,
     TeamRules,
     TeamAccessPolicy,
     { provide: TeamRepository, useClass: PrismaTeamRepository },

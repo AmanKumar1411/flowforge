@@ -134,6 +134,15 @@ export class PrismaCycleRepository extends CycleRepository {
     return rows.map(toDomain);
   }
 
+  async listClosedByIds(ids: readonly string[]): Promise<Cycle[]> {
+    const rows = await this.prisma.courseProjectCycle.findMany({
+      where: { id: { in: [...ids] }, status: PrismaCycleStatus.CLOSED },
+      include: withMilestones,
+      orderBy: { closedAt: "desc" },
+    });
+    return rows.map(toDomain);
+  }
+
   async update(
     id: string,
     expectedStatus: CycleStatus,

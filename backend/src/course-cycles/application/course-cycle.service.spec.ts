@@ -13,6 +13,7 @@ import {
 import { InMemoryCycleRepository } from "../testing/in-memory-cycle.repository";
 import { CreateCycleCommand, MilestoneCommand } from "./cycle-commands";
 import { CourseCycleService } from "./course-cycle.service";
+import { CycleMembership } from "./cycle-membership";
 import { CyclePublishChecks } from "./cycle-publish-checks";
 import { PublishChecks } from "./publish-checks";
 
@@ -88,10 +89,14 @@ describe("CourseCycleService", () => {
   let clock: FixedClock;
   let audited: AuditEvent[];
   let batchStudents: unknown[];
+  let formerCycles: string[];
   beforeEach(() => {
     clock = new FixedClock(NOW);
     audited = [];
     batchStudents = [{ id: "s1" }];
+    formerCycles = [];
+    const membership = new CycleMembership();
+    membership.provide(async () => formerCycles);
     const repository = new InMemoryCycleRepository();
     const workflow = new CycleWorkflow();
     const checks = new PublishChecks();
@@ -111,6 +116,7 @@ describe("CourseCycleService", () => {
       } as unknown as AuditService,
       new ImmediateTransactionRunner(),
       clock,
+      membership,
     );
   });
   const owner = faculty("faculty-a");
@@ -166,7 +172,7 @@ describe("CourseCycleService", () => {
 
   it("refuses a schedule out of order before saving anything", async () => {
     await expect(
-      service.create(owner, createDto(2026, { ideaDeadline: nov(4) })),
+      service.create(owner, createDto(2026, { ideaDeadline: nov(3) })),
     ).rejects.toMatchObject({ code: "INVALID_IDEA_DEADLINE" });
     await expect(
       service.create(
@@ -326,6 +332,25 @@ describe("CourseCycleService", () => {
     const times = upcoming.map((event) => event.at.toISOString());
     expect(times).toEqual([...times].sort());
     expect(await service.upcomingFor(owner)).toEqual([]);
+  });
+
+  // S4 (Phase 9): a closed project stays readable to students who were in one of its teams.
+  it("keeps a closed project readable, and listed as past, only for its former team members", async () => {
+    const created = await service.create(owner, createDto(2026));
+    await service.publish(owner, created.id);
+    await service.close(owner, created.id);
+    const member = student("s26", 2026);
+    await expect(service.findById(member, created.id)).rejects.toMatchObject({
+      code: "CYCLE_NOT_FOUND",
+    });
+    expect(await service.listPastForStudent(member)).toEqual([]);
+    formerCycles = [created.id];
+    expect((await service.findById(member, created.id)).status).toBe("CLOSED");
+    expect(
+      (await service.listPastForStudent(member)).map((cycle) => cycle.id),
+    ).toEqual([created.id]);
+    expect(await service.listVisible(member)).toEqual([]);
+    expect(await service.listPastForStudent(owner)).toEqual([]);
   });
 
   it("gives admins every published or closed cycle, read-only", async () => {

@@ -3,6 +3,7 @@ import { formatDate } from "../dates";
 import { submissionWindow } from "../ideas";
 import { requirementText } from "../links";
 import type { Cycle, CycleSubmission } from "../types";
+import { GradingPanel } from "./faculty/GradingPanel";
 import { SubmissionHistory } from "./SubmissionPanels";
 
 const WINDOW_TEXT = { NOT_OPEN: "Coming up", OPEN: "Open now", CLOSED: "Closed" } as const;
@@ -16,12 +17,15 @@ export function MilestonesTab({
   work,
   failed,
   now,
+  onChanged,
 }: {
   cycle: Cycle;
   /** Each milestone's rows; undefined while loading. */
   work: { milestoneId: string; rows: CycleSubmission[] }[] | undefined;
   failed: boolean;
   now: number;
+  /** Told after a grading change, so the page's counts follow. */
+  onChanged?: () => void;
 }) {
   if (cycle.milestones.length === 0) {
     return <p className="muted">No milestones yet. Add them in the project's setup.</p>;
@@ -86,6 +90,7 @@ export function MilestonesTab({
                 ))}
               </ul>
             )}
+            {cycle.status !== "DRAFT" && <GradingPanel cycle={cycle} milestone={milestone} onChanged={onChanged} />}
           </section>
         );
       })}

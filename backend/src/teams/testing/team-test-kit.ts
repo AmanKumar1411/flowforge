@@ -1,4 +1,6 @@
 import { AuditService } from "../../audit/audit.service";
+import { CycleMembership } from "../../course-cycles/application/cycle-membership";
+import { TeamCycleMembership } from "../application/team-cycle-membership";
 import { PublishChecks } from "../../course-cycles/application/publish-checks";
 import { CycleTimeline } from "../../course-cycles/domain/cycle-timeline";
 import { AuditEvent } from "../../audit/domain/audit-event";
@@ -90,6 +92,7 @@ export function createTeamKit(seed = 1) {
     lastLoginAt: new Date("2026-10-20T09:00:00.000Z"),
   });
   const removalChecks = new EnrollmentRemovalChecks();
+  const membership = new CycleMembership();
   // Cycle changes are audited too; the kit keeps only the teams module's events.
   const cycles = new CourseCycleService(
     cycleRepository,
@@ -100,6 +103,7 @@ export function createTeamKit(seed = 1) {
     { record: async () => undefined } as unknown as AuditService,
     transactions,
     clock,
+    membership,
   );
   // The two calls the enrollment service makes: reading students, and pre-registering new ones.
   let registered = 0;
@@ -141,6 +145,7 @@ export function createTeamKit(seed = 1) {
   const rules = new TeamRules();
   const policy = new TeamAccessPolicy();
   new TeamEnrollmentGuard(removalChecks, teams).onModuleInit();
+  new TeamCycleMembership(membership, teams).onModuleInit();
   return {
     clock,
     cycles,

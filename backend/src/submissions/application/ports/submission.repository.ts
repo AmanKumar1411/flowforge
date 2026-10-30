@@ -7,6 +7,10 @@ export abstract class SubmissionRepository {
     teamId: string,
     milestoneId: string,
   ): Promise<Submission[]>;
+  /** Which milestones each of these teams has handed in at least one version for, in one query. */
+  abstract listSubmittedMilestones(
+    teamIds: readonly string[],
+  ): Promise<{ teamId: string; milestoneId: string }[]>;
   /** Every version of every team for one milestone, newest first per team. */
   abstract listByMilestone(milestoneId: string): Promise<Submission[]>;
   /**

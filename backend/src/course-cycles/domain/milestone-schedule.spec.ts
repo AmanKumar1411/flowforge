@@ -88,8 +88,16 @@ describe("MilestoneSchedule", () => {
     ]);
   });
 
-  it("needs the idea deadline strictly after the team deadline", () => {
-    expect(codes({ ...valid, ideaDeadline: day(4) })).toContain(
+  // S5 (Phase 9): equal deadlines are allowed (was strict in Phase 8); they leave no placement window.
+  it("accepts equal team and idea deadlines, and refuses an idea deadline before the team deadline", () => {
+    expect(
+      codes({
+        ...valid,
+        ideaDeadline: day(4),
+        milestones: [input("Final", 8, 15, 16)],
+      }),
+    ).toEqual([]);
+    expect(codes({ ...valid, ideaDeadline: day(3) })).toContain(
       "INVALID_IDEA_DEADLINE",
     );
     expect(codes({ ...valid, teamDeadline: day(9) })).toContain(
@@ -122,8 +130,8 @@ describe("MilestoneSchedule", () => {
   it("reports every problem at once, and throws the first", () => {
     const broken = {
       ...valid,
-      ideaDeadline: day(4),
-      milestones: [input("A", 3, 2, 1)],
+      ideaDeadline: day(3),
+      milestones: [input("A", 2, 1, 0)],
     };
     expect(codes(broken, true)).toEqual([
       "INVALID_IDEA_DEADLINE",

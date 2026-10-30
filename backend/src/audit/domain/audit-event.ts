@@ -34,7 +34,10 @@ export type AuditAction =
   | "CYCLE_CREATED"
   | "CYCLE_UPDATED"
   | "CYCLE_PUBLISHED"
-  | "CYCLE_CLOSED";
+  | "CYCLE_CLOSED"
+  | "EVALUATION_SAVED"
+  | "EVALUATION_RELEASED"
+  | "GRADING_SCALE_SET";
 
 export type AuditEntityType =
   | "User"
@@ -46,7 +49,9 @@ export type AuditEntityType =
   | "CourseProjectCycle"
   | "ProjectIdea"
   | "CatalogIdea"
-  | "Submission";
+  | "Submission"
+  | "Evaluation"
+  | "Milestone";
 
 export type AuditMetadata = Record<
   string,

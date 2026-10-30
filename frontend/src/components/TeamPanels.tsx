@@ -68,7 +68,11 @@ export function MemberList({ team }: { team: Team }) {
 }
 
 /** A student's team in one cycle: view it, or create and edit it as the leader. */
-export function StudentTeamPanel({ cycle }: { cycle: Cycle }) {
+/** Which part of the team panel to show: everything, or one project tab (Phase 9). */
+export type TeamPanelPart = "all" | "team" | "idea" | "milestones";
+
+export function StudentTeamPanel({ cycle, show = "all" }: { cycle: Cycle; show?: TeamPanelPart }) {
+  const showTeam = show === "all" || show === "team";
   const { state } = useAuth();
   const myId = state.status === "signed-in" ? state.user.id : "";
   const [team, setTeam] = useState<Team | null | undefined>(undefined);
@@ -104,6 +108,7 @@ export function StudentTeamPanel({ cycle }: { cycle: Cycle }) {
   const leader = team?.members.find((member) => member.isLeader);
   return (
     <>
+      {showTeam && (
       <section className="team-panel" aria-labelledby="team-heading">
         <div className="panel-heading">
           <div>
@@ -174,8 +179,12 @@ export function StudentTeamPanel({ cycle }: { cycle: Cycle }) {
           )
         )}
       </section>
+      )}
+      {!showTeam && team === null && (
+        <p className="notice">You are not in a team in this project, so there is nothing here yet. See the Team tab.</p>
+      )}
       {team && !editing && (
-        <TeamProject cycle={cycle} team={team} myId={myId} />
+        <TeamProject cycle={cycle} team={team} myId={myId} show={show} />
       )}
     </>
   );
@@ -187,21 +196,23 @@ function TeamProject({
   cycle,
   team,
   myId,
+  show,
 }: {
   cycle: Cycle;
   team: Team;
   myId: string;
+  show: TeamPanelPart;
 }) {
   const [idea, setIdea] = useState<Idea | null | undefined>(undefined);
+  // The idea panel stays mounted (hidden on the Milestones tab): it tells the work cards whether the idea is approved.
   return (
     <>
-      <TeamIdeaPanel
-        cycle={cycle}
-        team={team}
-        myId={myId}
-        onIdeaChange={setIdea}
-      />
-      <TeamSubmissionPanel cycle={cycle} team={team} idea={idea} />
+      <div hidden={!(show === "all" || show === "idea")}>
+        <TeamIdeaPanel cycle={cycle} team={team} myId={myId} onIdeaChange={setIdea} />
+      </div>
+      {(show === "all" || show === "milestones") && (
+        <TeamSubmissionPanel cycle={cycle} team={team} idea={idea} />
+      )}
     </>
   );
 }

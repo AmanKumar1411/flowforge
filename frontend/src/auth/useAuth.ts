@@ -11,7 +11,7 @@ export function useAuth(): AuthContextValue {
 }
 
 const dashboards: Record<UserRole, string> = {
-  STUDENT: "/student/cycles",
+  STUDENT: "/student",
   FACULTY: "/faculty/cycles",
   ADMIN: "/admin",
   PENDING_STAFF: "/pending",
