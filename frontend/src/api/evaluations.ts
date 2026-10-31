@@ -20,7 +20,7 @@ export function saveEvaluation(
   cycleId: string,
   milestoneId: string,
   teamId: string,
-  body: { marks: number | null; feedback: string | null; expectedVersion?: number },
+  body: { marks?: number | null; feedback: string | null; expectedVersion?: number },
 ) {
   return apiRequest<TeamEvaluation>(`${base(cycleId, milestoneId)}/teams/${teamId}/evaluation`, {
     method: "PUT",

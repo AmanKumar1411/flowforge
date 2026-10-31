@@ -1,8 +1,16 @@
 import { Transaction } from "../../../common/transaction";
-import { Idea, IdeaRevision, NewIdea, NewIdeaReview } from "../../domain/idea";
+import {
+  Idea,
+  IdeaRevision,
+  IdeaSummary,
+  NewIdea,
+  NewIdeaReview,
+} from "../../domain/idea";
 
 export abstract class IdeaRepository {
   abstract findByTeam(teamId: string, tx?: Transaction): Promise<Idea | null>;
+  /** The idea's title, status and source only: one small read, no reviews or people. */
+  abstract findSummaryByTeam(teamId: string): Promise<IdeaSummary | null>;
   /**
    * Locks the team row so it cannot be disbanded meanwhile, and the team's idea
    * row if there is one; then reads the idea. `teamExists` is false once it is gone.

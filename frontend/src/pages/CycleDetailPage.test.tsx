@@ -113,8 +113,8 @@ describe("CycleDetailPage by course type", () => {
       { team: { id: "t2" }, idea: null },
     ] as unknown as CycleIdea[]);
     vi.mocked(submissions.listCycleSubmissions).mockResolvedValue([
-      { team: { id: "t1", name: "Byte Club" }, latest: null, versions: [], versionCount: 0 },
-      { team: { id: "t2", name: "Null Pointers" }, latest: null, versions: [], versionCount: 0 },
+      { team: { id: "t1", name: "Byte Club" }, latest: null, versionCount: 0 },
+      { team: { id: "t2", name: "Null Pointers" }, latest: null, versionCount: 0 },
     ] as unknown as CycleSubmission[]);
     vi.mocked(teams.getCompletionOverview).mockResolvedValue({
       open: false,

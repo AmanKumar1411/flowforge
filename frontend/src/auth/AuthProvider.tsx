@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { fetchCurrentUser, logout, logoutEverywhere } from "../api/auth";
-import { refreshAccessToken, setSessionEndedHandler } from "../api/client";
+import {
+  refreshUntilAnswered,
+  retryWhileUnreachable,
+  setReachabilityHandler,
+  setSessionEndedHandler,
+} from "../api/client";
 import type { CurrentUser } from "../types";
 import { AuthContext, type AuthState } from "./auth-context";
 
@@ -13,18 +18,22 @@ const SESSION_END_REASONS = new Set([
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ status: "loading" });
+  const [unreachable, setUnreachable] = useState(false);
   const sessionRequest = useRef<Promise<CurrentUser | null> | null>(null);
 
   useEffect(() => {
     setSessionEndedHandler((reason) => setState({ status: "signed-out", reason }));
+    setReachabilityHandler((reachable) => setUnreachable(!reachable));
   }, []);
 
+  // Waits out an outage (H6): only an answer from the API, like 401, signs the user out.
   const reloadUser = useCallback(async () => {
     try {
-      const user = await fetchCurrentUser();
+      const user = await retryWhileUnreachable(fetchCurrentUser);
       setState({ status: "signed-in", user });
       return user;
     } catch {
+      // Only an answer is left here (an outage is retried above): the session is not usable.
       setState((current) =>
         current.status === "signed-out" ? current : { status: "signed-out" },
       );
@@ -34,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // React StrictMode runs effects twice; sharing one promise keeps it to one refresh.
   const establishSession = useCallback(() => {
-    sessionRequest.current ??= refreshAccessToken()
+    sessionRequest.current ??= refreshUntilAnswered()
       .then((result) => {
         if ("errorCode" in result) {
           setState({
@@ -71,5 +80,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({ state, establishSession, reloadUser, signOut, signOutEverywhere }),
     [state, establishSession, reloadUser, signOut, signOutEverywhere],
   );
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {unreachable && (
+        <p className="banner connection-banner" role="status">
+          Can't reach FlowForge. Retrying…
+        </p>
+      )}
+      {children}
+    </AuthContext.Provider>
+  );
 }

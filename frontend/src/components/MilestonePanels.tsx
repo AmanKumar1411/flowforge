@@ -1,8 +1,12 @@
+import { useState } from "react";
 import { Link } from "react-router";
+import { listTeamSubmissions } from "../api/submissions";
 import { formatDate } from "../dates";
+import { readableError } from "../errors";
+import { focusTarget } from "../focus";
 import { submissionWindow } from "../ideas";
 import { requirementText } from "../links";
-import type { Cycle, CycleSubmission } from "../types";
+import type { Cycle, CycleSubmission, Submission } from "../types";
 import { GradingPanel } from "./faculty/GradingPanel";
 import { SubmissionHistory } from "./SubmissionPanels";
 
@@ -30,8 +34,22 @@ export function MilestonesTab({
   if (cycle.milestones.length === 0) {
     return <p className="muted">No milestones yet. Add them in the project's setup.</p>;
   }
+  const gradable = cycle.status !== "DRAFT";
   return (
     <div className="milestone-list">
+      {gradable && (
+        <nav className="jump-links" aria-label="Grading">
+          {cycle.milestones.map((milestone) => (
+            <a
+              key={milestone.id}
+              href={`#grading-${milestone.id}`}
+              onClick={(event) => focusTarget(event, `grading-${milestone.id}`)}
+            >
+              Jump to grading of M{milestone.position}
+            </a>
+          ))}
+        </nav>
+      )}
       {cycle.milestones.map((milestone) => {
         const rows = work?.find((entry) => entry.milestoneId === milestone.id)?.rows;
         const stage = submissionWindow(cycle, milestone, now);
@@ -78,22 +96,71 @@ export function MilestonesTab({
                             : "Nothing yet"}
                       </span>
                     </div>
-                    {row.versions.length > 0 && (
-                      <details>
-                        <summary>
-                          {row.versionCount === 1 ? "1 version" : `All ${row.versionCount} versions`}
-                        </summary>
-                        <SubmissionHistory versions={row.versions} latestLabel={stage === "CLOSED" ? "Final" : "Latest"} />
-                      </details>
+                    {row.versionCount > 0 && (
+                      <TeamHistory
+                        teamId={row.team.id}
+                        milestoneId={milestone.id}
+                        versionCount={row.versionCount}
+                        latestLabel={stage === "CLOSED" ? "Final" : "Latest"}
+                      />
                     )}
                   </li>
                 ))}
               </ul>
             )}
-            {cycle.status !== "DRAFT" && <GradingPanel cycle={cycle} milestone={milestone} onChanged={onChanged} />}
+            {gradable && <GradingPanel cycle={cycle} milestone={milestone} onChanged={onChanged} />}
           </section>
         );
       })}
     </div>
+  );
+}
+
+const HISTORY_PAGE = 10;
+
+/** A team's versions, read when the faculty open them, ten at a time (H4). */
+export function TeamHistory({
+  teamId,
+  milestoneId,
+  versionCount,
+  latestLabel,
+}: {
+  teamId: string;
+  milestoneId: string;
+  versionCount: number;
+  latestLabel: string;
+}) {
+  const [versions, setVersions] = useState<Submission[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const loadMore = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const before = versions?.at(-1)?.version;
+      const page = await listTeamSubmissions(teamId, milestoneId, { limit: HISTORY_PAGE, before });
+      setVersions([...(versions ?? []), ...page]);
+    } catch (caught) {
+      setError(readableError(caught));
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <details
+      onToggle={(event) => {
+        if (event.currentTarget.open && !versions && !loading) void loadMore();
+      }}
+    >
+      <summary>{versionCount === 1 ? "1 version" : `All ${versionCount} versions`}</summary>
+      {versions && <SubmissionHistory versions={versions} latestLabel={latestLabel} />}
+      {loading && <p className="loading">Loading…</p>}
+      {error && <p className="form-error">{error}</p>}
+      {versions && versions.length < versionCount && !loading && (
+        <button className="text-button" onClick={() => void loadMore()}>
+          Show older versions
+        </button>
+      )}
+    </details>
   );
 }

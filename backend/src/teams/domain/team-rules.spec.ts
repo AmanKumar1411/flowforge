@@ -221,7 +221,12 @@ describe("TeamRules", () => {
       ).not.toThrow();
       expect(() =>
         rules.assertHasRoom(team("lead", ["a", "b", "c"]), cycle()),
-      ).toThrow("Falcon already has the maximum of 4 members");
+      ).toThrow(
+        expect.objectContaining({
+          code: "TEAM_FULL",
+          message: "Falcon already has the maximum of 4 members",
+        }),
+      );
     });
 
     it("refuses a student in two proposed teams, leaders included", () => {

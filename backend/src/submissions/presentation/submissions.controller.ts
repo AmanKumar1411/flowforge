@@ -5,6 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
 } from "@nestjs/common";
 import {
   ApiCreatedResponse,
@@ -16,7 +17,11 @@ import { AuthenticatedUser } from "../../auth/application/authenticated-user";
 import { CurrentUser } from "../../auth/presentation/decorators/current-user.decorator";
 import { Roles } from "../../auth/presentation/decorators/roles.decorator";
 import { SubmissionService } from "../application/submission.service";
-import { SubmitWorkDto } from "./dto/submission-requests.dto";
+import {
+  HISTORY_PAGE_DEFAULT,
+  SubmissionHistoryQueryDto,
+  SubmitWorkDto,
+} from "./dto/submission-requests.dto";
 import { SubmissionDto } from "./dto/submission-responses.dto";
 
 @ApiTags("submissions")
@@ -27,17 +32,23 @@ export class SubmissionsController {
   @Get()
   @Roles("STUDENT", "FACULTY", "ADMIN")
   @ApiOperation({
-    summary: "Every version of the team's work for a milestone, newest first",
+    summary:
+      "The team's versions for a milestone, newest first, a page at a time",
     description:
-      "Members, the cycle's owning faculty and admins. 404 MILESTONE_NOT_FOUND for a milestone of another cycle.",
+      "Members, the cycle's owning faculty and admins. 404 MILESTONE_NOT_FOUND for a milestone of another cycle. For the next page, pass the last version you got as `before`.",
   })
   @ApiOkResponse({ type: SubmissionDto, isArray: true })
   async list(
     @CurrentUser() user: AuthenticatedUser,
     @Param("teamId", new ParseUUIDPipe()) teamId: string,
     @Param("milestoneId", new ParseUUIDPipe()) milestoneId: string,
+    @Query() query: SubmissionHistoryQueryDto,
   ): Promise<SubmissionDto[]> {
-    return (await this.submissions.list(user, teamId, milestoneId)).map(
+    const page = {
+      limit: query.limit ?? HISTORY_PAGE_DEFAULT,
+      beforeVersion: query.before,
+    };
+    return (await this.submissions.list(user, teamId, milestoneId, page)).map(
       (submission) => SubmissionDto.from(submission),
     );
   }

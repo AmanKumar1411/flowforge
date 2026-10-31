@@ -38,6 +38,12 @@ export class InMemoryRefreshTokenRepository extends RefreshTokenRepository {
     if (record) record.replacedById = replacedById;
   }
 
+  async hasActiveToken(familyId: string, now: Date): Promise<boolean> {
+    return [...this.records.values()].some(
+      (r) => r.familyId === familyId && !r.revokedAt && r.expiresAt > now,
+    );
+  }
+
   async revokeFamily(familyId: string, at: Date): Promise<number> {
     return this.revokeWhere((r) => r.familyId === familyId, at);
   }

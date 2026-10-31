@@ -4,9 +4,13 @@ import { apiRequest } from "./client";
 const teamRoute = (teamId: string, milestoneId: string) =>
   `/teams/${teamId}/milestones/${milestoneId}/submissions`;
 
-/** Every version of the team's work for a milestone, newest first. */
-export function listTeamSubmissions(teamId: string, milestoneId: string) {
-  return apiRequest<Submission[]>(teamRoute(teamId, milestoneId));
+/**
+ * The team's versions for a milestone, newest first. Without a page, the whole
+ * history (a team has at most 50); with one, `limit` versions older than `before`.
+ */
+export function listTeamSubmissions(teamId: string, milestoneId: string, page?: { limit: number; before?: number }) {
+  const query = page ? `?limit=${page.limit}${page.before ? `&before=${page.before}` : ""}` : "";
+  return apiRequest<Submission[]>(`${teamRoute(teamId, milestoneId)}${query}`);
 }
 
 /** Adds the next version (any member, while the milestone is open). */

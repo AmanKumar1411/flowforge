@@ -38,6 +38,14 @@ Implemented so far:
   updates, active and past projects) and work in a tabbed project page. Faculty mark each
   milestone out of a scale, give feedback and release the results to all teams at once; only the
   team sees its own result, and corrections show as updated.
+- **Phase 10:** hardening before go-live, from the [QA report](docs/testing/report.md):
+  - `npm start` runs several API processes;
+  - campus-sized rate limits shared by every process;
+  - feedback-only evaluations (marks off by default);
+  - fewer queries per request;
+  - outages that don't sign anyone out;
+  - safer links and text;
+  - keyboard and contrast fixes.
 
 Evaluations come later.
 
@@ -66,7 +74,8 @@ Evaluations come later.
    - Start the API with `npm run start:dev`. It listens on `http://localhost:3000/api`; Swagger is
      at `http://localhost:3000/api/docs`.
 3. **Frontend** (`frontend/`)
-   - Copy `.env.example` to `.env`. `VITE_DEV_LOGIN=true` shows the dev login form.
+   - Copy `.env.example` to `.env`. For the dev login form, put `VITE_DEV_LOGIN=true` in
+     `.env.development.local`: only `npm run dev` reads it, and a production build refuses the flag.
    - Run `npm ci`, then `npm run dev`.
    - Open **`http://localhost:5173`**. Use `localhost`, not `127.0.0.1`: the API checks the
      `Origin` header against `FRONTEND_URL`.
@@ -153,11 +162,20 @@ or with `AUTH_DEV_LOGIN_ENABLED=false`. The list is in
 | `JWT_ACCESS_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`, `ACCESS_TOKEN_TTL` | Access token (HS256, `15m`) |
 | `REFRESH_TOKEN_TTL_DAYS`, `REFRESH_FAMILY_MAX_DAYS` | Refresh-token and absolute session lifetime, both `1`: a sign-in lasts one day |
 | `COOKIE_SECRET` | Signs the OAuth state cookie; must differ from the JWT secret |
-| `AUTH_DEV_LOGIN_ENABLED` | Enables `POST /api/auth/dev-login`; refused at boot in production |
-| `AUTH_LOGIN_RATE_LIMIT_PER_MINUTE`, `AUTH_REFRESH_RATE_LIMIT_PER_MINUTE` | Optional limits per route, per IP, per minute (10 for each login route, 30 for refresh and logout) |
+| `AUTH_DEV_LOGIN_ENABLED` | Enables `POST /api/auth/dev-login` with `NODE_ENV=test`, or in development for requests from this machine; refused at boot otherwise |
+| `AUTH_LOGIN_RATE_LIMIT_PER_MINUTE` | Sign-ins per client IP per minute, each route counted apart (600, sized for a campus behind one NAT) |
+| `AUTH_ACCOUNT_LOGIN_RATE_LIMIT_PER_MINUTE` | Google sign-ins per Google account per minute (10) |
+| `AUTH_REFRESH_RATE_LIMIT_PER_MINUTE` | Refreshes per session (refresh-token family) per minute, never per IP (10) |
+| `SUBMISSION_RATE_LIMIT_PER_MINUTE`, `SUBMISSION_VERSION_LIMIT`, `WRITE_RATE_LIMIT_PER_MINUTE` | Versions per member per milestone per minute (10), versions per team per milestone (50), other writes per user per minute (120) |
+| `REFRESH_REUSE_GRACE_SECONDS` | A rotated refresh token presented again within this many seconds keeps the session (10) |
+| `TRUST_PROXY` | The proxy whose `X-Forwarded-For` gives the client IP: off (default), `loopback`, addresses or CIDRs, or a hop count; never `true` |
+| `API_WORKERS`, `DB_POOL_MAX`, `DB_MAX_CONNECTIONS`, `DB_CONNECTION_HEADROOM` | Processes for `npm start` (one per CPU), each one's pool (10); boot is refused when the pools exceed the server's connections minus the headroom (100, 10) |
+| `HTTP_KEEP_ALIVE_TIMEOUT_MS`, `MAX_BODY_DEPTH` | Idle keep-alive (65 s, above a proxy's 60 s); deepest JSON body (32) |
+| `EVALUATION_MARKS_ENABLED` | Marks and a scale for evaluations; off (default) means feedback only, and no response carries marks |
+| `DB_QUERY_EVENTS` | An event per query, for tests that count queries only |
 
 `infra/.env`: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT`.
-`frontend/.env`: `VITE_API_BASE_URL`, `VITE_DEV_LOGIN`.
+`frontend/.env`: `VITE_API_BASE_URL`. `frontend/.env.development.local`: `VITE_DEV_LOGIN`.
 
 ## Scripts and tests
 
@@ -165,7 +183,8 @@ In `backend/`:
 
 | Command | What it does |
 | --- | --- |
-| `npm run build` / `npm run lint` / `npm run typecheck` | Compile, lint, type-check including `test/` |
+| `npm run build` / `npm run lint` / `npm run typecheck` | Compile into `dist/main.js`, lint, type-check including `test/` |
+| `npm start` / `npm run start:single` | The built API: `API_WORKERS` processes on one port, or one process |
 | `npm run seed:demo` | Create the [demo accounts](#demo-accounts) and the published "AIML demo project" (three milestones); safe to run again |
 | `npm test` | Jest unit tests (domain rules, sessions, config, Google token verification) |
 | `npm run test:integration` | `node:test` against real PostgreSQL `flowforge_test`: Google flow (Google faked at its network boundary), faculty access, sessions, admin, RBAC matrix, boot checks, Phase 2 scenario, teams, ideas and submissions (including races and database constraints) |
@@ -188,10 +207,11 @@ All routes use the `/api` prefix and every error is `{ code, message }`. Interac
 
 | Method | Path | Access |
 | --- | --- | --- |
+| GET | `/health` | public: 200 when the database answers, 503 otherwise |
 | GET | `/auth/google` | public, redirects to Google |
 | GET | `/auth/google/callback` | public, Google redirects here |
-| POST | `/auth/dev-login` | public, development only, Origin checked |
-| GET | `/auth/dev-login/accounts` | public, development only: the demo accounts |
+| POST | `/auth/dev-login` | public, `NODE_ENV=test` or development from this machine, Origin checked |
+| GET | `/auth/dev-login/accounts` | public, test login only: the demo accounts |
 | POST | `/auth/refresh` | refresh cookie and Origin; returns `{ accessToken }` |
 | POST | `/auth/logout` | refresh cookie and Origin |
 | POST | `/auth/logout-all` | any signed-in user |
@@ -213,9 +233,9 @@ All routes use the `/api` prefix and every error is `{ code, message }`. Interac
 | POST | `/course-cycles/:id/close` | FACULTY owner |
 | GET | `/me/upcoming` | STUDENT: the next 10 events of their visible projects |
 | GET | `/me/dashboard` | STUDENT: up next, updates, active and past projects |
-| GET, PUT | `/course-cycles/:id/milestones/:mid/grading` | GET: FACULTY owner, ADMIN; PUT `{ maxMarks }`: owner |
+| GET, PUT | `/course-cycles/:id/milestones/:mid/grading` | GET: FACULTY owner, ADMIN; PUT `{ maxMarks }`: owner, only with marks on (else 400 `MARKS_DISABLED`) |
 | POST | `/course-cycles/:id/milestones/:mid/grading/release` | FACULTY owner: release to all teams, one-way |
-| PUT | `/course-cycles/:id/milestones/:mid/teams/:tid/evaluation` | FACULTY owner: `{ marks?, feedback?, expectedVersion? }` |
+| PUT | `/course-cycles/:id/milestones/:mid/teams/:tid/evaluation` | FACULTY owner: `{ feedback, expectedVersion? }` (`marks` only with marks on) |
 | GET | `/course-cycles/:id/milestones/:mid/teams/:tid/evaluations` | Team members (released only), owner, ADMIN; others 404 |
 | POST | `/course-cycles/:id/teams` | STUDENT of the batch, while formation is open; caller becomes leader |
 | GET | `/course-cycles/:id/teams` | STUDENT (own team), FACULTY owner, ADMIN (all teams) |
@@ -239,9 +259,9 @@ All routes use the `/api` prefix and every error is `{ code, message }`. Interac
 | GET | `/course-cycles/:id/idea-catalog` | STUDENT of the cycle, FACULTY owner, ADMIN: the faculty's ideas with how many teams picked each |
 | POST | `/course-cycles/:id/idea-catalog` | FACULTY owner, until the cycle closes: `{ title, description, link? }` |
 | PUT, DELETE | `/course-cycles/:id/idea-catalog/:ideaId` | FACULTY owner; a picked idea cannot be removed |
-| GET | `/teams/:id/milestones/:milestoneId/submissions` | Team members, FACULTY owner, ADMIN: every version for the milestone, newest first |
+| GET | `/teams/:id/milestones/:milestoneId/submissions?limit=&before=` | Team members, FACULTY owner, ADMIN: the versions for the milestone, newest first, a page at a time (50 by default) |
 | POST | `/teams/:id/milestones/:milestoneId/submissions` | Any team member, with an approved or picked idea, while that milestone is open: `{ links: [{ type, url }], notes? }` |
-| GET | `/course-cycles/:id/milestones/:milestoneId/submissions` | FACULTY owner, ADMIN: every team with its idea, latest version and every version |
+| GET | `/course-cycles/:id/milestones/:milestoneId/submissions` | FACULTY owner, ADMIN: every team with its idea, latest version and version count |
 
 Cycles take `minTeamSize`, `maxTeamSize` (defaults 1 and 4, at most 10), `teamDeadline` and
 `ideaDeadline` (required, the idea deadline strictly later), `ideaSource` (`BOTH`,
@@ -281,6 +301,12 @@ reads the allowlist through `FacultyDirectory`, so `SignInService` and `RoleReso
 - [Phase 9 baseline analysis](docs/analysis/phase9-student-baseline.md), [plan](docs/plans/phase9-plan.md),
   [evaluations](docs/architecture/evaluations.md), [student experience](docs/architecture/student-experience.md),
   [viva notes](docs/viva/student-side.md)
+- [Phase 10 baseline analysis](docs/analysis/phase10-hardening-baseline.md),
+  [QA report and Phase 10 results](docs/testing/report.md),
+  [test report](docs/testing/phase10-test-report.md), ADRs
+  [023](docs/decisions/023-campus-limits-and-sessions.md),
+  [024](docs/decisions/024-scaling-the-api.md) and
+  [025](docs/decisions/025-feedback-only-evaluations.md)
 - [Architecture: foundation](docs/architecture/foundation.md),
   [course cycles](docs/architecture/course-cycles.md),
   [authentication and RBAC](docs/architecture/auth-and-rbac.md),

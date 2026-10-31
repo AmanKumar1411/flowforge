@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { AuditService } from "../../audit/audit.service";
 import { Clock } from "../../common/clock";
 import { Transaction, TransactionRunner } from "../../common/transaction";
+import { AppConfig } from "../../config/app-config";
 import { EvaluationDomainError } from "../domain/evaluation.errors";
 import {
   EvaluationActor,
@@ -15,6 +16,7 @@ import {
   GradingView,
   MemberEvaluationView,
   TeamEvaluationView,
+  toGradingEvaluation,
   toTeamView,
 } from "./evaluation-views";
 import {
@@ -31,10 +33,13 @@ type Actor = EvaluationActor & { batchYear: number | null; email: string };
  * results to every team at once. Each save is a new version, refused when it
  * is based on an older one (optimistic concurrency). Every change is audited
  * in its own transaction. Students read only their own team's released
- * results; anything else is not found.
+ * results; anything else is not found. Without marks (EVALUATION_MARKS_ENABLED
+ * off, H3) grading is feedback only: marks are refused and no view carries them.
  */
 @Injectable()
 export class EvaluationService {
+  private readonly marksEnabled: boolean;
+
   constructor(
     private readonly evaluations: EvaluationRepository,
     private readonly sources: GradingSources,
@@ -43,7 +48,10 @@ export class EvaluationService {
     private readonly audit: AuditService,
     private readonly transactions: TransactionRunner,
     private readonly clock: Clock,
-  ) {}
+    config: AppConfig,
+  ) {
+    this.marksEnabled = config.values.evaluationMarksEnabled;
+  }
 
   /** The scale, the release and every team's evaluation and latest work: the owner and admins. */
   async gradingView(
@@ -61,14 +69,20 @@ export class EvaluationService {
     ]);
     return {
       milestone,
-      maxMarks: grading?.maxMarks ?? null,
+      marksEnabled: this.marksEnabled,
+      ...(this.marksEnabled ? { maxMarks: grading?.maxMarks ?? null } : {}),
       releasedAt: grading?.releasedAt ?? null,
       open: this.rules.isGradingOpen(cycle, milestone, this.clock.now()),
-      rows: teams.map((team) => ({
-        team,
-        evaluation: evaluations.find((e) => e.teamId === team.id) ?? null,
-        latestWork: work.find((w) => w.teamId === team.id) ?? null,
-      })),
+      rows: teams.map((team) => {
+        const evaluation = evaluations.find((e) => e.teamId === team.id);
+        return {
+          team,
+          evaluation: evaluation
+            ? toGradingEvaluation(evaluation, this.marksEnabled)
+            : null,
+          latestWork: work.find((w) => w.teamId === team.id) ?? null,
+        };
+      }),
     };
   }
 
@@ -84,7 +98,7 @@ export class EvaluationService {
     await this.transactions.run(async (tx) => {
       await this.evaluations.lockGrading(milestone.id, tx);
       const highest = await this.evaluations.highestMark(milestone.id, tx);
-      this.rules.checkMaxMarks(cycle, maxMarks, highest);
+      this.rules.checkMaxMarks(cycle, maxMarks, highest, this.marksEnabled);
       await this.evaluations.setMaxMarks(milestone.id, maxMarks, tx);
       await this.record(
         "GRADING_SCALE_SET",
@@ -119,6 +133,7 @@ export class EvaluationService {
       const input = this.rules.clean(
         { marks: command.marks ?? null, feedback: command.feedback ?? null },
         grading,
+        this.marksEnabled,
       );
       const current = await this.evaluations.findByTeam(
         milestone.id,
@@ -149,6 +164,7 @@ export class EvaluationService {
         saved,
         grading,
         this.rules.isUpdatedAfterRelease(saved, grading),
+        this.marksEnabled,
       );
     });
   }
@@ -227,6 +243,7 @@ export class EvaluationService {
             evaluation,
             grading,
             this.rules.isUpdatedAfterRelease(evaluation, grading),
+            this.marksEnabled,
           ),
         ]
       : [];
@@ -253,6 +270,7 @@ export class EvaluationService {
       evaluation,
       evaluation,
       this.rules.isUpdatedAfterRelease(evaluation, evaluation),
+      this.marksEnabled,
     );
   }
 

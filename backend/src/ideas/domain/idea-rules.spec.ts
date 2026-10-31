@@ -334,5 +334,22 @@ describe("IdeaRules", () => {
         rules.cleanCatalog({ title: " T ", description: " D ", link: " " }),
       ).toEqual({ title: "T", description: "D", link: null });
     });
+
+    it("takes only public https reference links, like every other link (H13)", () => {
+      const withLink = (link: string) =>
+        rules.cleanCatalog({ title: "T", description: "D", link });
+      expect(withLink(" https://example.org/brief ").link).toBe(
+        "https://example.org/brief",
+      );
+      for (const link of [
+        "http://example.org/brief",
+        "https://10.0.0.5/brief",
+        "https://user:token@example.org/brief",
+      ]) {
+        expect(() => withLink(link)).toThrow(
+          expect.objectContaining({ code: "INVALID_LINK" }),
+        );
+      }
+    });
   });
 });

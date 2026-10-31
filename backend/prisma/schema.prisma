@@ -501,3 +501,15 @@ model EvaluationRevision {
 
   @@unique([evaluationId, version])
 }
+
+// Fixed-window rate-limit counters shared by every API process (ADR 023). The migration creates
+// the table UNLOGGED: counters are cheap to lose in a crash and skip the write-ahead log.
+// Times are epoch milliseconds, so no time zone is involved.
+model RateLimitCounter {
+  key         String @id
+  windowStart BigInt
+  count       Int
+  expiresAt   BigInt
+
+  @@index([expiresAt])
+}

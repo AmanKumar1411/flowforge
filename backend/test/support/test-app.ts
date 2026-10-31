@@ -31,6 +31,8 @@ export interface TestApp {
 interface TestAppOptions {
   env?: Record<string, string>;
   clock?: Clock;
+  /** Where to listen; 127.0.0.1 unless a test needs requests from another address. */
+  host?: string;
 }
 
 /** The real AppModule on a random port, with Google's network calls faked. */
@@ -57,7 +59,7 @@ export async function startTestApp(
     logger: false,
   });
   configureApp(app);
-  await app.listen(0, "127.0.0.1");
+  await app.listen(0, options.host ?? "127.0.0.1");
   const { port } = app.getHttpServer().address() as AddressInfo;
   const apiUrl = `http://127.0.0.1:${port}/api`;
   const prisma = app.get(PrismaService);
@@ -76,7 +78,7 @@ export async function startTestApp(
 // TRUNCATE bypasses the audit table's append-only row trigger, which only blocks UPDATE and DELETE.
 async function resetDatabase(prisma: PrismaService): Promise<void> {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "AuditLog", "RefreshToken", "FacultyAccessRequest", "FacultyAllowlistEntry", "EvaluationRevision", "Evaluation", "MilestoneGrading", "Submission", "Milestone", "IdeaReview", "ProjectIdea", "CatalogIdea", "TeamSeeker", "TeamMember", "Team", "CycleEnrollment", "CourseProjectCycle", "User" CASCADE',
+    'TRUNCATE "AuditLog", "RefreshToken", "FacultyAccessRequest", "FacultyAllowlistEntry", "EvaluationRevision", "Evaluation", "MilestoneGrading", "Submission", "Milestone", "IdeaReview", "ProjectIdea", "CatalogIdea", "TeamSeeker", "TeamMember", "Team", "CycleEnrollment", "CourseProjectCycle", "User", "RateLimitCounter" CASCADE',
   );
 }
 

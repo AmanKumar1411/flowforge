@@ -1,4 +1,7 @@
-import { SubmissionRepository } from "../application/ports/submission.repository";
+import {
+  HistoryPage,
+  SubmissionRepository,
+} from "../application/ports/submission.repository";
 import { NewSubmission, Person, Submission } from "../domain/submission";
 import { SubmissionDomainError } from "../domain/submission.errors";
 
@@ -10,11 +13,18 @@ export class InMemorySubmissionRepository extends SubmissionRepository {
     super();
   }
 
-  listByTeam(teamId: string, milestoneId: string): Promise<Submission[]> {
+  listByTeam(
+    teamId: string,
+    milestoneId: string,
+    page: HistoryPage,
+  ): Promise<Submission[]> {
     return Promise.resolve(
       this.newestFirst(
-        (row) => row.teamId === teamId && row.milestoneId === milestoneId,
-      ),
+        (row) =>
+          row.teamId === teamId &&
+          row.milestoneId === milestoneId &&
+          (!page.beforeVersion || row.version < page.beforeVersion),
+      ).slice(0, page.limit),
     );
   }
 
@@ -32,10 +42,12 @@ export class InMemorySubmissionRepository extends SubmissionRepository {
     return Promise.resolve([...pairs.values()]);
   }
 
-  listByMilestone(milestoneId: string): Promise<Submission[]> {
-    return Promise.resolve(
-      this.newestFirst((row) => row.milestoneId === milestoneId),
-    );
+  listLatestByMilestone(milestoneId: string): Promise<Submission[]> {
+    const latest = new Map<string, Submission>();
+    for (const row of this.newestFirst((r) => r.milestoneId === milestoneId)) {
+      if (!latest.has(row.teamId)) latest.set(row.teamId, row);
+    }
+    return Promise.resolve([...latest.values()]);
   }
 
   lockLatestVersion(teamId: string, milestoneId: string): Promise<number> {
@@ -62,11 +74,10 @@ export class InMemorySubmissionRepository extends SubmissionRepository {
     ) {
       throw new SubmissionDomainError("SUBMISSION_CHANGED", "Version taken");
     }
-    const { submittedById, ...rest } = submission;
     const created = {
-      ...rest,
+      ...submission,
       id: `submission-${this.rows.length + 1}`,
-      submittedBy: this.people(submittedById),
+      submittedBy: this.people(submission.submittedBy.id),
     };
     this.rows.push(created);
     return Promise.resolve(structuredClone(created));

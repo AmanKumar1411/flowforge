@@ -3,7 +3,9 @@ import { AuditEvent } from "../../audit/domain/audit-event";
 import { LinkRequirement } from "../../common/links/link-requirement";
 import { FixedClock } from "../../common/testing/fixed-clock";
 import { ImmediateTransactionRunner } from "../../common/testing/immediate-transaction.runner";
+import { InMemoryRateLimiter } from "../../common/testing/in-memory-rate-limiter";
 import { Transaction } from "../../common/transaction";
+import { createTestAppConfig } from "../../config/testing/test-environment";
 import { Milestone } from "../../course-cycles/domain/milestone";
 import { TeamActor } from "../../teams/domain/team-access.policy";
 import {
@@ -79,6 +81,8 @@ const kestrel: SubmissionTeam = {
   members: [{ userId: "other-leader", name: "Other leader" }],
 };
 
+const PAGE = { limit: 50 };
+
 const work = {
   links: [{ type: "GITHUB", url: "https://github.com/falcon/app" }],
   notes: "First version",
@@ -115,6 +119,15 @@ class FakeSubmissionTeams extends SubmissionTeams {
     });
   }
 
+  async getVisibleTeam(actor: TeamActor, teamId: string) {
+    const { team } = await this.getVisible(actor, teamId);
+    return { team, cycle };
+  }
+
+  getVisibleCycle() {
+    return Promise.resolve(cycle);
+  }
+
   listForCycle() {
     return Promise.resolve({
       cycle,
@@ -126,7 +139,7 @@ class FakeSubmissionTeams extends SubmissionTeams {
   }
 }
 
-function createKit() {
+function createKit(env: Record<string, string> = {}) {
   const clock = new FixedClock(NOW);
   const audited: AuditEvent[] = [];
   const service = new SubmissionService(
@@ -140,6 +153,8 @@ function createKit() {
     } as unknown as AuditService,
     new ImmediateTransactionRunner(),
     clock,
+    new InMemoryRateLimiter(clock),
+    createTestAppConfig(env),
   );
   return { service, clock, audited };
 }
@@ -165,7 +180,9 @@ describe("SubmissionService", () => {
       submittedBy: { id: "member" },
     });
     expect(
-      (await kit.service.list(leader, "falcon", "m1")).map((s) => s.version),
+      (await kit.service.list(leader, "falcon", "m1", PAGE)).map(
+        (s) => s.version,
+      ),
     ).toEqual([2, 1]);
     expect(kit.audited.map((event) => event.metadata)).toEqual([
       { cycleId: "cycle", teamId: "falcon", milestoneId: "m1", version: 1 },
@@ -188,7 +205,9 @@ describe("SubmissionService", () => {
     ).rejects.toMatchObject({
       code: "SUBMISSION_CLOSED",
     });
-    expect(await kit.service.list(leader, "falcon", "m1")).toHaveLength(1);
+    expect(await kit.service.list(leader, "falcon", "m1", PAGE)).toHaveLength(
+      1,
+    );
   });
 
   it("checks links against the milestone and refuses an unknown milestone", async () => {
@@ -216,14 +235,56 @@ describe("SubmissionService", () => {
   it("hides another team's work", async () => {
     await kit.service.submit(leader, "falcon", "m1", work);
     await expect(
-      kit.service.list(outsider, "falcon", "m1"),
+      kit.service.list(outsider, "falcon", "m1", PAGE),
     ).rejects.toMatchObject({
       code: "TEAM_NOT_FOUND",
     });
-    expect(await kit.service.list(faculty, "falcon", "m1")).toHaveLength(1);
+    expect(await kit.service.list(faculty, "falcon", "m1", PAGE)).toHaveLength(
+      1,
+    );
   });
 
-  it("lists every team of the cycle with its idea and its versions for a milestone", async () => {
+  it("limits one member to 10 versions a minute per milestone, without holding back the rest of the team", async () => {
+    kit = createKit({ SUBMISSION_RATE_LIMIT_PER_MINUTE: "10" });
+    for (let version = 1; version <= 10; version += 1) {
+      await kit.service.submit(leader, "falcon", "m1", work);
+    }
+    await expect(
+      kit.service.submit(leader, "falcon", "m1", work),
+    ).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
+    await expect(
+      kit.service.submit(member, "falcon", "m1", work),
+    ).resolves.toMatchObject({ version: 11 });
+    kit.clock.advance(60_000);
+    await expect(
+      kit.service.submit(leader, "falcon", "m1", work),
+    ).resolves.toMatchObject({ version: 12 });
+  });
+
+  it("caps a team's versions for a milestone with 409 VERSION_LIMIT_REACHED", async () => {
+    kit = createKit({ SUBMISSION_VERSION_LIMIT: "3" });
+    for (const who of [leader, member, leader]) {
+      await kit.service.submit(who, "falcon", "m1", work);
+    }
+    await expect(
+      kit.service.submit(member, "falcon", "m1", work),
+    ).rejects.toMatchObject({ code: "VERSION_LIMIT_REACHED" });
+  });
+
+  it("pages a team's history, newest first", async () => {
+    for (let version = 1; version <= 5; version += 1) {
+      await kit.service.submit(leader, "falcon", "m1", work);
+    }
+    const versions = async (page: { limit: number; beforeVersion?: number }) =>
+      (await kit.service.list(leader, "falcon", "m1", page)).map(
+        (s) => s.version,
+      );
+    expect(await versions({ limit: 2 })).toEqual([5, 4]);
+    expect(await versions({ limit: 2, beforeVersion: 4 })).toEqual([3, 2]);
+    expect(await versions({ limit: 2, beforeVersion: 2 })).toEqual([1]);
+  });
+
+  it("lists every team of the cycle with its idea and its latest version for a milestone", async () => {
     await kit.service.submit(leader, "falcon", "m1", work);
     await kit.service.submit(member, "falcon", "m1", work);
     const rows = await kit.service.listForCycle(faculty, "cycle", "m1");
@@ -232,11 +293,13 @@ describe("SubmissionService", () => {
         row.team.id,
         row.latest?.version ?? null,
         row.versionCount,
-        row.versions.length,
       ]),
     ).toEqual([
-      ["falcon", 2, 2, 2],
-      ["kestrel", null, 0, 0],
+      ["falcon", 2, 2],
+      ["kestrel", null, 0],
+    ]);
+    expect(await kit.service.latestForCycle(faculty, "cycle", "m1")).toEqual([
+      { teamId: "falcon", version: 2, submittedAt: new Date(NOW) },
     ]);
     expect(
       (await kit.service.listForCycle(faculty, "cycle", "m2"))[0].versionCount,

@@ -27,6 +27,12 @@ export const testEnvironment = (): Record<string, string> => ({
   AUTH_DEV_LOGIN_ENABLED: "true",
   AUTH_LOGIN_RATE_LIMIT_PER_MINUTE: "10000",
   AUTH_REFRESH_RATE_LIMIT_PER_MINUTE: "10000",
+  SUBMISSION_RATE_LIMIT_PER_MINUTE: "10000",
+  WRITE_RATE_LIMIT_PER_MINUTE: "10000",
+  // The marks tests run with marks on; feedback-only tests switch them off (H3).
+  EVALUATION_MARKS_ENABLED: "true",
+  // The dashboard and query-budget tests count queries.
+  DB_QUERY_EVENTS: "true",
 });
 
 export const createTestAppConfig = (

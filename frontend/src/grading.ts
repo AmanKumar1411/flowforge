@@ -28,23 +28,25 @@ const plural = (count: number, one: string, many = `${one}s`) => `${count} ${cou
 export function releaseConfirmText(grading: Grading): string {
   const { graded, ungraded } = gradingCounts(grading);
   const label = `M${grading.milestone.position} · ${grading.milestone.name}`;
+  const what = grading.marksEnabled ? "marks and feedback" : "feedback";
   return [
-    `Release the results of ${label} to every team now?`,
+    `Release the ${grading.marksEnabled ? "results" : "feedback"} of ${label} to every team now?`,
     `${plural(graded, "team is", "teams are")} graded${ungraded ? `; ${plural(ungraded, "team is", "teams are")} not graded yet and will see their result once you grade them` : ""}.`,
-    "Release can't be undone. You can still correct marks afterwards; the team sees them as updated.",
+    `Release can't be undone. You can still correct ${what} afterwards; the team sees it as updated.`,
   ].join("\n\n");
 }
 
-/** "14 / 20", "14", or null when only feedback was given. */
+/** "14 / 20", "14", or null when only feedback was given or marks are off. */
 export function marksText(evaluation: Pick<TeamEvaluation, "marks" | "maxMarks">): string | null {
-  if (evaluation.marks === null) return null;
+  if (evaluation.marks === null || evaluation.marks === undefined) return null;
   const marks = Number.isInteger(evaluation.marks) ? String(evaluation.marks) : evaluation.marks.toFixed(2).replace(/0$/, "");
-  return evaluation.maxMarks === null ? marks : `${marks} / ${evaluation.maxMarks}`;
+  return evaluation.maxMarks == null ? marks : `${marks} / ${evaluation.maxMarks}`;
 }
 
-/** "Evaluated on <date>", plus "Updated on <date>" after a correction. */
+/** "Released on <date>" ("Feedback released on" without marks), plus "Updated on <date>" after a correction. */
 export function evaluationDates(evaluation: TeamEvaluation): string[] {
-  const lines = evaluation.releasedAt ? [`Released on ${formatDate(evaluation.releasedAt)}`] : [];
+  const released = "marks" in evaluation ? "Released on" : "Feedback released on";
+  const lines = evaluation.releasedAt ? [`${released} ${formatDate(evaluation.releasedAt)}`] : [];
   if (evaluation.updatedAfterRelease) lines.push(`Updated on ${formatDate(evaluation.updatedAt)}`);
   return lines;
 }

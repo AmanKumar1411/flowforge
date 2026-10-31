@@ -2,6 +2,8 @@
 
 **Status:** Accepted (Phase 9)
 
+**Note:** Phase 10: marks and the scale are off unless `EVALUATION_MARKS_ENABLED` is on; grading is feedback only ([ADR 025](025-feedback-only-evaluations.md)).
+
 ## Context
 
 Teams submit versioned work per milestone (ADRs 015, 016). The faculty now mark it and give

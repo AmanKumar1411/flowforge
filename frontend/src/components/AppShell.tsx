@@ -1,5 +1,6 @@
 import { Outlet, useNavigate } from "react-router";
 import { dashboardFor, useAuth } from "../auth/useAuth";
+import { focusTarget } from "../focus";
 
 export function AppShell() {
   const { state, signOut, signOutEverywhere } = useAuth();
@@ -10,11 +11,14 @@ export function AppShell() {
 
   const leave = async (everywhere: boolean) => {
     await (everywhere ? signOutEverywhere() : signOut());
-    navigate("/login", { replace: true });
+    navigate(everywhere ? "/login" : "/login?signedOut=1", { replace: true });
   };
 
   return (
     <div className="app-frame">
+      <a className="skip-link" href="#main-content" onClick={(event) => focusTarget(event, "main-content")}>
+        Skip to main content
+      </a>
       <header className="topbar">
         <button className="brand" onClick={() => navigate(dashboardFor(user))}>
           <span className="brand-mark">F</span>
@@ -35,7 +39,7 @@ export function AppShell() {
           </button>
         </div>
       </header>
-      <main className="page-content">
+      <main className="page-content" id="main-content" tabIndex={-1}>
         <Outlet />
       </main>
     </div>

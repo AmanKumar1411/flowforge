@@ -77,7 +77,7 @@ export function ProjectCardView({ project }: { project: ProjectCard }) {
           <ul className="card-results" aria-label="Results">
             {project.results.map((result) => (
               <li key={result.milestoneId}>
-                {result.label}: {marksText(result) ?? "Feedback"}
+                {result.label}: {marksText(result) ?? "Feedback released"}
                 {result.updatedAfterRelease ? " (updated)" : ""}
               </li>
             ))}

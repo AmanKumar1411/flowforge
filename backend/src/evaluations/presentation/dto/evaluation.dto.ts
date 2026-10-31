@@ -11,9 +11,11 @@ import {
 import { SaveEvaluationCommand } from "../../application/evaluation-commands";
 import {
   GradingView,
+  pickMarks,
   TeamEvaluationView,
 } from "../../application/evaluation-views";
 import { MAX_MARKS_LIMIT } from "../../domain/evaluation-rules";
+import { IsCleanText } from "../../../common/validation/clean-text";
 
 export class MaxMarksDto {
   @ApiProperty({ example: 20, minimum: 1, maximum: MAX_MARKS_LIMIT })
@@ -28,7 +30,8 @@ export class SaveEvaluationDto implements SaveEvaluationCommand {
     type: Number,
     nullable: true,
     example: 14.5,
-    description: "0 to maxMarks, at most 2 decimals",
+    description:
+      "0 to maxMarks, at most 2 decimals. Only when EVALUATION_MARKS_ENABLED; otherwise 400 MARKS_DISABLED and feedback is required.",
   })
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
@@ -38,6 +41,7 @@ export class SaveEvaluationDto implements SaveEvaluationCommand {
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 4000 })
   @IsOptional()
   @IsString()
+  @IsCleanText()
   @MaxLength(4000)
   feedback?: string | null;
 
@@ -57,9 +61,16 @@ class GradingTeamDto {
   @ApiProperty() memberCount!: number;
 }
 
+const MARKS_ONLY = "Present only when marks are enabled";
+
 class GradingEvaluationDto {
   @ApiProperty() id!: string;
-  @ApiProperty({ type: Number, nullable: true }) marks!: number | null;
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: MARKS_ONLY,
+  })
+  marks?: number | null;
   @ApiProperty({ type: String, nullable: true }) feedback!: string | null;
   @ApiProperty({ description: "Send it back as expectedVersion when saving" })
   version!: number;
@@ -92,7 +103,16 @@ class GradingMilestoneDto {
 
 export class GradingDto {
   @ApiProperty({ type: GradingMilestoneDto }) milestone!: GradingMilestoneDto;
-  @ApiProperty({ type: Number, nullable: true }) maxMarks!: number | null;
+  @ApiProperty({
+    description: "Whether this version gives marks; otherwise feedback only",
+  })
+  marksEnabled!: boolean;
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: MARKS_ONLY,
+  })
+  maxMarks?: number | null;
   @ApiProperty({ type: String, nullable: true }) releasedAt!: string | null;
   @ApiProperty({
     description:
@@ -109,7 +129,8 @@ export class GradingDto {
         name: view.milestone.name,
         submissionDueAt: view.milestone.submissionDueAt.toISOString(),
       },
-      maxMarks: view.maxMarks,
+      marksEnabled: view.marksEnabled,
+      ...("maxMarks" in view ? { maxMarks: view.maxMarks } : {}),
       releasedAt: view.releasedAt?.toISOString() ?? null,
       open: view.open,
       rows: view.rows.map(({ team, evaluation, latestWork }) => ({
@@ -120,7 +141,7 @@ export class GradingDto {
         },
         evaluation: evaluation && {
           id: evaluation.id,
-          marks: evaluation.marks,
+          ...("marks" in evaluation ? { marks: evaluation.marks } : {}),
           feedback: evaluation.feedback,
           version: evaluation.version,
           updatedAt: evaluation.updatedAt.toISOString(),
@@ -136,8 +157,18 @@ export class GradingDto {
 
 export class TeamEvaluationDto {
   @ApiProperty() milestoneId!: string;
-  @ApiProperty({ type: Number, nullable: true }) marks!: number | null;
-  @ApiProperty({ type: Number, nullable: true }) maxMarks!: number | null;
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: MARKS_ONLY,
+  })
+  marks?: number | null;
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: MARKS_ONLY,
+  })
+  maxMarks?: number | null;
   @ApiProperty({ type: String, nullable: true }) feedback!: string | null;
   @ApiProperty({
     type: String,
@@ -152,8 +183,7 @@ export class TeamEvaluationDto {
   static from(view: TeamEvaluationView): TeamEvaluationDto {
     return Object.assign(new TeamEvaluationDto(), {
       milestoneId: view.milestoneId,
-      marks: view.marks,
-      maxMarks: view.maxMarks,
+      ...pickMarks(view),
       feedback: view.feedback,
       releasedAt: view.releasedAt?.toISOString() ?? null,
       updatedAt: view.updatedAt.toISOString(),

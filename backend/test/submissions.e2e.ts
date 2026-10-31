@@ -39,7 +39,6 @@ interface CycleSubmissionBody {
   team: { id: string; name: string; leader: { name: string } };
   idea: { title: string; status: string; source: string } | null;
   latest: SubmissionBody | null;
-  versions: SubmissionBody[];
   versionCount: number;
 }
 
@@ -325,7 +324,7 @@ describe("Submissions", () => {
     );
   });
 
-  it("lists every team of the cycle for its faculty and admins, per milestone, with every version", async () => {
+  it("lists every team of the cycle for its faculty and admins, per milestone, with its latest version; history is paged per team", async () => {
     const { cycleId, m1, m2 } = await openCycle();
     const falcon = await team(cycleId, "aman", ["neha"]);
     await team(cycleId, "ravi", []);
@@ -339,14 +338,28 @@ describe("Submissions", () => {
       const listed = await reader.get<CycleSubmissionBody[]>(path(m1));
       assert.equal(listed.status, 200);
       const rows = new Map(listed.body.map((row) => [row.team.name, row]));
+      const aman = rows.get("aman's team");
       assert.deepEqual(
-        [
-          rows.get("aman's team")?.latest?.version,
-          rows.get("aman's team")?.versions.map((v) => v.version),
-        ],
-        [2, [2, 1]],
+        [aman?.latest?.version, aman?.versionCount, "versions" in (aman ?? {})],
+        [2, 2, false],
       );
       assert.equal(rows.get("ravi's team")?.latest, null);
+      // The history, a page at a time (H4): newest first, then older than the last one seen.
+      const history = (query: string) =>
+        reader.get<{ version: number }[]>(
+          `/teams/${falcon}/milestones/${m1}/submissions${query}`,
+        );
+      const first = await history("?limit=1");
+      assert.deepEqual(
+        first.body.map((v) => v.version),
+        [2],
+      );
+      const next = await history("?limit=1&before=2");
+      assert.deepEqual(
+        next.body.map((v) => v.version),
+        [1],
+      );
+      assert.equal((await history("?limit=0")).status, 400);
     }
     assert.equal(
       (await owner.get<CycleSubmissionBody[]>(path(m2))).body[0].versionCount,

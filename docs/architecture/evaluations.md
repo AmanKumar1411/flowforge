@@ -14,6 +14,13 @@ backend/src/evaluations/
 Tables: `MilestoneGrading` (scale, release), `Evaluation` (one per team and milestone; composite
 foreign keys keep milestone and team in one cycle), `EvaluationRevision` (append-only history).
 
+## Marks are off in this version
+
+`EVALUATION_MARKS_ENABLED` (default `false`, [ADR 025](../decisions/025-feedback-only-evaluations.md)):
+a mark or a scale is `400 MARKS_DISABLED`, an evaluation needs feedback, no scale is needed to
+release, and no view carries `marks` or `maxMarks` for any role (the keys are absent). The grading
+view has `marksEnabled`. The rules below about marks apply with the flag on.
+
 ## Rules
 
 | Rule | Where |
@@ -43,6 +50,7 @@ everywhere else; another faculty member gets 404.
 | --- | ---: | --- |
 | `GRADING_NOT_OPEN` | 409 | Before the milestone's due date |
 | `GRADING_CLOSED` | 409 | The cycle is not published (or closed, for the scale) |
+| `MARKS_DISABLED` | 400 | A mark or a scale while marks are off |
 | `INVALID_MAX_MARKS` | 400 | Not a whole number from 1 to 1000 |
 | `MAX_MARKS_BELOW_EXISTING` | 409 | Below a mark already given |
 | `MAX_MARKS_NOT_SET` | 409 | Marks before a scale |

@@ -92,9 +92,11 @@ test.describe("SEC-AUTH sessions", () => {
     const evil = await request.newContext({ storageState: await session.ctx.storageState(), extraHTTPHeaders: { Origin: "https://evil.example" } });
     expect((await send(evil, "POST", "/auth/refresh")).status).toBe(403);
 
-    // Replay: keep the cookie, rotate once, then present the old cookie again.
+    // Replay: keep the cookie, rotate once, then present the old cookie again after the 10 s grace
+    // window for two tabs (H14; SEC-AUTH-9 covers the window itself).
     const stale = await session.ctx.storageState();
     expect((await send(session.ctx, "POST", "/auth/refresh")).status).toBe(200);
+    await new Promise((resolve) => setTimeout(resolve, 11_000));
     const replay = await request.newContext({ storageState: stale, extraHTTPHeaders: { Origin: WEB } });
     const replayed = await send(replay, "POST", "/auth/refresh");
     expect(replayed.status).toBe(401);
@@ -159,8 +161,21 @@ test.describe("SEC-AUTH sessions", () => {
     const winner = a.status === 200 ? tabA : tabB;
     const after = await send(winner, "POST", "/auth/refresh");
     test.info().annotations.push({ type: "observation", description: `winner refreshes again: ${after.status} ${after.body?.code ?? ""}` });
-    expect([a.status, b.status]).toContain(200);
+    expect([a.status, b.status], "both tabs get a token (the grace window of H14)").toEqual([200, 200]);
     expect(after.status, "the tab that won is signed out by the other tab's refresh").toBe(200);
+  });
+
+  test("SEC-AUTH-9b a refresh token replayed after the grace window still ends the whole family", async () => {
+    test.setTimeout(60_000);
+    const session = await login(capstone.teams[8].leader);
+    const stolen = await session.ctx.storageState();
+    expect((await send(session.ctx, "POST", "/auth/refresh")).status).toBe(200);
+    await new Promise((resolve) => setTimeout(resolve, 11_000));
+    const thief = await request.newContext({ storageState: stolen, extraHTTPHeaders: { Origin: WEB } });
+    const replay = await send(thief, "POST", "/auth/refresh");
+    expect([replay.status, replay.body?.code]).toEqual([401, "REFRESH_TOKEN_REUSED"]);
+    const owner = await send(session.ctx, "POST", "/auth/refresh");
+    expect(owner.status, "the family is revoked for its owner too").toBe(401);
   });
 });
 

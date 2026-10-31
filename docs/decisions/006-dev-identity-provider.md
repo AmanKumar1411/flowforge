@@ -2,6 +2,8 @@
 
 **Status:** Accepted (Phase 3)
 
+**Note:** Phase 10: the test login answers only with `NODE_ENV=test`, or in development to requests from this machine ([ADR 023](023-campus-limits-and-sessions.md)).
+
 ## Context
 
 Real Google accounts make tests slow and flaky, and a live demo needs to show a student, a faculty

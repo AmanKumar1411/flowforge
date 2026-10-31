@@ -1,4 +1,6 @@
 import type { Role } from "../../auth/domain/role";
+import { LinkDomainError } from "../../common/links/link.errors";
+import { isPublicHttpsLink } from "../../common/links/link-validators";
 import { IdeaDomainError } from "./idea.errors";
 import {
   CatalogIdea,
@@ -188,12 +190,27 @@ export class IdeaRules {
     }
   }
 
-  /** Trimmed catalog content; an empty link means none. */
+  /** Trimmed catalog content; an empty link means none, and a link is a public https one like any other (H13). */
   cleanCatalog(content: CatalogIdeaContent): CatalogIdeaContent {
+    const link = content.link?.trim() || null;
+    if (link !== null && !isPublicHttpsLink(parseUrl(link))) {
+      throw new LinkDomainError(
+        "INVALID_LINK",
+        "The reference link must be a public https link (a site name, not an IP address, and no password in it)",
+      );
+    }
     return {
       title: content.title.trim(),
       description: content.description.trim(),
-      link: content.link?.trim() || null,
+      link,
     };
   }
 }
+
+const parseUrl = (value: string): URL => {
+  try {
+    return new URL(value);
+  } catch {
+    return new URL("invalid:");
+  }
+};

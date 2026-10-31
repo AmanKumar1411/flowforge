@@ -66,7 +66,9 @@ export class EvaluationRules {
     cycle: GradingCycle,
     maxMarks: number,
     highestMark: number | null,
+    marksEnabled: boolean,
   ): number {
+    if (!marksEnabled) throw this.marksDisabled();
     if (cycle.status === "CLOSED") {
       throw new EvaluationDomainError(
         "GRADING_CLOSED",
@@ -92,13 +94,28 @@ export class EvaluationRules {
     return maxMarks;
   }
 
-  /** Trimmed feedback; marks within the scale, at most 2 decimals; something must be given. */
+  /**
+   * Trimmed feedback; marks within the scale, at most 2 decimals; something
+   * must be given. Without marks (the default, H3), feedback is required and
+   * any mark is refused.
+   */
   clean(
     input: EvaluationInput,
     grading: MilestoneGrading | null,
+    marksEnabled: boolean,
   ): EvaluationInput {
     const feedback = input.feedback?.trim() || null;
     const { marks } = input;
+    if (!marksEnabled) {
+      if (marks !== null) throw this.marksDisabled();
+      if (feedback === null) {
+        throw new EvaluationDomainError(
+          "EMPTY_EVALUATION",
+          "Write feedback for the team",
+        );
+      }
+      return { marks: null, feedback };
+    }
     if (marks === null && feedback === null) {
       throw new EvaluationDomainError(
         "EMPTY_EVALUATION",
@@ -166,6 +183,13 @@ export class EvaluationRules {
   ): boolean {
     return Boolean(
       grading?.releasedAt && evaluation.updatedAt > grading.releasedAt,
+    );
+  }
+
+  private marksDisabled(): EvaluationDomainError {
+    return new EvaluationDomainError(
+      "MARKS_DISABLED",
+      "This version of FlowForge gives feedback only, without marks",
     );
   }
 

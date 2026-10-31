@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Runs one k6 profile against the QA stack with monitoring, then saves pg_stat_statements and API errors.
-#   tests/load/run.sh smoke|normal|peak|spike|soak
+#   tests/load/run.sh smoke|normal|peak|spike|soak|campus
+# campus: the peak through load/campus-proxy.cjs (one client IP in X-Forwarded-For); the API needs TRUST_PROXY=loopback.
 # Before: tests/support/qa-stack.sh up with QA_LOAD=1 (raised sign-in limits), and node tests/seed/seed.cjs.
 set -euo pipefail
 PROFILE="${1:?profile}"
@@ -15,10 +16,18 @@ BEFORE=$(psql_qa -tA -c 'SELECT count(*) FROM "Submission"')
 API_LOG_LINES=$(wc -l < .qa/api.log)
 node load/monitor.cjs "$OUT/$PROFILE-monitor.csv" &
 MONITOR=$!
-trap 'kill $MONITOR 2>/dev/null || true' EXIT
+PROXY=""
+K6_API="http://localhost:3200/api"
+if [ "$PROFILE" = campus ]; then
+  node load/campus-proxy.cjs 3210 3200 203.0.113.10 &
+  PROXY=$!
+  K6_API="http://localhost:3210/api"
+  for _ in $(seq 1 20); do curl -sf "$K6_API/health" > /dev/null && break; sleep 0.5; done
+fi
+trap 'kill $MONITOR 2>/dev/null || true; [ -n "$PROXY" ] && kill $PROXY 2>/dev/null || true' EXIT
 set +e
 K6_WEB_DASHBOARD=true K6_WEB_DASHBOARD_EXPORT="$OUT/$PROFILE-k6-report.html" K6_WEB_DASHBOARD_PORT=-1 \
-  k6 run -e PROFILE="$PROFILE" --summary-export "$OUT/$PROFILE-summary.json" load/flowforge.js > "$DIR/results/raw/$PROFILE-k6.log" 2>&1
+  k6 run -e PROFILE="$PROFILE" -e API="$K6_API" --summary-export "$OUT/$PROFILE-summary.json" load/flowforge.js > "$DIR/results/raw/$PROFILE-k6.log" 2>&1
 K6_EXIT=$?
 set -e
 kill $MONITOR 2>/dev/null || true

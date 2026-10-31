@@ -14,6 +14,7 @@ import {
   ValidateNested,
 } from "class-validator";
 import { TEAM_SIZE_LIMIT } from "../../../course-cycles/domain/cycle.types";
+import { IsCleanText } from "../../../common/validation/clean-text";
 
 const NAME_MAX_LENGTH = 60;
 // Letters, digits, spaces and the punctuation found in names and emails. No LIKE wildcards (% _).
@@ -22,6 +23,7 @@ const SEARCH_PATTERN = /^[\p{L}\p{M}\p{N} .@'-]+$/u;
 export class CreateTeamDto {
   @ApiProperty({ example: "Team Falcon", maxLength: NAME_MAX_LENGTH })
   @IsString()
+  @IsCleanText()
   @Matches(/\S/, { message: "name must not be blank" })
   @MaxLength(NAME_MAX_LENGTH)
   name!: string;
@@ -43,6 +45,7 @@ export class UpdateTeamDto {
   @ApiPropertyOptional({ example: "Team Falcon", maxLength: NAME_MAX_LENGTH })
   @IsOptional()
   @IsString()
+  @IsCleanText()
   @Matches(/\S/, { message: "name must not be blank" })
   @MaxLength(NAME_MAX_LENGTH)
   name?: string;
@@ -70,6 +73,7 @@ export class TeamCandidatesQueryDto {
     typeof value === "string" ? value.trim() : value,
   )
   @IsString()
+  @IsCleanText()
   @MinLength(2)
   @MaxLength(100)
   @Matches(SEARCH_PATTERN, {
@@ -85,6 +89,7 @@ export class LookingForTeamDto {
   })
   @IsOptional()
   @IsString()
+  @IsCleanText()
   @MaxLength(200)
   note?: string;
 }
@@ -93,6 +98,7 @@ export class LookingForTeamDto {
 export class FacultyTeamDto {
   @ApiProperty({ example: "Auto team 1", maxLength: NAME_MAX_LENGTH })
   @IsString()
+  @IsCleanText()
   @Matches(/\S/, { message: "name must not be blank" })
   @MaxLength(NAME_MAX_LENGTH)
   name!: string;

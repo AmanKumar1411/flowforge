@@ -74,31 +74,37 @@ describe("EvaluationRules", () => {
   });
 
   it("keeps marks within the scale, and the scale above every mark given", () => {
-    expect(rules.clean({ marks: 14.5, feedback: " Good " }, grading())).toEqual(
-      { marks: 14.5, feedback: "Good" },
-    );
     expect(
-      codeOf(() => rules.clean({ marks: 21, feedback: null }, grading())),
+      rules.clean({ marks: 14.5, feedback: " Good " }, grading(), true),
+    ).toEqual({ marks: 14.5, feedback: "Good" });
+    expect(
+      codeOf(() => rules.clean({ marks: 21, feedback: null }, grading(), true)),
     ).toBe("INVALID_MARKS");
     expect(
-      codeOf(() => rules.clean({ marks: -1, feedback: null }, grading())),
-    ).toBe("INVALID_MARKS");
-    expect(
-      codeOf(() => rules.clean({ marks: 1.234, feedback: null }, grading())),
+      codeOf(() => rules.clean({ marks: -1, feedback: null }, grading(), true)),
     ).toBe("INVALID_MARKS");
     expect(
       codeOf(() =>
-        rules.clean({ marks: 5, feedback: null }, grading({ maxMarks: null })),
+        rules.clean({ marks: 1.234, feedback: null }, grading(), true),
+      ),
+    ).toBe("INVALID_MARKS");
+    expect(
+      codeOf(() =>
+        rules.clean(
+          { marks: 5, feedback: null },
+          grading({ maxMarks: null }),
+          true,
+        ),
       ),
     ).toBe("MAX_MARKS_NOT_SET");
-    expect(rules.checkMaxMarks(cycle, 20, 18)).toBe(20);
-    expect(codeOf(() => rules.checkMaxMarks(cycle, 15, 18))).toBe(
+    expect(rules.checkMaxMarks(cycle, 20, 18, true)).toBe(20);
+    expect(codeOf(() => rules.checkMaxMarks(cycle, 15, 18, true))).toBe(
       "MAX_MARKS_BELOW_EXISTING",
     );
-    expect(codeOf(() => rules.checkMaxMarks(cycle, 0, null))).toBe(
+    expect(codeOf(() => rules.checkMaxMarks(cycle, 0, null, true))).toBe(
       "INVALID_MAX_MARKS",
     );
-    expect(codeOf(() => rules.checkMaxMarks(cycle, 1001, null))).toBe(
+    expect(codeOf(() => rules.checkMaxMarks(cycle, 1001, null, true))).toBe(
       "INVALID_MAX_MARKS",
     );
     expect(
@@ -107,6 +113,7 @@ describe("EvaluationRules", () => {
           { ...cycle, status: "CLOSED" } as GradingCycle,
           20,
           null,
+          true,
         ),
       ),
     ).toBe("GRADING_CLOSED");
@@ -117,14 +124,36 @@ describe("EvaluationRules", () => {
       rules.clean(
         { marks: null, feedback: "Clear plan" },
         grading({ maxMarks: null }),
+        true,
       ),
     ).toEqual({
       marks: null,
       feedback: "Clear plan",
     });
     expect(
-      codeOf(() => rules.clean({ marks: null, feedback: "   " }, grading())),
+      codeOf(() =>
+        rules.clean({ marks: null, feedback: "   " }, grading(), true),
+      ),
     ).toBe("EMPTY_EVALUATION");
+  });
+
+  it("without marks (the default): refuses any mark or scale and requires feedback", () => {
+    expect(
+      rules.clean({ marks: null, feedback: " Good " }, grading(), false),
+    ).toEqual({ marks: null, feedback: "Good" });
+    expect(
+      codeOf(() =>
+        rules.clean({ marks: 14, feedback: "Good" }, grading(), false),
+      ),
+    ).toBe("MARKS_DISABLED");
+    expect(
+      codeOf(() =>
+        rules.clean({ marks: null, feedback: "  " }, grading(), false),
+      ),
+    ).toBe("EMPTY_EVALUATION");
+    expect(codeOf(() => rules.checkMaxMarks(cycle, 20, null, false))).toBe(
+      "MARKS_DISABLED",
+    );
   });
 
   it("numbers versions and refuses a save based on another version, or none", () => {

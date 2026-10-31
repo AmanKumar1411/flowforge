@@ -2,6 +2,8 @@
 
 **Status:** Accepted (Phase 3)
 
+**Note:** Phase 10: a token presented again within 10 seconds of its rotation gets a sibling in the same family instead of ending it ([ADR 023](023-campus-limits-and-sessions.md)).
+
 ## Context
 
 Access tokens must be short-lived (15 minutes) so a leaked one is useful only briefly. Users should

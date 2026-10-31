@@ -342,8 +342,7 @@ export interface CycleSubmission {
   team: CycleIdea["team"];
   idea: { title: string; status: IdeaStatus; source: IdeaSource } | null;
   latest: Submission | null;
-  /** Every version for the milestone, newest first. */
-  versions: Submission[];
+  /** How many versions the team has; the history is read per team, a page at a time (H4). */
   versionCount: number;
 }
 
@@ -386,16 +385,19 @@ export interface FacultyRequest {
 /** A milestone's grading for its faculty (Phase 9, ADR 020). */
 export interface Grading {
   milestone: { id: string; position: number; name: string; submissionDueAt: string };
-  maxMarks: number | null;
+  /** Whether this version gives marks; without them grading is feedback only (H3). */
+  marksEnabled: boolean;
+  /** Present only when marks are enabled. */
+  maxMarks?: number | null;
   releasedAt: string | null;
-  /** Marks can be given now: from the due date while the project is published. */
+  /** Evaluations can be saved now: from the due date while the project is published. */
   open: boolean;
   rows: GradingRow[];
 }
 
 export interface GradingRow {
   team: { id: string; name: string; memberCount: number };
-  evaluation: { id: string; marks: number | null; feedback: string | null; version: number; updatedAt: string } | null;
+  evaluation: { id: string; marks?: number | null; feedback: string | null; version: number; updatedAt: string } | null;
   /** Null when the team submitted nothing. */
   latestWork: { version: number; submittedAt: string } | null;
 }
@@ -403,8 +405,9 @@ export interface GradingRow {
 /** A team's evaluation as the team (or its faculty) reads it. */
 export interface TeamEvaluation {
   milestoneId: string;
-  marks: number | null;
-  maxMarks: number | null;
+  /** Present only when marks are enabled, like `maxMarks`. */
+  marks?: number | null;
+  maxMarks?: number | null;
   feedback: string | null;
   releasedAt: string | null;
   updatedAt: string;
@@ -448,8 +451,9 @@ export interface ProjectCard {
   results: {
     milestoneId: string;
     label: string;
-    marks: number | null;
-    maxMarks: number | null;
+    /** Present only when marks are enabled. */
+    marks?: number | null;
+    maxMarks?: number | null;
     feedback: string | null;
     releasedAt: string;
     updatedAfterRelease: boolean;

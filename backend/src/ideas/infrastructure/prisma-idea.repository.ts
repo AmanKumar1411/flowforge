@@ -4,7 +4,13 @@ import { Transaction } from "../../common/transaction";
 import { Prisma } from "../../generated/prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { IdeaRepository } from "../application/ports/idea.repository";
-import { Idea, IdeaRevision, NewIdea, NewIdeaReview } from "../domain/idea";
+import {
+  Idea,
+  IdeaRevision,
+  IdeaSummary,
+  NewIdea,
+  NewIdeaReview,
+} from "../domain/idea";
 import { IdeaDomainError } from "../domain/idea.errors";
 
 // The submitter and the reviewers' names come in the same query.
@@ -60,6 +66,13 @@ export class PrismaIdeaRepository extends IdeaRepository {
       include: withPeople,
     });
     return row ? toDomain(row) : null;
+  }
+
+  findSummaryByTeam(teamId: string): Promise<IdeaSummary | null> {
+    return this.prisma.projectIdea.findFirst({
+      where: { teamId },
+      select: { title: true, status: true, source: true },
+    });
   }
 
   async lockTeamIdea(

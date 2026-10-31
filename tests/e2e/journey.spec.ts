@@ -3,14 +3,14 @@ import { WEB, login, manifest, nameOf, sql } from "../support/api";
 import { Watch, expectNoSideScroll, openTab, signIn } from "../support/browser";
 
 // E2E-S1 (seeded part) on every browser and on a 375px phone: a leader whose idea was rejected then
-// approved, whose M1 marks were released and then corrected, submits M2 through the UI. A member of
+// approved, whose M1 feedback was released and then corrected, submits M2 through the UI. A member of
 // the same team sees the team and the work but has no leader buttons.
 const m = manifest();
 const capstone = m.cycles.capstone;
 // One team per browser project, each with a rejected-then-approved idea and an "Updated" M1 result.
 const TEAM_BY_PROJECT: Record<string, number> = { "chrome-journey": 35, "mobile-chrome": 175, firefox: 105, webkit: 245 };
 
-test("E2E-S1 leader and member journey on seeded data: dashboard, team, idea history, released marks, M2 submission", async ({ browser }, info) => {
+test("E2E-S1 leader and member journey on seeded data: dashboard, team, idea history, released feedback, M2 submission", async ({ browser }, info) => {
   test.setTimeout(240_000);
   const team = capstone.teams[TEAM_BY_PROJECT[info.project.name] ?? 5];
   const watch = new Watch();
@@ -45,10 +45,11 @@ test("E2E-S1 leader and member journey on seeded data: dashboard, team, idea his
     await expectNoSideScroll(leader);
   });
 
-  await test.step("milestones tab: M1 marks and feedback, marked as updated after release", async () => {
+  await test.step("milestones tab: M1 feedback (no marks in this version), marked as updated after release", async () => {
     await openTab(leader, "Milestones");
-    await expect(leader.locator(".evaluation-marks").first()).toHaveText(/\d+ \/ 100/);
-    await expect(leader.getByText(/Re-marked after review\./)).toBeVisible();
+    await expect(leader.getByText(/Updated after review\./)).toBeVisible();
+    await expect(leader.getByText(/^Feedback released on /).first()).toBeVisible();
+    await expect(leader.locator(".evaluation-marks")).toHaveCount(0);
     await expect(leader.getByText(/^Updated on /).first()).toBeVisible();
   });
 
@@ -95,14 +96,15 @@ test("E2E-V1 visibility: another batch, a past project for former members only, 
   await expect(other.getByText("Capstone project")).toHaveCount(0);
   await other.goto(`${WEB}/student/projects/${capstone.id}`);
   await expect(other.getByText(/not available/i).first()).toBeVisible();
-  // A former member reads last term's project, read-only, with its released marks.
+  // A former member reads last term's project, read-only, with its released feedback.
   const former = m.cycles.lastTerm.teams[2];
   const reader = await signIn(browser, watch, former.members[1], nameOf(former.members[1]));
   await reader.getByText("Past projects (1)").click();
   await expect(reader.locator(".past-projects").getByText("Last term project")).toBeVisible();
   await reader.goto(`${WEB}/student/projects/${m.cycles.lastTerm.id}?tab=milestones`);
   await expect(reader.getByText(/closed/i).first()).toBeVisible();
-  await expect(reader.locator(".evaluation-marks").first()).toHaveText(/\d+ \/ 20/);
+  await expect(reader.getByText(/^Feedback released on /).first()).toBeVisible();
+  await expect(reader.locator(".evaluation-marks")).toHaveCount(0);
   await expect(reader.getByRole("button", { name: /Submit|Edit|Revise/ })).toHaveCount(0);
   // A 2023 student who had no team in it sees nothing of it.
   const outsider = await signIn(browser, watch, m.students["2023"][700], nameOf(m.students["2023"][700]));

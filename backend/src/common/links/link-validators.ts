@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import { LinkType } from "./link-type";
 
 /** Decides whether a URL is a proper link of one type (Strategy). */
@@ -8,7 +9,27 @@ export interface LinkValidator {
   accepts(url: URL): boolean;
 }
 
-const isHttps = (url: URL): boolean => url.protocol === "https:";
+// Names that only mean something on one machine or one network.
+const LOCAL_NAMES =
+  /(^|\.)(localhost|local|internal|intranet|lan|home\.arpa)$/i;
+
+/**
+ * A link anyone can open: https, a public host name (never an IP address,
+ * localhost or a .local/.internal name), and no username or password in it
+ * (SEC-F4, H13). The API never fetches links; this keeps intranet addresses
+ * and tokens out of what students and faculty click.
+ */
+export function isPublicHttpsLink(url: URL): boolean {
+  const host = url.hostname.replace(/^\[|\]$/g, "");
+  return (
+    url.protocol === "https:" &&
+    url.username === "" &&
+    url.password === "" &&
+    isIP(host) === 0 &&
+    host.includes(".") &&
+    !LOCAL_NAMES.test(host)
+  );
+}
 
 /** `https://github.com/<owner>/<repo>`, with anything after the repository. */
 export class GithubLinkValidator implements LinkValidator {
@@ -18,7 +39,7 @@ export class GithubLinkValidator implements LinkValidator {
   accepts(url: URL): boolean {
     const [owner, repo] = url.pathname.split("/").filter(Boolean);
     return (
-      isHttps(url) &&
+      isPublicHttpsLink(url) &&
       url.hostname === "github.com" &&
       Boolean(owner) &&
       Boolean(repo)
@@ -34,21 +55,22 @@ export class DriveLinkValidator implements LinkValidator {
 
   accepts(url: URL): boolean {
     return (
-      isHttps(url) &&
+      isPublicHttpsLink(url) &&
       ["drive.google.com", "docs.google.com"].includes(url.hostname) &&
       url.pathname.length > 1
     );
   }
 }
 
-/** Any https page: a deployed demo, a report hosted anywhere. */
+/** Any public https page: a deployed demo, a report hosted anywhere. */
 export class HttpsLinkValidator implements LinkValidator {
-  readonly expected = "an https link";
+  readonly expected =
+    "a public https link (a site name, not an IP address, and no password in it)";
 
   constructor(readonly type: LinkType) {}
 
   accepts(url: URL): boolean {
-    return isHttps(url) && url.hostname.includes(".");
+    return isPublicHttpsLink(url);
   }
 }
 

@@ -2,6 +2,7 @@ import { IdeaRepository } from "../application/ports/idea.repository";
 import {
   Idea,
   IdeaRevision,
+  IdeaSummary,
   NewIdea,
   NewIdeaReview,
   Person,
@@ -22,6 +23,15 @@ export class InMemoryIdeaRepository extends IdeaRepository {
 
   findByTeam(teamId: string): Promise<Idea | null> {
     return Promise.resolve(this.copy(this.ideas.get(teamId)));
+  }
+
+  findSummaryByTeam(teamId: string): Promise<IdeaSummary | null> {
+    const idea = this.ideas.get(teamId);
+    return Promise.resolve(
+      idea
+        ? { title: idea.title, status: idea.status, source: idea.source }
+        : null,
+    );
   }
 
   lockTeamIdea(

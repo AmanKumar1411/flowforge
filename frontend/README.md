@@ -3,7 +3,7 @@
 React and Vite client. Routes: `/login`, `/auth/callback`, `/pending`, `/student/cycles`,
 `/faculty/cycles`, `/admin`; each dashboard is guarded by role.
 
-- Sign-in is Google via the API (`/api/auth/google`). `VITE_DEV_LOGIN=true` adds a dev login form.
+- Sign-in is Google via the API (`/api/auth/google`). `VITE_DEV_LOGIN=true` in `.env.development.local` adds a dev login form to `npm run dev`; `npm run build` refuses it.
 - The access token is kept in memory only (`src/api/client.ts`). On a 401 the client refreshes
   once and retries. Refresh is single-flight within a tab and serialized across tabs with the Web
   Locks API, so concurrent requests never present the same refresh token twice.

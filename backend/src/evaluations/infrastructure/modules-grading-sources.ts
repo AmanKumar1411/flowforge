@@ -45,26 +45,11 @@ export class ModulesGradingSources extends GradingSources {
     return toGradingTeam(await this.teams.findById(actor, teamId));
   }
 
-  async latestWork(
+  latestWork(
     actor: Actor,
     cycleId: string,
     milestoneId: string,
   ): Promise<LatestWork[]> {
-    const rows = await this.submissions.listForCycle(
-      actor,
-      cycleId,
-      milestoneId,
-    );
-    return rows.flatMap((row) =>
-      row.latest
-        ? [
-            {
-              teamId: row.team.id,
-              version: row.latest.version,
-              submittedAt: row.latest.submittedAt,
-            },
-          ]
-        : [],
-    );
+    return this.submissions.latestForCycle(actor, cycleId, milestoneId);
   }
 }

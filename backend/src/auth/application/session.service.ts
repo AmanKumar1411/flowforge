@@ -2,6 +2,12 @@ import { Injectable } from "@nestjs/common";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { AuditService } from "../../audit/audit.service";
 import { Clock } from "../../common/clock";
+import { DomainError } from "../../common/errors/domain-error";
+import {
+  ONE_MINUTE_MS,
+  RateLimitedError,
+  RateLimiter,
+} from "../../common/rate-limit";
 import { Transaction, TransactionRunner } from "../../common/transaction";
 import { AppConfig } from "../../config/app-config";
 import { UsersService } from "../../users/users.service";
@@ -20,12 +26,14 @@ export interface IssuedRefreshToken {
 
 export interface RotatedSession {
   userId: string;
+  /** Read with the token, so the access token needs no second read of the user. */
+  tokenVersion: number;
   refreshToken: IssuedRefreshToken;
 }
 
 type RotationOutcome =
   | { kind: "ROTATED"; session: RotatedSession }
-  | { kind: "DENIED"; error: AuthDomainError };
+  | { kind: "DENIED"; error: DomainError };
 
 export const hashRefreshToken = (value: string): string =>
   createHash("sha256").update(value).digest("hex");
@@ -33,7 +41,9 @@ export const hashRefreshToken = (value: string): string =>
 /**
  * Refresh-token families. A login starts a family; each refresh revokes the
  * presented token and issues its successor. Presenting a token that was
- * already rotated means it was copied, so the whole family is revoked.
+ * already rotated means it was copied, so the whole family is revoked; but
+ * within a short grace window after the rotation (two tabs, a retried
+ * request) it gets a token in the same family instead (H14, ADR 023).
  */
 @Injectable()
 export class SessionService {
@@ -44,6 +54,7 @@ export class SessionService {
     private readonly transactions: TransactionRunner,
     private readonly clock: Clock,
     private readonly config: AppConfig,
+    private readonly limiter: RateLimiter,
   ) {}
 
   async startFamily(
@@ -106,9 +117,24 @@ export class SessionService {
     if (!current) {
       return this.deny("INVALID_REFRESH_TOKEN", "Refresh token is not valid");
     }
+    // Per session family, never per IP: a campus shares one address (ADR 023).
+    const limit = await this.limiter.consume(
+      `refresh:${current.familyId}`,
+      this.config.values.rateLimits.refreshPerMinute,
+      ONE_MINUTE_MS,
+      tx,
+    );
+    if (!limit.allowed) {
+      return {
+        kind: "DENIED",
+        error: new RateLimitedError(
+          "This session refreshed too often; try again in a minute",
+        ),
+      };
+    }
     if (current.revokedAt) {
       return current.replacedById
-        ? this.handleReuse(current, now, tx)
+        ? this.rotatedAgain(current, now, userAgent, tx)
         : this.deny("TOKEN_REVOKED", "This session has ended");
     }
     if (now >= current.expiresAt || now >= current.familyExpiresAt) {
@@ -122,8 +148,11 @@ export class SessionService {
     }
 
     if (!(await this.tokens.revokeIfActive(current.id, now, tx))) {
-      // Another request rotated this token between our read and our write.
-      return this.handleReuse(current, now, tx);
+      // Another request rotated this token between our read and our write: read what it did.
+      const latest = await this.tokens.findByHash(current.tokenHash, tx);
+      return latest?.replacedById
+        ? this.rotatedAgain(latest, now, userAgent, tx)
+        : this.handleReuse(current, now, tx);
     }
     const next = await this.issue(
       {
@@ -138,7 +167,57 @@ export class SessionService {
     await this.tokens.markReplaced(current.id, next.record.id, tx);
     return {
       kind: "ROTATED",
-      session: { userId: current.userId, refreshToken: next.issued },
+      session: {
+        userId: current.userId,
+        tokenVersion: user.tokenVersion,
+        refreshToken: next.issued,
+      },
+    };
+  }
+
+  /**
+   * A token that was already rotated. Within the grace window, and while its
+   * family still has a live token, it gets a sibling in the same family: the
+   * same browser asking twice. Later, it was copied: the family ends.
+   */
+  private async rotatedAgain(
+    token: RefreshTokenRecord,
+    now: Date,
+    userAgent: string | null,
+    tx: Transaction,
+  ): Promise<RotationOutcome> {
+    const graceMs = this.config.values.sessions.refreshReuseGraceSeconds * 1000;
+    const recent =
+      token.revokedAt !== null &&
+      now.getTime() - token.revokedAt.getTime() <= graceMs;
+    if (
+      !recent ||
+      !(await this.tokens.hasActiveToken(token.familyId, now, tx))
+    ) {
+      return this.handleReuse(token, now, tx);
+    }
+    const user = await this.users.findById(token.userId, tx);
+    if (!user || user.status === "DEACTIVATED") {
+      await this.tokens.revokeFamily(token.familyId, now, tx);
+      return this.deny("ACCOUNT_DEACTIVATED", "This account is deactivated");
+    }
+    const sibling = await this.issue(
+      {
+        userId: token.userId,
+        familyId: token.familyId,
+        familyExpiresAt: token.familyExpiresAt,
+        userAgent,
+      },
+      now,
+      tx,
+    );
+    return {
+      kind: "ROTATED",
+      session: {
+        userId: token.userId,
+        tokenVersion: user.tokenVersion,
+        refreshToken: sibling.issued,
+      },
     };
   }
 

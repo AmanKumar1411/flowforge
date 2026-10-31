@@ -19,6 +19,14 @@ describe("links", () => {
     expect(linkProblem("REPORT", "https://example.org/r.pdf")).toBeNull();
   });
 
+  it("refuses IP addresses, local names and credentials, like the API (H13)", () => {
+    for (const url of ["https://10.0.0.5:8080/", "https://169.254.169.254/x", "https://[::1]/", "https://printer.local/", "https://localhost/"]) {
+      expect(linkProblem("DEMO", url)).toMatch(/public address/);
+    }
+    expect(linkProblem("GITHUB", "https://user:token@github.com/qa/repo")).toMatch(/password/);
+    expect(linkProblem("DEMO", "https://seat-finder.vercel.app")).toBeNull();
+  });
+
   it("keeps the links typed in and reports a missing required one", () => {
     const values = { GITHUB: " https://github.com/falcon/app ", DEMO: "" };
     expect(linksFrom(milestone, values)).toEqual([{ type: "GITHUB", url: "https://github.com/falcon/app" }]);

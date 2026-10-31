@@ -12,12 +12,16 @@ list are in [docs/testing/report.md](../docs/testing/report.md); the plan is in
 | Part | Where |
 | --- | --- |
 | PostgreSQL 18 container `flowforge-qa-db` (`pg_stat_statements`, `max_connections=200`) | `localhost:5433/flowforge_qa` |
-| Compiled API (`node dist/src/main.js`, `NODE_ENV=test`, test login on) | `http://localhost:3200/api` |
-| Production web build served by `vite preview` (test-login form on) | `http://localhost:5300` |
+| Compiled API as a cluster (`node dist/cluster.js`, `API_WORKERS` processes, default 4; `NODE_ENV=test`, test login on, `TRUST_PROXY=loopback`) | `http://localhost:3200/api` |
+| Web build (`vite build --mode test`, so it may keep the test-login form) served by `vite preview` | `http://localhost:5300` |
 
 Secrets for this stack are generated once into `tests/.qa/qa.env` (git-ignored) and never printed.
-`QA_LOAD=1` raises the sign-in rate limits to the maximum the config allows (10,000/min); the
-rate-limit test starts its own API with the default limits.
+`QA_LOAD=1` raises the sign-in and refresh limits to 10,000/min for the functional suites, which
+sign in hundreds of users at once. Without it, the API runs with the real limits (600 sign-ins per
+IP per minute, 10 refreshes per session), as the Phase 10 load runs do. Submission and write
+limits are always real. Counters are shared through the database, so an API a test boots for
+itself shares them too. The seed is feedback-only like the API (`EVALUATION_MARKS_ENABLED` is off);
+`QA_MARKS=1 node seed/seed.cjs` seeds marks and scales as well.
 
 ## Commands
 
@@ -41,7 +45,7 @@ One suite at a time (reseed first):
 | axe and keyboard-only (P2) | `npx playwright test --project=a11y --workers=1` |
 | Database restart, slow 3G (P2) | `npx playwright test --project=resilience --workers=1` |
 | Data integrity (P2) | `node support/integrity.cjs` |
-| Load (P1) | `./load/run.sh smoke|normal|peak|spike|soak`, then `node support/charts.cjs <profiles>` and `node load/tables.cjs <profiles>` |
+| Load (P1) | `./load/run.sh smoke|normal|peak|spike|soak|campus`, then `node support/charts.cjs <profiles>` and `node load/tables.cjs <profiles>`. `campus` is the peak through `load/campus-proxy.cjs`: every request from one IP in `X-Forwarded-For`, and no student may be rate limited |
 | CPU profile of the API under load (second API on :3202, ~3 min) | `./load/profile.sh` |
 | Summaries | `node support/summarize.cjs results/raw/<suite>.json` |
 

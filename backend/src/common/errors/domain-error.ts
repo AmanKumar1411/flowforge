@@ -1,4 +1,8 @@
-export type CommonErrorCode = "ORIGIN_NOT_ALLOWED";
+export type CommonErrorCode =
+  | "ORIGIN_NOT_ALLOWED"
+  | "SERVICE_UNAVAILABLE"
+  | "TOO_MANY_REQUESTS"
+  | "BODY_TOO_DEEP";
 
 /** One of several problems an error reports together (for example every failed publish check). */
 export interface ErrorDetail {

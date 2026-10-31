@@ -1,4 +1,5 @@
-// Samples the QA stack every 5 s during a load run: API CPU and memory, k6 CPU, database container
+// Samples the QA stack every 5 s during a load run: API CPU and memory (the cluster's supervisor and
+// workers summed, with how many processes that is), k6 CPU, database container
 // CPU and memory, database connections by state, and the latency of one extra dashboard request.
 // Usage: node load/monitor.cjs <out.csv>   (stop it with Ctrl-C or kill)
 const { execSync } = require("node:child_process");
@@ -6,7 +7,7 @@ const fs = require("node:fs");
 const { API, WEB, manifest } = require("../support/qa-config.cjs");
 
 const out = process.argv[2];
-fs.writeFileSync(out, "t,api_cpu,api_rss_mb,k6_cpu,k6_rss_mb,db_cpu,db_mem_mb,db_active,db_idle,db_total,probe_ms,probe_status\n");
+fs.writeFileSync(out, "t,api_cpu,api_rss_mb,k6_cpu,k6_rss_mb,db_cpu,db_mem_mb,db_active,db_idle,db_total,probe_ms,probe_status,api_procs\n");
 const sh = (cmd) => { try { return execSync(cmd, { stdio: ["ignore", "pipe", "ignore"] }).toString().trim(); } catch { return ""; } };
 const proc = (pid) => { const [cpu, rss] = sh(`ps -o %cpu=,rss= -p ${pid}`).split(/\s+/).filter(Boolean); return [Number(cpu || 0), Math.round(Number(rss || 0) / 1024)]; };
 const probeUser = manifest().students["2023"][998];
@@ -24,7 +25,8 @@ async function signIn() {
 async function sample() {
   const apiPid = sh("lsof -ti tcp:3200 -sTCP:LISTEN").split("\n")[0];
   const k6Pid = sh("pgrep -x k6").split("\n")[0];
-  const [apiCpu, apiRss] = apiPid ? proc(apiPid) : [0, 0];
+  const apiPids = apiPid ? [apiPid, ...sh(`pgrep -P ${apiPid}`).split("\n").filter(Boolean)] : [];
+  const [apiCpu, apiRss] = apiPids.map(proc).reduce(([c, r], [pc, pr]) => [c + pc, r + pr], [0, 0]);
   const [k6Cpu, k6Rss] = k6Pid ? proc(k6Pid) : [0, 0];
   const [dbCpu, dbMem] = sh("docker stats --no-stream --format '{{.CPUPerc}},{{.MemUsage}}' flowforge-qa-db").split(",");
   const conns = sh(`docker exec flowforge-qa-db psql -U qa -d flowforge_qa -tA -F, -c "select count(*) filter (where state='active'), count(*) filter (where state='idle'), count(*) from pg_stat_activity where datname='flowforge_qa'"`);
@@ -42,7 +44,7 @@ async function sample() {
   }
   const memMb = (dbMem || "").split("/")[0].trim();
   const mb = memMb.endsWith("GiB") ? parseFloat(memMb) * 1024 : parseFloat(memMb);
-  fs.appendFileSync(out, [new Date().toISOString(), apiCpu, apiRss, k6Cpu, k6Rss, parseFloat(dbCpu || "0"), Math.round(mb || 0), conns || ",,", probeMs, probeStatus].join(",") + "\n");
+  fs.appendFileSync(out, [new Date().toISOString(), apiCpu, apiRss, k6Cpu, k6Rss, parseFloat(dbCpu || "0"), Math.round(mb || 0), conns || ",,", probeMs, probeStatus, apiPids.length].join(",") + "\n");
 }
 
 (async () => {

@@ -8,7 +8,7 @@ import { Watch, signIn } from "../support/browser";
 const m = manifest();
 const capstone = m.cycles.capstone;
 
-test("RES-1 a database restart mid-session: clear errors during the outage, recovery without restarting the API", async ({ browser }) => {
+test("RES-1 a database restart mid-session: a retry banner during the outage, still signed in after it, no API restart", async ({ browser }) => {
   test.setTimeout(180_000);
   const watch = new Watch();
   const team = capstone.teams[220];
@@ -27,11 +27,14 @@ test("RES-1 a database restart mid-session: clear errors during the outage, reco
       expect(reply.status).toBeGreaterThanOrEqual(500);
       expect(reply.text).not.toMatch(/ECONNREFUSED|5433|postgres|stack|at .*\.js/i);
     }
-    // A full page load during the outage: the app refreshes its token first.
+    for (const reply of [read, write]) expect(reply.body?.code).toBe("SERVICE_UNAVAILABLE");
+    // A full page load during the outage: the app refreshes its token first, gets 503, keeps the session
+    // and says it is retrying (H6).
     await page.goto(`${WEB}/student/projects/${capstone.id}?tab=milestones`);
-    await page.waitForLoadState("networkidle");
-    const message = page.locator(".form-error, .notice, [role=alert]").first();
-    outage.push(`UI during outage: ${new URL(page.url()).pathname}${(await message.isVisible()) ? ` "${(await message.innerText()).slice(0, 100)}"` : " (no error message)"}`);
+    const banner = page.getByText("Can't reach FlowForge. Retrying…");
+    await expect(banner).toBeVisible({ timeout: 15_000 });
+    outage.push(`UI during outage: ${new URL(page.url()).pathname} "${await banner.innerText()}"`);
+    expect(new URL(page.url()).pathname).not.toBe("/login");
   } finally {
     execSync("docker start flowforge-qa-db", { stdio: "pipe" });
     for (let i = 0; i < 30; i += 1) {
@@ -52,7 +55,10 @@ test("RES-1 a database restart mid-session: clear errors during the outage, reco
   outage.push(`after restart: ${recovered}`);
   test.info().annotations.push({ type: "observation", description: outage.join("; ") });
   expect(recovered).toBe(200);
-  // The student should still be signed in once the database is back.
+  // The page that waited through the outage signs in by itself once the database is back.
+  await expect(page.locator(".milestone-card", { hasText: "Working prototype" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Can't reach FlowForge. Retrying…")).toHaveCount(0);
+  // And a fresh load still finds the session: no new Google sign-in.
   await page.goto(`${WEB}/student/projects/${capstone.id}?tab=milestones`);
   await page.waitForLoadState("networkidle");
   test.info().annotations.push({ type: "observation", description: `after recovery the student is on ${new URL(page.url()).pathname}` });

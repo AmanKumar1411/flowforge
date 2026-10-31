@@ -5,6 +5,7 @@ import {
   CycleStatus as PrismaCycleStatus,
   Prisma,
 } from "../../generated/prisma/client";
+import { RequestScope } from "../../common/request-scope";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CycleRepository } from "../application/ports/cycle.repository";
 import {
@@ -56,6 +57,8 @@ const fieldData = (
 // Positions move out of the way first, so a reordered list never collides with itself.
 const POSITION_OFFSET = 1000;
 
+const memoKey = (id: string) => `cycle:${id}`;
+
 @Injectable()
 export class PrismaCycleRepository extends CycleRepository {
   constructor(private readonly prisma: PrismaService) {
@@ -78,7 +81,14 @@ export class PrismaCycleRepository extends CycleRepository {
     return toDomain(row);
   }
 
-  async findById(id: string, tx?: Transaction): Promise<Cycle | null> {
+  /** Outside a transaction, read once per request however many modules ask (H4). */
+  findById(id: string, tx?: Transaction): Promise<Cycle | null> {
+    return tx
+      ? this.read(id, tx)
+      : RequestScope.memo(memoKey(id), () => this.read(id));
+  }
+
+  private async read(id: string, tx?: Transaction): Promise<Cycle | null> {
     const row = await this.prisma.client(tx).courseProjectCycle.findUnique({
       where: { id },
       include: withMilestones,
@@ -150,6 +160,7 @@ export class PrismaCycleRepository extends CycleRepository {
     milestones: MilestonePlan | null,
     tx: Transaction,
   ): Promise<Cycle | null> {
+    RequestScope.forget(memoKey(id));
     const client = this.prisma.client(tx);
     const { count } = await client.courseProjectCycle.updateMany({
       where: { id, status: expectedStatus as PrismaCycleStatus },
@@ -190,6 +201,7 @@ export class PrismaCycleRepository extends CycleRepository {
       publishedAt: nextStatus === "PUBLISHED" ? timestamp : undefined,
       closedAt: nextStatus === "CLOSED" ? timestamp : undefined,
     };
+    RequestScope.forget(memoKey(id));
     const result = await this.prisma.client(tx).courseProjectCycle.updateMany({
       where: { id, status: expectedStatus as PrismaCycleStatus },
       data,

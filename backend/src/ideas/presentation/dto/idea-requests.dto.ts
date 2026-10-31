@@ -16,6 +16,7 @@ import {
 } from "class-validator";
 import { LinkDto } from "../../../common/links/link.dto";
 import type { IdeaDecision } from "../../domain/idea";
+import { IsCleanText } from "../../../common/validation/clean-text";
 
 export const IDEA_LIMITS = {
   title: 120,
@@ -34,6 +35,7 @@ export class SubmitIdeaDto {
     maxLength: IDEA_LIMITS.title,
   })
   @IsString()
+  @IsCleanText()
   @Matches(/\S/, { message: "title must not be blank" })
   @MaxLength(IDEA_LIMITS.title)
   title!: string;
@@ -43,6 +45,7 @@ export class SubmitIdeaDto {
     maxLength: IDEA_LIMITS.problem,
   })
   @IsString()
+  @IsCleanText()
   @Matches(/\S/, { message: "problem must not be blank" })
   @MaxLength(IDEA_LIMITS.problem)
   problem!: string;
@@ -52,6 +55,7 @@ export class SubmitIdeaDto {
     maxLength: IDEA_LIMITS.solution,
   })
   @IsString()
+  @IsCleanText()
   @Matches(/\S/, { message: "solution must not be blank" })
   @MaxLength(IDEA_LIMITS.solution)
   solution!: string;
@@ -92,6 +96,7 @@ export class ReviewIdeaDto {
   })
   @IsOptional()
   @IsString()
+  @IsCleanText()
   @MaxLength(IDEA_LIMITS.feedback)
   feedback?: string | null;
 }
@@ -105,6 +110,7 @@ export class PickIdeaDto {
 export class CatalogIdeaRequestDto {
   @ApiProperty({ example: "Library seat finder", maxLength: IDEA_LIMITS.title })
   @IsString()
+  @IsCleanText()
   @Matches(/\S/, { message: "title must not be blank" })
   @MaxLength(IDEA_LIMITS.title)
   title!: string;
@@ -114,6 +120,7 @@ export class CatalogIdeaRequestDto {
     maxLength: IDEA_LIMITS.description,
   })
   @IsString()
+  @IsCleanText()
   @Matches(/\S/, { message: "description must not be blank" })
   @MaxLength(IDEA_LIMITS.description)
   description!: string;
@@ -124,7 +131,7 @@ export class CatalogIdeaRequestDto {
     description: "A brief, dataset or reference (http or https)",
   })
   @IsOptional()
-  @IsUrl({ protocols: ["http", "https"], require_protocol: true })
+  @IsUrl({ protocols: ["https"], require_protocol: true })
   @MaxLength(IDEA_LIMITS.link)
   link?: string | null;
 }

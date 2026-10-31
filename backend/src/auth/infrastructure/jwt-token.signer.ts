@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
+import { createSecretKey, KeyObject } from "node:crypto";
 import { AppConfig } from "../../config/app-config";
 import {
   AccessTokenClaims,
@@ -10,22 +11,31 @@ import { AuthDomainError } from "../domain/auth.errors";
 
 const ALGORITHM = "HS256";
 
+/**
+ * HS256 access tokens. The key is built once: given the secret as a string,
+ * jsonwebtoken first tries to parse it as a PEM public key on every verify,
+ * which cost 17% of the API's CPU under load (BUG-9, H4).
+ */
 @Injectable()
 export class JwtTokenSigner extends TokenSigner {
+  private readonly key: KeyObject;
+
   constructor(
     private readonly jwt: JwtService,
     private readonly config: AppConfig,
   ) {
     super();
+    this.key = createSecretKey(
+      Buffer.from(config.values.jwt.accessSecret, "utf8"),
+    );
   }
 
   async sign(claims: AccessTokenClaims): Promise<SignedAccessToken> {
-    const { accessSecret, issuer, audience, accessTokenTtlSeconds } =
-      this.config.values.jwt;
+    const { issuer, audience, accessTokenTtlSeconds } = this.config.values.jwt;
     const token = await this.jwt.signAsync(
       { sub: claims.sub, ver: claims.ver },
       {
-        secret: accessSecret,
+        privateKey: this.key,
         algorithm: ALGORITHM,
         issuer,
         audience,
@@ -36,12 +46,13 @@ export class JwtTokenSigner extends TokenSigner {
   }
 
   async verify(token: string): Promise<AccessTokenClaims> {
-    const { accessSecret, issuer, audience } = this.config.values.jwt;
+    const { issuer, audience } = this.config.values.jwt;
     let payload: Record<string, unknown>;
     try {
       // Pinning the algorithm rejects "none" and asymmetric-key confusion tokens.
       payload = await this.jwt.verifyAsync(token, {
-        secret: accessSecret,
+        // Typed as string | Buffer, but handed to jsonwebtoken, which takes a KeyObject.
+        publicKey: this.key as unknown as Buffer,
         algorithms: [ALGORITHM],
         issuer,
         audience,

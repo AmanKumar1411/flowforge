@@ -1,3 +1,5 @@
+import { isIP } from "node:net";
+import { availableParallelism } from "node:os";
 import { AuthDomainError } from "../auth/domain/auth.errors";
 import { RoleResolver } from "../auth/domain/role-resolver";
 import { normalizeEmail } from "../auth/domain/university-identity-parser";
@@ -7,10 +9,28 @@ type Environment = Record<string, unknown>;
 
 export type NodeEnvironment = "development" | "test" | "production";
 
+/** Express's `trust proxy`: off, a hop count, or named proxies (`loopback`, addresses, CIDRs). */
+export type TrustProxy = false | number | string;
+
 export interface AppConfigValues {
   nodeEnv: NodeEnvironment;
   port: number;
   databaseUrl: string;
+  /** Processes `npm start` runs (src/cluster.ts); each has its own pool. */
+  apiWorkers: number;
+  database: {
+    /** Connections each process's pool may open. */
+    poolMax: number;
+    /** The server's max_connections, and how many of them to leave for migrations and tools. */
+    maxConnections: number;
+    connectionHeadroom: number;
+    /** Emit an event per query; only tests that count queries turn it on. */
+    queryEvents: boolean;
+  };
+  /** How long an idle keep-alive connection stays open; above any proxy's idle timeout (H5). */
+  keepAliveTimeoutMs: number;
+  /** Request bodies nested deeper are refused before validation walks them (H8). */
+  maxBodyDepth: number;
   frontendUrl: string;
   cookieSecret: string;
   google: { clientId: string; clientSecret: string; redirectUri: string };
@@ -28,9 +48,31 @@ export interface AppConfigValues {
     audience: string;
     accessTokenTtlSeconds: number;
   };
-  sessions: { refreshTokenTtlDays: number; refreshFamilyMaxDays: number };
+  sessions: {
+    refreshTokenTtlDays: number;
+    refreshFamilyMaxDays: number;
+    /** A token rotated this recently may be presented again (two tabs at once) without ending the family (H14). */
+    refreshReuseGraceSeconds: number;
+  };
   devLoginEnabled: boolean;
-  rateLimits: { loginPerMinute: number; refreshPerMinute: number };
+  /** Marks and a "marked out of" scale; off means feedback-only grading everywhere. */
+  evaluationMarksEnabled: boolean;
+  /** Which proxies may set X-Forwarded-For; the client IP comes from it only behind them. */
+  trustProxy: TrustProxy;
+  rateLimits: {
+    /** Sign-in routes, per client IP: sized for a campus behind one NAT. */
+    loginPerMinute: number;
+    /** Google sign-ins per Google account (`sub`). */
+    accountLoginPerMinute: number;
+    /** Refreshes per refresh-token family; never per IP. */
+    refreshPerMinute: number;
+    /** Submissions per user per milestone (H10). */
+    submissionsPerMinute: number;
+    /** Every other authenticated write (POST, PUT, PATCH, DELETE), per user (H10). */
+    writesPerMinute: number;
+  };
+  /** Versions a team may submit for one milestone (H10). */
+  submissionVersionLimit: number;
 }
 
 // Rejects backreferences, lookarounds and nested quantifiers to keep matching linear.
@@ -97,6 +139,29 @@ class EnvironmentReader {
       throw new Error(`${key} must be "true" or "false"`);
     }
     return value === "true";
+  }
+
+  trustProxy(key: string): TrustProxy {
+    const value = this.optional(key);
+    if (value === undefined || value === "false") return false;
+    if (/^\d+$/.test(value)) return this.integer(key, 1, 10);
+    if (value === "true") {
+      throw new Error(
+        `${key}=true would trust any X-Forwarded-For; name the proxy: loopback, its address, or a hop count`,
+      );
+    }
+    const named = ["loopback", "linklocal", "uniquelocal"];
+    const parts = value.split(",").map((part) => part.trim());
+    for (const part of parts) {
+      const [address, prefix] = part.split("/");
+      const validPrefix = prefix === undefined || /^\d{1,3}$/.test(prefix);
+      if (!named.includes(part) && !(isIP(address) && validPrefix)) {
+        throw new Error(
+          `${key} must be false, a hop count, or loopback, linklocal, uniquelocal, IP addresses and CIDRs separated by commas`,
+        );
+      }
+    }
+    return parts.join(",");
   }
 
   safePattern(key: string): RegExp {
@@ -192,10 +257,32 @@ export function parseEnvironment(env: Environment): AppConfigValues {
     );
   }
 
+  // The test login works in tests, and in development from this machine only (H11).
   const devLoginEnabled = read.boolean("AUTH_DEV_LOGIN_ENABLED", false);
-  if (devLoginEnabled && nodeEnv === "production") {
+  if (devLoginEnabled && nodeEnv !== "test" && nodeEnv !== "development") {
     throw new Error(
-      "AUTH_DEV_LOGIN_ENABLED must be false when NODE_ENV is production",
+      `AUTH_DEV_LOGIN_ENABLED must be false when NODE_ENV is ${nodeEnv}; the test login is for NODE_ENV=test, or development on this machine`,
+    );
+  }
+
+  const apiWorkers = read.integer(
+    "API_WORKERS",
+    1,
+    256,
+    availableParallelism(),
+  );
+  const database = {
+    poolMax: read.integer("DB_POOL_MAX", 1, 500, 10),
+    maxConnections: read.integer("DB_MAX_CONNECTIONS", 2, 100_000, 100),
+    connectionHeadroom: read.integer("DB_CONNECTION_HEADROOM", 0, 1_000, 10),
+    queryEvents: read.boolean("DB_QUERY_EVENTS", false),
+  };
+  const budget = database.maxConnections - database.connectionHeadroom;
+  if (apiWorkers * database.poolMax > budget) {
+    throw new Error(
+      `API_WORKERS × DB_POOL_MAX (${apiWorkers} × ${database.poolMax} = ${apiWorkers * database.poolMax}) ` +
+        `exceeds DB_MAX_CONNECTIONS − DB_CONNECTION_HEADROOM (${database.maxConnections} − ${database.connectionHeadroom} = ${budget}); ` +
+        "run fewer workers, give each a smaller pool, or raise the server's max_connections",
     );
   }
 
@@ -203,6 +290,15 @@ export function parseEnvironment(env: Environment): AppConfigValues {
     nodeEnv,
     port: read.integer("PORT", 1, 65535, 3000),
     databaseUrl: databaseUrl.toString(),
+    apiWorkers,
+    database,
+    keepAliveTimeoutMs: read.integer(
+      "HTTP_KEEP_ALIVE_TIMEOUT_MS",
+      1_000,
+      600_000,
+      65_000,
+    ),
+    maxBodyDepth: read.integer("MAX_BODY_DEPTH", 4, 1_000, 32),
     frontendUrl: frontendUrl.origin,
     cookieSecret,
     google: {
@@ -222,11 +318,28 @@ export function parseEnvironment(env: Environment): AppConfigValues {
       audience: read.required("JWT_AUDIENCE"),
       accessTokenTtlSeconds: read.duration("ACCESS_TOKEN_TTL"),
     },
-    sessions: { refreshTokenTtlDays, refreshFamilyMaxDays },
+    sessions: {
+      refreshTokenTtlDays,
+      refreshFamilyMaxDays,
+      refreshReuseGraceSeconds: read.integer(
+        "REFRESH_REUSE_GRACE_SECONDS",
+        0,
+        60,
+        10,
+      ),
+    },
     devLoginEnabled,
+    evaluationMarksEnabled: read.boolean("EVALUATION_MARKS_ENABLED", false),
+    trustProxy: read.trustProxy("TRUST_PROXY"),
     rateLimits: {
       loginPerMinute: read.integer(
         "AUTH_LOGIN_RATE_LIMIT_PER_MINUTE",
+        1,
+        100_000,
+        600,
+      ),
+      accountLoginPerMinute: read.integer(
+        "AUTH_ACCOUNT_LOGIN_RATE_LIMIT_PER_MINUTE",
         1,
         10_000,
         10,
@@ -235,9 +348,27 @@ export function parseEnvironment(env: Environment): AppConfigValues {
         "AUTH_REFRESH_RATE_LIMIT_PER_MINUTE",
         1,
         10_000,
-        30,
+        10,
+      ),
+      submissionsPerMinute: read.integer(
+        "SUBMISSION_RATE_LIMIT_PER_MINUTE",
+        1,
+        10_000,
+        10,
+      ),
+      writesPerMinute: read.integer(
+        "WRITE_RATE_LIMIT_PER_MINUTE",
+        1,
+        10_000,
+        120,
       ),
     },
+    submissionVersionLimit: read.integer(
+      "SUBMISSION_VERSION_LIMIT",
+      1,
+      1_000,
+      50,
+    ),
   };
 }
 

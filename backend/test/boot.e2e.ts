@@ -66,6 +66,19 @@ describe("Boot-time configuration", () => {
     );
   });
 
+  it("refuses dev login in any environment but test and development, such as staging (H11)", () => {
+    const result = boot({
+      NODE_ENV: "staging",
+      AUTH_DEV_LOGIN_ENABLED: "true",
+    });
+    assert.equal(result.exitCode, 1);
+    // staging is not an environment the API accepts at all, with or without the test login.
+    assert.match(
+      result.stderr,
+      /NODE_ENV must be development, test or production/,
+    );
+  });
+
   it("names a missing required variable", () => {
     const result = boot({ GOOGLE_CLIENT_ID: "" });
     assert.equal(result.exitCode, 1);

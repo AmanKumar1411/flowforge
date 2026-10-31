@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Runs every QA suite against the isolated stack, reseeding before each so results are independent.
 #   tests/run-all.sh            functional suites (security, concurrency, e2e, browsers, a11y, resilience, integrity)
-#   LOAD=1 tests/run-all.sh     also the k6 profiles normal, peak, spike, soak (about 2 hours)
+#   LOAD=1 tests/run-all.sh     also the k6 profiles normal, peak, spike, soak and campus, with the real
+#                               rate limits (about 2.5 hours)
 set -uo pipefail
 cd "$(dirname "$0")"
 QA_LOAD=1 ./support/qa-stack.sh up
@@ -21,10 +22,12 @@ run a11y --project=a11y --workers=1
 run resilience --project=resilience --workers=1
 node support/integrity.cjs results/integrity.json
 if [ "${LOAD:-0}" = 1 ]; then
+  # The API again, with the real limits (no QA_LOAD), as a cluster.
+  SKIP_BUILD=1 ./support/qa-stack.sh api
   # One seed, then the profiles back to back: the data grows from one profile to the next, as in the report.
   node seed/seed.cjs > /dev/null
-  for profile in normal peak spike soak; do ./load/run.sh "$profile"; done
+  for profile in normal peak spike soak campus; do ./load/run.sh "$profile"; done
   node support/integrity.cjs results/integrity-after-load.json
-  node support/charts.cjs normal peak spike soak
-  node load/tables.cjs normal peak spike soak > results/load/tables.md
+  node support/charts.cjs normal peak spike soak campus
+  node load/tables.cjs normal peak spike soak campus > results/load/tables.md
 fi

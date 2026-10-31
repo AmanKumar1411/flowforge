@@ -11,6 +11,7 @@ import { IdeasModule } from "./ideas/ideas.module";
 import { SubmissionsModule } from "./submissions/submissions.module";
 import { DashboardModule } from "./dashboard/dashboard.module";
 import { EvaluationsModule } from "./evaluations/evaluations.module";
+import { HealthModule } from "./health/health.module";
 import { TeamsModule } from "./teams/teams.module";
 
 @Module({
@@ -30,6 +31,7 @@ import { TeamsModule } from "./teams/teams.module";
     SubmissionsModule,
     EvaluationsModule,
     DashboardModule,
+    HealthModule,
   ],
 })
 export class AppModule {}

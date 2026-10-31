@@ -4,6 +4,7 @@ import { NestExpressApplication } from "@nestjs/platform-express";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import * as cookieParser from "cookie-parser";
 import helmet from "helmet";
+import { Server } from "node:http";
 import { AppModule } from "./app.module";
 import { REFRESH_COOKIE } from "./auth/presentation/auth-cookies";
 import { API_PREFIX } from "./common/http/api-prefix";
@@ -14,6 +15,14 @@ export function configureApp(app: NestExpressApplication): void {
   const config = app.get(AppConfig);
 
   app.setGlobalPrefix(API_PREFIX);
+  // Idle connections stay open longer than any proxy's idle timeout, so the API is never the
+  // side that closes one a proxy (or a browser) is about to reuse for a POST (H5).
+  const server = app.getHttpServer() as Server;
+  server.keepAliveTimeout = config.values.keepAliveTimeoutMs;
+  server.headersTimeout = config.values.keepAliveTimeoutMs + 1_000;
+  // Off unless a proxy is named: then the client IP comes from its X-Forwarded-For, which a
+  // client talking to the API directly cannot forge (ADR 023).
+  app.set("trust proxy", config.values.trustProxy);
   app.use(
     helmet({
       // HTTPS-only headers would break plain-http localhost development.
@@ -65,8 +74,11 @@ export async function createApp(): Promise<NestExpressApplication> {
   return app;
 }
 
-async function bootstrap(): Promise<void> {
+/** One API process: `npm run start:single`, or one worker of `src/cluster.ts`. */
+export async function bootstrap(): Promise<void> {
   const app = await createApp();
+  // SIGTERM: stop accepting, finish requests in flight, close the pool.
+  app.enableShutdownHooks();
   await app.listen(app.get(AppConfig).values.port);
 }
 

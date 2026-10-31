@@ -37,6 +37,9 @@ and the sections below read "the window" as **that milestone's window**:
 | Versions 1, 2, 3… per team, even when two members save at once | Team row `FOR UPDATE`, then the next number; unique `(teamId, version)`; CHECK `version >= 1` |
 | A submission stays in its team's cycle | Composite foreign key `(teamId, cycleId)` → `Team (id, cycleId)` |
 | Every version is audited | `SUBMISSION_CREATED` in the same transaction |
+| At most 10 versions per member per milestone per minute (`429 TOO_MANY_REQUESTS`) | `SubmissionService`, through the shared `RateLimiter` (ADR 023) |
+| At most 50 versions per team per milestone (`409 VERSION_LIMIT_REACHED`, `SUBMISSION_VERSION_LIMIT`) | `SubmissionRules.assertBelowVersionLimit`, under the team's lock |
+| The faculty list and grading read each team's latest version only; a team's history is paged | `listLatestByMilestone` (`DISTINCT ON`); `GET …/submissions?limit&before` (ADR 024) |
 
 ## Module structure
 
@@ -100,9 +103,20 @@ sequenceDiagram
 | Why lock the team row? | Two members saving at once would both read version 2 and both write 3; the lock makes the second wait and read 3. | `prisma-submission.repository.ts: lockLatestVersion` |
 | Why read teams through the ideas module? | Visibility and the idea's status come from one place. | `ideas-submission-teams.ts` |
 
+## Reads (Phase 10)
+
+- `GET /course-cycles/:id/milestones/:m/submissions` (faculty): every team with its idea, its
+  `latest` version and `versionCount`. Versions are numbered without gaps, so the count is the
+  latest version number. The list no longer carries every version.
+- `GET /teams/:teamId/milestones/:m/submissions?limit=&before=`: the team's versions, newest first.
+  Without `limit`, a page holds 50 (as many as a team may submit); with `before`, only versions
+  older than that one. The faculty screen reads ten at a time when a team's history is opened.
+- A submission reads a summary of the team's idea (title, status, source), and saves with one
+  `INSERT … RETURNING`.
+
 ## Limitations
 
 - Links can change after the deadline (for example a repository's default branch). Teams should
   link to a release or commit.
 - There is no admin screen; admins read submissions through the API.
-- Evaluations of submissions are the next phase.
+- Evaluations are in [evaluations.md](evaluations.md).

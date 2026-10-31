@@ -2,6 +2,7 @@ import type {
   CycleEvent,
   CycleStage,
 } from "../../course-cycles/domain/cycle-timeline";
+import type { MarksPart } from "../../evaluations/application/evaluation-views";
 import type { DashboardUpdate } from "../domain/dashboard-feed";
 
 export interface CycleSummary {
@@ -22,10 +23,8 @@ export interface UpNextItem {
   action?: { tab: "team" | "idea" | "milestones"; actionable: boolean };
 }
 
-export interface ProjectResult {
+export interface ProjectResult extends MarksPart {
   milestone: { id: string; position: number; name: string };
-  marks: number | null;
-  maxMarks: number | null;
   feedback: string | null;
   releasedAt: Date;
   updatedAt: Date;

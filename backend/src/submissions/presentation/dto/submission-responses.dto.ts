@@ -77,19 +77,15 @@ export class CycleSubmissionDto {
   })
   latest!: SubmissionDto | null;
   @ApiProperty({
-    type: SubmissionDto,
-    isArray: true,
-    description: "Every version for the milestone, newest first",
+    description:
+      "How many versions the team has; read them from GET /teams/:teamId/milestones/:milestoneId/submissions",
   })
-  versions!: SubmissionDto[];
-  @ApiProperty()
   versionCount!: number;
 
   static from({
     team,
     idea,
     latest,
-    versions,
     versionCount,
   }: CycleSubmission): CycleSubmissionDto {
     const leader = team.members.find(
@@ -104,7 +100,6 @@ export class CycleSubmissionDto {
       },
       idea,
       latest: latest ? SubmissionDto.from(latest) : null,
-      versions: versions.map((version) => SubmissionDto.from(version)),
       versionCount,
     });
   }

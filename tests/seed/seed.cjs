@@ -217,8 +217,10 @@ function main() {
     });
   };
 
+  // Feedback only, like the API's default (H3); QA_MARKS=1 seeds marks and a scale as well.
+  const withMarks = process.env.QA_MARKS === "1";
   const grade = (owner, milestone, maxMarks, releasedAt, teamsToGrade, marksOf, updatedAfterRelease) => {
-    gradings.push({ milestoneId: milestone.id, maxMarks, releasedAt, releasedById: releasedAt ? owner.createdByFacultyId : null, updatedAt: releasedAt ?? milestone.submissionDueAt });
+    gradings.push({ milestoneId: milestone.id, maxMarks: withMarks ? maxMarks : null, releasedAt, releasedById: releasedAt ? owner.createdByFacultyId : null, updatedAt: releasedAt ?? milestone.submissionDueAt });
     teamsToGrade.forEach((t, k) => {
       const created = new Date(milestone.submissionDueAt.getTime() + 6 * HOUR);
       const evaluation = {
@@ -226,7 +228,7 @@ function main() {
         milestoneId: milestone.id,
         teamId: t.id,
         cycleId: owner.id,
-        marks: String(marksOf(k)),
+        marks: withMarks ? String(marksOf(k)) : null,
         feedback: `Feedback for ${t.name}: clear structure, add tests.`,
         version: 1,
         evaluatedById: owner.createdByFacultyId,
@@ -236,8 +238,8 @@ function main() {
       revisions.push({ id: randomUUID(), evaluationId: evaluation.id, version: 1, marks: evaluation.marks, feedback: evaluation.feedback, evaluatedById: evaluation.evaluatedById, createdAt: created });
       if (updatedAfterRelease(k)) {
         evaluation.version = 2;
-        evaluation.marks = String(Math.min(maxMarks, marksOf(k) + 5));
-        evaluation.feedback += " Re-marked after review.";
+        evaluation.marks = withMarks ? String(Math.min(maxMarks, marksOf(k) + 5)) : null;
+        evaluation.feedback += " Updated after review.";
         evaluation.updatedAt = at(-2 * DAY);
         revisions.push({ id: randomUUID(), evaluationId: evaluation.id, version: 2, marks: evaluation.marks, feedback: evaluation.feedback, evaluatedById: evaluation.evaluatedById, createdAt: evaluation.updatedAt });
       }
@@ -351,7 +353,7 @@ function main() {
 const TABLES = [
   "EvaluationRevision", "Evaluation", "MilestoneGrading", "Submission", "IdeaReview", "ProjectIdea", "CatalogIdea",
   "TeamSeeker", "TeamMember", "Team", "CycleEnrollment", "Milestone", "CourseProjectCycle", "AuditLog",
-  "RefreshToken", "FacultyAccessRequest", "FacultyAllowlistEntry", "User",
+  "RefreshToken", "FacultyAccessRequest", "FacultyAllowlistEntry", "User", "RateLimitCounter",
 ];
 
 async function run() {

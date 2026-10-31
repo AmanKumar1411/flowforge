@@ -2,6 +2,7 @@ import { AuditService } from "../../audit/audit.service";
 import { AuditEvent } from "../../audit/domain/audit-event";
 import { FixedClock } from "../../common/testing/fixed-clock";
 import { ImmediateTransactionRunner } from "../../common/testing/immediate-transaction.runner";
+import { InMemoryRateLimiter } from "../../common/testing/in-memory-rate-limiter";
 import { Transaction } from "../../common/transaction";
 import { createTestAppConfig } from "../../config/testing/test-environment";
 import { User } from "../../users/domain/user";
@@ -37,6 +38,7 @@ describe("SessionService", () => {
       new ImmediateTransactionRunner(),
       clock,
       createTestAppConfig(lifetimes),
+      new InMemoryRateLimiter(clock),
     );
 
   beforeEach(() => {
@@ -79,9 +81,10 @@ describe("SessionService", () => {
     expect(next?.revokedAt).toBeNull();
   });
 
-  it("revokes the whole family when a rotated token is replayed", async () => {
+  it("revokes the whole family when a rotated token is replayed after the grace window", async () => {
     const first = await start();
     const second = await sessions.rotate(first.value, "jest");
+    clock.advance(11_000);
 
     await expect(sessions.rotate(first.value, "jest")).rejects.toMatchObject({
       code: "REFRESH_TOKEN_REUSED",
@@ -95,6 +98,34 @@ describe("SessionService", () => {
         entityId: record(first.value)?.familyId,
       }),
     ]);
+  });
+
+  it("gives a token in the same family to a token presented again within the grace window (two tabs, H14)", async () => {
+    const first = await start();
+    const winner = await sessions.rotate(first.value, "jest");
+    clock.advance(3_000);
+    const sibling = await sessions.rotate(first.value, "jest");
+
+    expect(record(sibling.refreshToken.value)?.familyId).toBe(
+      record(first.value)?.familyId,
+    );
+    // Both tokens stay usable, and nothing was reported as reuse.
+    await expect(
+      sessions.rotate(winner.refreshToken.value, "jest"),
+    ).resolves.toBeDefined();
+    await expect(
+      sessions.rotate(sibling.refreshToken.value, "jest"),
+    ).resolves.toBeDefined();
+    expect(audited).toEqual([]);
+  });
+
+  it("gives no grace to a token of a family that has ended", async () => {
+    const first = await start();
+    await sessions.rotate(first.value, "jest");
+    await sessions.revokeFamilyOf(first.value, tx);
+    await expect(sessions.rotate(first.value, "jest")).rejects.toMatchObject({
+      code: "REFRESH_TOKEN_REUSED",
+    });
   });
 
   it("treats a lost compare-and-set as reuse", async () => {
@@ -185,5 +216,23 @@ describe("SessionService", () => {
         code: "TOKEN_REVOKED",
       });
     }
+  });
+
+  it("limits refreshes per family, not per caller: the 11th in a minute is refused, other families are not", async () => {
+    sessions = createSessions({ AUTH_REFRESH_RATE_LIMIT_PER_MINUTE: "10" });
+    let token = (await start()).value;
+    for (let refresh = 1; refresh <= 10; refresh += 1) {
+      token = (await sessions.rotate(token, "jest")).refreshToken.value;
+    }
+    await expect(sessions.rotate(token, "jest")).rejects.toMatchObject({
+      code: "TOO_MANY_REQUESTS",
+    });
+    // The limited token is still the family's current one: no reuse, no revocation.
+    expect(record(token)?.revokedAt).toBeNull();
+    const other = await start();
+    await expect(sessions.rotate(other.value, "jest")).resolves.toBeDefined();
+
+    clock.advance(60_000);
+    await expect(sessions.rotate(token, "jest")).resolves.toBeDefined();
   });
 });

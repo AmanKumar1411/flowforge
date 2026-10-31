@@ -14,6 +14,7 @@ import {
 import { LinkRequirementShape } from "../../../common/links/link-requirement";
 import { LINK_TYPES, LinkType } from "../../../common/links/link-type";
 import { MilestoneCommand } from "../../application/cycle-commands";
+import { IsCleanText } from "../../../common/validation/clean-text";
 
 /** Which links are required and which are optional; any other type is not allowed. */
 export class LinkRequirementDto implements LinkRequirementShape {
@@ -39,6 +40,7 @@ export class MilestoneDto implements MilestoneCommand {
 
   @ApiProperty({ example: "Design review", maxLength: 80 })
   @IsString()
+  @IsCleanText()
   @IsNotEmpty()
   @MaxLength(80)
   name!: string;
@@ -51,6 +53,7 @@ export class MilestoneDto implements MilestoneCommand {
   })
   @IsOptional()
   @IsString()
+  @IsCleanText()
   @MaxLength(2000)
   description?: string | null;
 

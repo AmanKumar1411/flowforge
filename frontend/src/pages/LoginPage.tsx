@@ -10,6 +10,7 @@ export function LoginPage() {
   const { state } = useAuth();
   const [params] = useSearchParams();
   const denial = messageForCode(params.get("error"));
+  const signedOut = params.get("signedOut") === "1";
 
   if (state.status === "signed-in") {
     return <Navigate to={dashboardFor(state.user)} replace />;
@@ -34,6 +35,12 @@ export function LoginPage() {
         <p className="card-kicker">Welcome back</p>
         <h2>Sign in to continue</h2>
         {denial && <p className="form-error banner">{denial}</p>}
+        {signedOut && (
+          <p className="notice" role="status">
+            You're signed out on this device. Use <strong>Sign out everywhere</strong> on shared computers: it also ends
+            this account's other tabs and devices at once, which a single sign-out leaves open for up to 15 minutes.
+          </p>
+        )}
         <a className="primary-button google-button" href={googleSignInUrl}>
           Sign in with Google
         </a>

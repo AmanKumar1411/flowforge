@@ -143,10 +143,20 @@ Every error has the shape `{ code, message }` (`ApiExceptionFilter`). The code â
 
 - `helmet` (HSTS and `upgrade-insecure-requests` only in production), CORS limited to
   `FRONTEND_URL` with credentials.
-- `@nestjs/throttler` on `/api/auth`: each login route (`google`, `google/callback`, `dev-login`)
-  allows 10 requests per minute per IP, and `refresh` and `logout` 30 (both configurable). Counters
-  are per route, so one full Google sign-in (start plus callback) uses one request from each. Behind a reverse proxy, enable Express `trust proxy` so the real
-  client IP is used. A campus NAT shares one IP, so raise the login limit for a whole-class login.
+- Rate limits, keyed by what they protect ([ADR 023](../decisions/023-campus-limits-and-sessions.md)), with counters
+  in PostgreSQL (`RateLimitCounter`, UNLOGGED) so every API process shares them:
+  - sign-in routes (`google`, `google/callback`, `dev-login`): 600 per minute per client IP, sized
+    for a campus behind one NAT; each route has its own count;
+  - Google sign-in: 10 per minute per Google account, checked once Google has vouched for it;
+  - refresh: 10 per minute per refresh-token family, never per IP; a limited refresh is 429 and
+    keeps its cookie.
+- `TRUST_PROXY` (off by default) names the proxy whose `X-Forwarded-For` gives the client IP;
+  without it the header is ignored, so a client cannot change its own IP. `true` is refused.
+- A rotated refresh token presented again within `REFRESH_REUSE_GRACE_SECONDS` (10) gets a token in
+  the same family (two tabs at once); after that, reuse still ends the family.
+- Refresh clears its cookie only for an answer about the session (`INVALID_REFRESH_TOKEN`,
+  `TOKEN_REVOKED`, `REFRESH_TOKEN_REUSED`, `ACCOUNT_DEACTIVATED`, `UNAUTHENTICATED`). A database
+  outage is `503 SERVICE_UNAVAILABLE` and the browser keeps its session, retrying with backoff.
 - Cookie-authenticated routes (`refresh`, `logout`, `dev-login`) require `Origin == FRONTEND_URL`.
 - Tokens, codes and cookie values are never logged. `AuditService` refuses metadata keys that look
   like secrets.
@@ -170,7 +180,10 @@ Every error has the shape `{ code, message }` (`ApiExceptionFilter`). The code â
 `DemoAccountsService` creates the accounts listed in `application/demo-accounts.ts` ahead of their
 first dev login (`npm run seed:demo`, which boots the app context and calls `seed()`), and lists
 them for the login page (`GET /auth/dev-login/accounts`). Both check
-`DevIdentityProvider.assertEnabled()` first, so they refuse exactly when dev login does.
+`DevIdentityProvider.assertEnabled()` first, so they refuse exactly when dev login does. Both routes
+also pass `DevLoginGuard`: dev login answers only with `NODE_ENV=test`, or in development to a
+request from this machine (a loopback peer and no forwarding header); anything else is 404
+`DEV_LOGIN_DISABLED`. Boot is refused with `AUTH_DEV_LOGIN_ENABLED=true` in any other environment.
 
 - Users get the provider sub `dev|<email>` (`devSubject`), so the later dev login finds them
   instead of hitting `IDENTITY_CONFLICT`. Their `lastLoginAt` stays empty until then.

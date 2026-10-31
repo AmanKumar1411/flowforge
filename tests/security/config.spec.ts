@@ -13,7 +13,7 @@ const m = manifest();
 async function bootApi(port: number, env: Record<string, string>): Promise<{ proc: ChildProcess; output: () => string; up: boolean }> {
   const secrets = qaSecrets();
   let output = "";
-  const proc = spawn("node", ["dist/src/main.js"], {
+  const proc = spawn("node", ["dist/main.js"], {
     cwd: path.join(ROOT, "backend"),
     env: {
       ...process.env,
@@ -24,8 +24,10 @@ async function bootApi(port: number, env: Record<string, string>): Promise<{ pro
       JWT_ACCESS_SECRET: secrets.QA_JWT_SECRET,
       COOKIE_SECRET: secrets.QA_COOKIE_SECRET,
       ADMIN_BOOTSTRAP_EMAILS: m.admin,
-      AUTH_LOGIN_RATE_LIMIT_PER_MINUTE: "10",
-      AUTH_REFRESH_RATE_LIMIT_PER_MINUTE: "30",
+      // Counters are shared through the database with the QA API that every other test signs in to,
+      // so an API booted here is not about limits unless the test says so (SEC-ABUSE-4).
+      AUTH_LOGIN_RATE_LIMIT_PER_MINUTE: "10000",
+      AUTH_REFRESH_RATE_LIMIT_PER_MINUTE: "10000",
       ...env,
     },
   });
@@ -81,21 +83,47 @@ test("SEC-AUTH-11 production refuses to boot with the test login, and a producti
   }
 });
 
-test("SEC-AUTH-12 a production web build has no test-login form; a build that picks up frontend/.env does", async () => {
-  const build = (outDir: string, env: Record<string, string>) =>
-    execSync(`npx vite build --outDir ${outDir} --emptyOutDir`, { cwd: path.join(ROOT, "frontend"), env: { ...process.env, VITE_API_BASE_URL: "https://api.example.org/api", ...env }, stdio: "pipe" });
-  const prodDir = path.join(QA_DIR, "web-prod");
-  build(prodDir, { VITE_DEV_LOGIN: "false" });
+test("SEC-AUTH-12 a production web build refuses the test-login flag and never ships the form; a test-mode build does", async () => {
+  test.setTimeout(240_000);
+  const frontend = path.join(ROOT, "frontend");
+  const build = (outDir: string, env: Record<string, string>, mode = "production") =>
+    execSync(`npx vite build --mode ${mode} --outDir ${outDir} --emptyOutDir`, { cwd: frontend, env: { ...process.env, VITE_API_BASE_URL: "https://api.example.org/api", ...env }, stdio: "pipe" });
   const bundle = (dir: string) => fs.readdirSync(path.join(dir, "assets")).filter((f) => f.endsWith(".js")).map((f) => fs.readFileSync(path.join(dir, "assets", f), "utf8")).join("\n");
-  const prodJs = bundle(prodDir);
-  expect(prodJs).not.toContain("Dev sign in");
-  // A plain build in a developer checkout reads frontend/.env (VITE_DEV_LOGIN=true there).
-  const defaultDir = path.join(QA_DIR, "web-default");
+
+  // The flag in a production build stops the build (H12).
+  let refused = "";
+  try {
+    build(path.join(QA_DIR, "web-refused"), { VITE_DEV_LOGIN: "true" });
+  } catch (error) {
+    refused = String((error as { stderr?: Buffer }).stderr ?? error);
+  }
+  expect(refused).toContain("VITE_DEV_LOGIN=true in a production build");
+
+  // A plain build in a developer checkout: the flag lives in .env.development.local, which it does not read.
+  const plainDir = path.join(QA_DIR, "web-prod");
   const env = { ...process.env } as Record<string, string>;
   delete env.VITE_DEV_LOGIN;
-  execSync(`npx vite build --outDir ${defaultDir} --emptyOutDir`, { cwd: path.join(ROOT, "frontend"), env, stdio: "pipe" });
-  const defaultJs = bundle(defaultDir);
-  test.info().annotations.push({ type: "observation", description: `plain 'vite build' with frontend/.env present ships the dev-login form: ${defaultJs.includes("Dev sign in")}` });
+  execSync(`npx vite build --outDir ${plainDir} --emptyOutDir`, { cwd: frontend, env, stdio: "pipe" });
+  expect(bundle(plainDir)).not.toContain("Dev sign in");
+
+  // The QA stack's own build (--mode test) is the only one with the form.
+  const testDir = path.join(QA_DIR, "web-default");
+  build(testDir, { VITE_DEV_LOGIN: "true" }, "test");
+  expect(bundle(testDir)).toContain("Dev sign in");
+});
+
+test("SEC-AUTH-11b in development the test login answers only requests from this machine, never forwarded ones", async () => {
+  const dev = await bootApi(3296, { NODE_ENV: "development", AUTH_DEV_LOGIN_ENABLED: "true" });
+  try {
+    expect(dev.up, dev.output().slice(-500)).toBeTruthy();
+    const ctx = await request.newContext({ extraHTTPHeaders: { Origin: WEB } });
+    const body = { email: m.students["2024"][340], name: "Dev" };
+    expect((await send(ctx, "POST", "http://localhost:3296/api/auth/dev-login", body)).status).toBe(204);
+    const forwarded = await send(ctx, "POST", "http://localhost:3296/api/auth/dev-login", body, { "X-Forwarded-For": "203.0.113.5" });
+    expect([forwarded.status, forwarded.body?.code]).toEqual([404, "DEV_LOGIN_DISABLED"]);
+  } finally {
+    dev.proc.kill();
+  }
 });
 
 test("SEC-CONF-1 the bundles hold no secrets, database URLs or source maps", async () => {
@@ -160,22 +188,45 @@ test("SEC-CONF-4 error bodies are {code, message} with no stack traces, SQL or f
   test.info().annotations.push({ type: "observation", description: `Swagger on the QA (NODE_ENV=test) API: ${docs.status()}` });
 });
 
-test("SEC-ABUSE-4 sign-in and refresh are rate limited per client and X-Forwarded-For does not reset the limit", async () => {
-  const limited = await bootApi(3201, { NODE_ENV: "test", AUTH_DEV_LOGIN_ENABLED: "true" });
+test("SEC-ABUSE-4 sign-in is limited per client IP (from the proxy when one is trusted), refresh per session, and a forged X-Forwarded-For changes nothing", async () => {
+  // Counters live in the shared database, so this API gets its own client IPs through a trusted proxy.
+  const limits = { AUTH_LOGIN_RATE_LIMIT_PER_MINUTE: "10", AUTH_REFRESH_RATE_LIMIT_PER_MINUTE: "10" };
+  const proxied = await bootApi(3201, { NODE_ENV: "test", AUTH_DEV_LOGIN_ENABLED: "true", TRUST_PROXY: "loopback", ...limits });
+  const direct = await bootApi(3203, { NODE_ENV: "test", AUTH_DEV_LOGIN_ENABLED: "true", ...limits });
   try {
-    expect(limited.up, limited.output().slice(-500)).toBeTruthy();
+    expect(proxied.up, proxied.output().slice(-500)).toBeTruthy();
+    expect(direct.up, direct.output().slice(-500)).toBeTruthy();
+    const n = 1 + Math.floor(Math.random() * 200);
+    const [client, neighbour] = [`198.51.100.${n}`, `198.51.100.${n + 1}`];
     const ctx = await request.newContext({ extraHTTPHeaders: { Origin: WEB } });
+    const login = (base: string, i: number, ip?: string) =>
+      send(ctx, "POST", `${base}/auth/dev-login`, { email: m.students["2024"][300 + i], name: "Rate Limit" }, ip ? { "X-Forwarded-For": ip } : {});
     const statuses: number[] = [];
-    for (let i = 0; i < 14; i += 1) {
-      statuses.push((await send(ctx, "POST", "http://localhost:3201/api/auth/dev-login", { email: m.students["2024"][300 + i], name: "Rate Limit" })).status);
-    }
-    expect(statuses.slice(0, 10).every((s) => s === 204), statuses.join(",")).toBeTruthy();
+    for (let i = 0; i < 14; i += 1) statuses.push((await login("http://localhost:3201/api", i, client)).status);
+    expect(statuses.slice(0, 10).every((x) => x === 204), statuses.join(",")).toBeTruthy();
     expect(statuses.slice(10)).toContain(429);
-    const spoofed = await send(ctx, "POST", "http://localhost:3201/api/auth/dev-login", { email: m.students["2024"][320], name: "Rate Limit" }, { "X-Forwarded-For": "203.0.113.9" });
-    expect(spoofed.status).toBe(429);
-    test.info().annotations.push({ type: "observation", description: `login statuses: ${statuses.join(",")}; with X-Forwarded-For: ${spoofed.status}` });
+    // Another client behind the same proxy has its own budget.
+    expect((await login("http://localhost:3201/api", 20, neighbour)).status).toBe(204);
+
+    // Without a trusted proxy, X-Forwarded-For is ignored: once limited, a forged one changes nothing.
+    let limited = false;
+    for (let i = 0; i < 12 && !limited; i += 1) limited = (await login("http://localhost:3203/api", i)).status === 429;
+    expect(limited).toBeTruthy();
+    expect((await login("http://localhost:3203/api", 21, "203.0.113.9")).status).toBe(429);
+
+    // Refresh: never per IP, per session family (10 a minute).
+    const family = await request.newContext({ extraHTTPHeaders: { Origin: WEB, "X-Forwarded-For": "198.51.100.251" } });
+    expect((await send(family, "POST", "http://localhost:3201/api/auth/dev-login", { email: m.students["2024"][330], name: "Family" })).status).toBe(204);
+    const refreshes: number[] = [];
+    for (let i = 0; i < 11; i += 1) refreshes.push((await send(family, "POST", "http://localhost:3201/api/auth/refresh")).status);
+    expect(refreshes, refreshes.join(",")).toEqual([...Array(10).fill(200), 429]);
+    const other = await request.newContext({ extraHTTPHeaders: { Origin: WEB, "X-Forwarded-For": "198.51.100.251" } });
+    await send(other, "POST", "http://localhost:3201/api/auth/dev-login", { email: m.students["2024"][331], name: "Other" });
+    expect((await send(other, "POST", "http://localhost:3201/api/auth/refresh")).status, "another session from the same IP").toBe(200);
+    test.info().annotations.push({ type: "observation", description: `login statuses: ${statuses.join(",")}; one family's refreshes: ${refreshes.join(",")}` });
   } finally {
-    limited.proc.kill();
+    proxied.proc.kill();
+    direct.proc.kill();
   }
 });
 

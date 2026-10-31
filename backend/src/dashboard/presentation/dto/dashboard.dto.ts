@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { pickMarks } from "../../../evaluations/application/evaluation-views";
 import {
   CycleEventDto,
   CycleStageDto,
@@ -56,8 +57,18 @@ class UpdateDto {
 class ResultDto {
   @ApiProperty() milestoneId!: string;
   @ApiProperty() label!: string;
-  @ApiProperty({ type: Number, nullable: true }) marks!: number | null;
-  @ApiProperty({ type: Number, nullable: true }) maxMarks!: number | null;
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: "Present only when marks are enabled",
+  })
+  marks?: number | null;
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description: "Present only when marks are enabled",
+  })
+  maxMarks?: number | null;
   @ApiProperty({ type: String, nullable: true }) feedback!: string | null;
   @ApiProperty() releasedAt!: string;
   @ApiProperty() updatedAfterRelease!: boolean;
@@ -102,8 +113,7 @@ const card = (project: ProjectCard): ProjectCardDto => ({
   results: project.results.map((result) => ({
     milestoneId: result.milestone.id,
     label: `M${result.milestone.position} · ${result.milestone.name}`,
-    marks: result.marks,
-    maxMarks: result.maxMarks,
+    ...pickMarks(result),
     feedback: result.feedback,
     releasedAt: result.releasedAt.toISOString(),
     updatedAfterRelease: result.updatedAfterRelease,

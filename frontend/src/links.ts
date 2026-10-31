@@ -47,10 +47,18 @@ function parse(url: string): URL | null {
   }
 }
 
+// Same rule as the API's isPublicHttpsLink (H13): a site name, not an IP address or a local name.
+const LOCAL_NAMES = /(^|\.)(localhost|local|internal|intranet|lan|home\.arpa)$/i;
+const IP_ADDRESS = /^(\d{1,3}(\.\d{1,3}){3}|\[[0-9a-f:.]+\])$/i;
+
 /** Why a URL is not a proper link of its type, or null. */
 export function linkProblem(type: LinkType, raw: string): string | null {
   const url = parse(raw.trim());
   if (!url || url.protocol !== "https:") return "Paste a full link that starts with https://";
+  if (url.username || url.password) return "Remove the username or password from the link";
+  if (IP_ADDRESS.test(url.hostname) || LOCAL_NAMES.test(url.hostname)) {
+    return "Use the site's public address, not an IP address or a local name";
+  }
   if (type === "GITHUB") {
     const [owner, repo] = url.pathname.split("/").filter(Boolean);
     if (url.hostname !== "github.com" || !owner || !repo) {

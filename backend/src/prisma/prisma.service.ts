@@ -3,10 +3,10 @@ import {
   OnApplicationShutdown,
   OnModuleInit,
 } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { Transaction } from "../common/transaction";
+import { AppConfig } from "../config/app-config";
 import { Prisma, PrismaClient } from "../generated/prisma/client";
 
 // Without a timeout, an unreachable database (e.g. a paused Docker) makes boot hang forever.
@@ -20,16 +20,19 @@ export class PrismaService
   private readonly pool: Pool;
   private readonly target: string;
 
-  constructor(config: ConfigService) {
-    const connectionString = config.getOrThrow<string>("DATABASE_URL");
+  constructor(config: AppConfig) {
+    const connectionString = config.values.databaseUrl;
     const pool = new Pool({
       connectionString,
       connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
+      max: config.values.database.poolMax,
     });
     super({
       adapter: new PrismaPg(pool),
-      // Emitted only to listeners: the dashboard test counts queries (ADR 021).
-      log: [{ emit: "event", level: "query" }],
+      // Tests count queries (ADR 021, H4); elsewhere no event is built for every query.
+      ...(config.values.database.queryEvents
+        ? { log: [{ emit: "event" as const, level: "query" as const }] }
+        : {}),
     });
     this.pool = pool;
     const url = new URL(connectionString);

@@ -13,6 +13,8 @@ interface RequestOptions {
   /** Defaults to the FlowForge frontend origin. Pass null to send none. */
   origin?: string | null;
   cookie?: string;
+  /** Extra request headers, for example X-Forwarded-For. */
+  headers?: Record<string, string>;
 }
 
 interface StoredCookie {
@@ -87,7 +89,7 @@ export class TestBrowser {
     options: RequestOptions = {},
   ): Promise<HttpResult<T>> {
     const url = new URL(`${this.apiUrl}${path}`);
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { ...options.headers };
     const origin =
       options.origin === undefined ? FRONTEND_ORIGIN : options.origin;
     if (origin) headers.Origin = origin;

@@ -8,6 +8,7 @@ import {
   IdeaContent,
   IdeaCycle,
   IdeaDecision,
+  IdeaSummary,
   IdeaTeam,
   IdeaVersionContent,
   SavedIdeaStatus,
@@ -60,7 +61,24 @@ export class IdeaService {
     return this.ideas.findByTeam(teamId);
   }
 
-  /** The team, its cycle and its idea, for anyone who can see the team (used by submissions). */
+  /** The team and its cycle, for anyone who can see the team, without reading its idea (used by submissions). */
+  getVisibleTeam(
+    actor: TeamActor,
+    teamId: string,
+  ): Promise<{ team: IdeaTeam; cycle: IdeaCycle }> {
+    return this.teams.getVisible(actor, teamId);
+  }
+
+  /** The team, its cycle and a summary of its idea, for anyone who can see the team (used by submissions). */
+  async getTeamIdeaSummary(
+    actor: TeamActor,
+    teamId: string,
+  ): Promise<{ team: IdeaTeam; cycle: IdeaCycle; idea: IdeaSummary | null }> {
+    const { team, cycle } = await this.teams.getVisible(actor, teamId);
+    return { team, cycle, idea: await this.ideas.findSummaryByTeam(team.id) };
+  }
+
+  /** The team, its cycle and its idea, for anyone who can see the team. */
   async getTeamIdea(actor: TeamActor, teamId: string): Promise<TeamIdea> {
     const { team, cycle } = await this.teams.getVisible(actor, teamId);
     return { team, cycle, idea: await this.ideas.findByTeam(team.id) };

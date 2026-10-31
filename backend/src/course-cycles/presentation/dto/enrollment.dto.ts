@@ -12,6 +12,7 @@ import {
   EnrolledStudent,
   EnrollmentResult,
 } from "../../application/cycle-enrollment.service";
+import { IsCleanText } from "../../../common/validation/clean-text";
 
 export const ENROLLMENT_IMPORT_LIMIT = 500;
 
@@ -25,6 +26,7 @@ export class AddEnrollmentsDto {
   @ArrayMinSize(1)
   @ArrayMaxSize(ENROLLMENT_IMPORT_LIMIT)
   @IsString({ each: true })
+  @IsCleanText({ each: true })
   @MaxLength(254, { each: true })
   emails!: string[];
 }

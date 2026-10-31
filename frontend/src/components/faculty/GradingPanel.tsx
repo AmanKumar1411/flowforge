@@ -10,7 +10,8 @@ type SaveState = "idle" | "saving" | "saved" | "error";
 /**
  * The faculty's grading of one milestone (Phase 9, ADR 020): what it is
  * marked out of, each team's marks and feedback with its save state, and the
- * one-way release to every team. Marks stay editable after release.
+ * one-way release to every team. Marks stay editable after release. Without
+ * marks (the default, H3) it is feedback only: no scale and no marks fields.
  */
 export function GradingPanel({
   cycle,
@@ -29,7 +30,7 @@ export function GradingPanel({
     getGrading(cycle.id, milestone.id)
       .then((loaded) => {
         setGrading(loaded);
-        setMax(loaded.maxMarks === null ? "" : String(loaded.maxMarks));
+        setMax(loaded.maxMarks == null ? "" : String(loaded.maxMarks));
       })
       .catch((caught) => setError(readableError(caught)));
   }, [cycle.id, milestone.id]);
@@ -60,7 +61,7 @@ export function GradingPanel({
   };
 
   return (
-    <section className="grading" aria-label={`Grading of M${milestone.position}`}>
+    <section className="grading" id={`grading-${milestone.id}`} tabIndex={-1} aria-label={`Grading of M${milestone.position}`}>
       <div className="grading-head">
         <h3>Grading</h3>
         {grading.releasedAt ? (
@@ -74,23 +75,25 @@ export function GradingPanel({
       {!grading.open && !grading.releasedAt && (
         <p className="field-hint">Teams can be graded from the due date, {formatDate(milestone.submissionDueAt)}.</p>
       )}
-      <form
-        className="grading-max"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void saveMax();
-        }}
-      >
-        <label>
-          Marked out of
-          <input type="number" min={1} max={1000} value={max} onChange={(event) => setMax(event.target.value)} disabled={!owner} />
-        </label>
-        {owner && (
-          <button className="text-button" disabled={!max || Number(max) === grading.maxMarks}>
-            Save
-          </button>
-        )}
-      </form>
+      {grading.marksEnabled && (
+        <form
+          className="grading-max"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveMax();
+          }}
+        >
+          <label>
+            Marked out of
+            <input type="number" min={1} max={1000} value={max} onChange={(event) => setMax(event.target.value)} disabled={!owner} />
+          </label>
+          {owner && (
+            <button className="text-button" disabled={!max || Number(max) === grading.maxMarks}>
+              Save
+            </button>
+          )}
+        </form>
+      )}
       {error && (
         <p className="form-error" role="alert">
           {error}
@@ -103,7 +106,8 @@ export function GradingPanel({
             cycleId={cycle.id}
             milestoneId={milestone.id}
             row={row}
-            maxMarks={grading.maxMarks}
+            marksEnabled={grading.marksEnabled}
+            maxMarks={grading.maxMarks ?? null}
             disabled={!grading.open}
             onSaved={() => {
               load();
@@ -114,7 +118,7 @@ export function GradingPanel({
       </ul>
       {grading.open && !grading.releasedAt && (
         <button className="primary-button" disabled={counts.graded === 0} onClick={() => void release()}>
-          Release results to all teams
+          {grading.marksEnabled ? "Release results to all teams" : "Release feedback to all teams"}
         </button>
       )}
     </section>
@@ -125,6 +129,7 @@ function GradingRowEditor({
   cycleId,
   milestoneId,
   row,
+  marksEnabled,
   maxMarks,
   disabled,
   onSaved,
@@ -132,18 +137,21 @@ function GradingRowEditor({
   cycleId: string;
   milestoneId: string;
   row: GradingRow;
+  marksEnabled: boolean;
   maxMarks: number | null;
   disabled: boolean;
   onSaved: () => void;
 }) {
-  const [marks, setMarks] = useState(row.evaluation?.marks === null || !row.evaluation ? "" : String(row.evaluation.marks));
+  const [marks, setMarks] = useState(row.evaluation?.marks == null ? "" : String(row.evaluation.marks));
   const [feedback, setFeedback] = useState(row.evaluation?.feedback ?? "");
   const [state, setState] = useState<SaveState>("idle");
   const [problem, setProblem] = useState("");
   const parsed = parseMarks(marks);
   const changed =
-    marks !== (row.evaluation?.marks == null ? "" : String(row.evaluation.marks)) ||
+    (marksEnabled && marks !== (row.evaluation?.marks == null ? "" : String(row.evaluation.marks))) ||
     feedback !== (row.evaluation?.feedback ?? "");
+  // Without marks an evaluation is its feedback, so there must be some.
+  const empty = !marksEnabled && feedback.trim() === "";
 
   const save = async () => {
     if (parsed.problem) return setProblem(parsed.problem);
@@ -151,7 +159,7 @@ function GradingRowEditor({
     setProblem("");
     try {
       await saveEvaluation(cycleId, milestoneId, row.team.id, {
-        marks: parsed.marks,
+        ...(marksEnabled ? { marks: parsed.marks } : {}),
         feedback: feedback.trim() || null,
         ...(row.evaluation ? { expectedVersion: row.evaluation.version } : {}),
       });
@@ -175,16 +183,18 @@ function GradingRowEditor({
           <span className="tag warning-tag">No submission</span>
         )}
       </div>
-      <label>
-        Marks{maxMarks ? ` (out of ${maxMarks})` : ""}
-        <input
-          inputMode="decimal"
-          value={marks}
-          onChange={(event) => setMarks(event.target.value)}
-          disabled={disabled || !maxMarks}
-          aria-label={`Marks for ${row.team.name}`}
-        />
-      </label>
+      {marksEnabled && (
+        <label>
+          Marks{maxMarks ? ` (out of ${maxMarks})` : ""}
+          <input
+            inputMode="decimal"
+            value={marks}
+            onChange={(event) => setMarks(event.target.value)}
+            disabled={disabled || !maxMarks}
+            aria-label={`Marks for ${row.team.name}`}
+          />
+        </label>
+      )}
       <label>
         Feedback
         <textarea
@@ -197,7 +207,7 @@ function GradingRowEditor({
         />
       </label>
       <div className="row-actions">
-        <button className="dark-button compact" disabled={disabled || !changed || state === "saving"} onClick={() => void save()}>
+        <button className="dark-button compact" disabled={disabled || !changed || empty || state === "saving"} onClick={() => void save()}>
           {state === "saving" ? "Saving…" : "Save"}
         </button>
         <span className="field-hint" role="status">

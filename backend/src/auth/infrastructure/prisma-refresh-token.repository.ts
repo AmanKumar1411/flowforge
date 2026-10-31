@@ -49,6 +49,18 @@ export class PrismaRefreshTokenRepository extends RefreshTokenRepository {
     });
   }
 
+  async hasActiveToken(
+    familyId: string,
+    now: Date,
+    tx: Transaction,
+  ): Promise<boolean> {
+    const active = await this.prisma.client(tx).refreshToken.findFirst({
+      where: { familyId, revokedAt: null, expiresAt: { gt: now } },
+      select: { id: true },
+    });
+    return active !== null;
+  }
+
   async revokeFamily(
     familyId: string,
     at: Date,

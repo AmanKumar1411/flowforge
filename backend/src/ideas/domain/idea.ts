@@ -86,6 +86,13 @@ export interface Idea extends IdeaVersionContent {
 /** A proposal waits for review (SUBMITTED); a pick is approved at once. */
 export type SavedIdeaStatus = "SUBMITTED" | "APPROVED";
 
+/** What other modules need to know of a team's idea: its title, where it came from and its status. */
+export interface IdeaSummary {
+  title: string;
+  status: IdeaStatus;
+  source: IdeaSource;
+}
+
 export interface NewIdea extends IdeaVersionContent {
   teamId: string;
   cycleId: string;

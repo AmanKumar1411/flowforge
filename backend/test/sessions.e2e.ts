@@ -16,7 +16,8 @@ describe("Sessions", () => {
   let app: TestApp;
 
   before(async () => {
-    app = await startTestApp();
+    // A one-second grace window for tokens presented again (H14), so a replay after it is quick to test.
+    app = await startTestApp({ env: { REFRESH_REUSE_GRACE_SECONDS: "1" } });
   });
   after(() => app.close());
   beforeEach(() => app.reset());
@@ -72,10 +73,33 @@ describe("Sessions", () => {
     }
   });
 
-  it("revokes the whole family when an old refresh token is replayed", async () => {
+  it("keeps the session when two requests refresh with the same cookie at once (H14)", async () => {
+    const browser = await app.browser().signIn(STUDENT);
+    const cookie = `flowforge_refresh=${browser.cookie("flowforge_refresh")}`;
+    const both = await Promise.all(
+      [0, 1].map(() =>
+        app.browser().post("/auth/refresh", { token: null, cookie }),
+      ),
+    );
+    assert.deepEqual(
+      both.map((result) => result.status),
+      [200, 200],
+    );
+    assert.equal(
+      (
+        await auditActions(app.prisma, {
+          action: "REFRESH_TOKEN_REUSE_DETECTED",
+        })
+      ).length,
+      0,
+    );
+  });
+
+  it("revokes the whole family when an old refresh token is replayed after the grace window", async () => {
     const browser = await app.browser().signIn(STUDENT);
     const stolen = browser.cookie("flowforge_refresh");
     assert.equal((await browser.refresh()).status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 1_100));
 
     const attacker = app.browser();
     const replay = await attacker.post("/auth/refresh", {

@@ -86,11 +86,15 @@ export class TeamRules {
     };
   }
 
-  /** A team with room for one more member. */
+  /**
+   * A team with room for one more member. A full team is a conflict with its
+   * current state (409), like losing a race for its last slot, not a bad
+   * request (BUG-7, H9).
+   */
   assertHasRoom(team: Team, cycle: TeamCycle): void {
     if (team.members.length >= cycle.maxTeamSize) {
       throw new TeamDomainError(
-        "TEAM_SIZE_OUT_OF_RANGE",
+        "TEAM_FULL",
         `${team.name} already has the maximum of ${cycle.maxTeamSize} members`,
       );
     }

@@ -4,8 +4,10 @@
   "private": true,
   "description": "FlowForge V1 API foundation",
   "scripts": {
+    "prebuild": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "tsc -p tsconfig.build.json",
-    "start": "node dist/main",
+    "start": "node dist/cluster",
+    "start:single": "node dist/main",
     "start:dev": "ts-node src/main.ts",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "test": "jest --runInBand",

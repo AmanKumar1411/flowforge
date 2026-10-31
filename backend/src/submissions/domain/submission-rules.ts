@@ -79,6 +79,19 @@ export class SubmissionRules {
     }
   }
 
+  /**
+   * Versions are permanent, so a team's history is capped (SEC-F1, H10): a
+   * script cannot fill it, and every list of it stays bounded.
+   */
+  assertBelowVersionLimit(latestVersion: number, limit: number): void {
+    if (latestVersion >= limit) {
+      throw new SubmissionDomainError(
+        "VERSION_LIMIT_REACHED",
+        `Your team has submitted the most versions allowed for this milestone (${limit}); ask your faculty if you need another`,
+      );
+    }
+  }
+
   /** The links checked against the milestone's requirement; empty notes mean none. */
   clean(
     content: SubmissionContent,

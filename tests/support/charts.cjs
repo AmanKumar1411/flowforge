@@ -95,7 +95,7 @@ for (const profile of process.argv.slice(2)) {
   const pts = (key) => rows.filter((r) => r[key] !== "" && !Number.isNaN(Number(r[key]))).map((r) => [t(r), Number(r[key])]);
   panels(profile, `${profile}: latency, API CPU, memory and database connections (5 s samples)`, [
     { label: "Dashboard request latency (ms): one probe request every 5 s, beside the load", points: pts("probe_ms"), unit: " ms", target: 500 },
-    { label: "API process CPU (%; 100% = one core, which runs all the JavaScript)", points: pts("api_cpu"), unit: "%" },
+    { label: "API CPU, every process summed (%; 100% = one core)", points: pts("api_cpu"), unit: "%" },
     { label: "API memory (RSS, MB)", points: pts("api_rss_mb"), unit: " MB" },
     { label: "Database connections (all states)", points: pts("db_total"), unit: "" },
   ]);

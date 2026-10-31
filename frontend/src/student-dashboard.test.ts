@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gradingCounts, marksText, parseMarks, releaseConfirmText } from "./grading";
+import { evaluationDates, gradingCounts, marksText, parseMarks, releaseConfirmText } from "./grading";
 import { projectPath, tabOf, todosFor, upNextLink, upNextText } from "./student-dashboard";
 import type { Grading, UpNextItem } from "./types";
 
@@ -24,6 +24,7 @@ describe("student dashboard words and links", () => {
 describe("grading words", () => {
   const grading: Grading = {
     milestone: { id: "m1", position: 1, name: "Design review", submissionDueAt: "2026-11-15T18:29:00.000Z" },
+    marksEnabled: true,
     maxMarks: 20,
     releasedAt: null,
     open: true,
@@ -46,5 +47,15 @@ describe("grading words", () => {
     expect(parseMarks("")).toEqual({ marks: null, problem: null });
     expect(parseMarks("14.555").problem).toMatch(/number/);
     expect(parseMarks("-1").problem).toMatch(/number/);
+  });
+
+  it("speaks of feedback only when marks are off (H3)", () => {
+    const feedbackOnly: Grading = { ...grading, marksEnabled: false, maxMarks: undefined };
+    expect(releaseConfirmText(feedbackOnly)).toMatch(/^Release the feedback of M1/);
+    expect(releaseConfirmText(feedbackOnly)).not.toMatch(/marks/);
+    expect(marksText({})).toBeNull();
+    const released = { milestoneId: "m1", feedback: "Good", releasedAt: "2026-11-16T05:00:00.000Z", updatedAt: "", updatedAfterRelease: false };
+    expect(evaluationDates(released)[0]).toMatch(/^Feedback released on /);
+    expect(evaluationDates({ ...released, marks: 14, maxMarks: 20 })[0]).toMatch(/^Released on /);
   });
 });

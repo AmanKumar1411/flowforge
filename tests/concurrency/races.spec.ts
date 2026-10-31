@@ -63,6 +63,8 @@ test("CON-2 the last free slot of a team is taken once: 10 faculty placements at
   const size = (await sql(`SELECT count(*)::int AS n FROM "TeamMember" WHERE "teamId" = $1`, [teamId]))[0].n;
   expect(size).toBe(4);
   expect(replies.filter((r) => r.status < 300).length).toBe(1);
+  // The others lost a race for the slot: a conflict with the team's state (H9), not a bad request.
+  expect(replies.filter((r) => r.status >= 300).map((r) => `${r.status} ${r.body?.code}`)).toEqual(Array(9).fill("409 TEAM_FULL"));
   expect(replies.filter((r) => r.status >= 500)).toEqual([]);
 });
 
@@ -115,8 +117,8 @@ test("CON-4 two faculty tabs save the same evaluation: one wins, the other gets 
   const route = `/course-cycles/${capstone.id}/milestones/${capstone.milestones[0].id}/teams/${team}/evaluation`;
   const current = (await sql(`SELECT version FROM "Evaluation" WHERE "teamId" = $1 AND "milestoneId" = $2`, [team, capstone.milestones[0].id]))[0].version;
   const replies = await Promise.all([
-    alpha.call("PUT", route, { marks: 61, feedback: "Tab one", expectedVersion: current }),
-    alpha2.call("PUT", route, { marks: 62, feedback: "Tab two", expectedVersion: current }),
+    alpha.call("PUT", route, { feedback: "Tab one", expectedVersion: current }),
+    alpha2.call("PUT", route, { feedback: "Tab two", expectedVersion: current }),
   ]);
   note(`two tabs, same version: ${statuses(replies)}`);
   expect(count(replies, 200)).toBe(1);
@@ -127,7 +129,7 @@ test("CON-4 two faculty tabs save the same evaluation: one wins, the other gets 
   // First grade of an ungraded team from 10 tabs at once: one evaluation, one revision.
   const bravo = await Promise.all(Array.from({ length: 10 }, () => login(systems.owner)));
   const fresh = systems.teams[230].id;
-  const first = await Promise.all(bravo.map((b, i) => b.call("PUT", `/course-cycles/${systems.id}/milestones/${systems.milestones[0].id}/teams/${fresh}/evaluation`, { marks: 20 + i })));
+  const first = await Promise.all(bravo.map((b, i) => b.call("PUT", `/course-cycles/${systems.id}/milestones/${systems.milestones[0].id}/teams/${fresh}/evaluation`, { feedback: `First save from tab ${i}` })));
   note(`10 first saves of one evaluation: ${statuses(first)}`);
   expect(count(first, 200)).toBe(1);
   expect((await sql(`SELECT count(*)::int AS n FROM "EvaluationRevision" r JOIN "Evaluation" e ON e.id = r."evaluationId" WHERE e."teamId" = $1`, [fresh]))[0].n).toBe(1);
@@ -185,25 +187,28 @@ test.describe("deadline races on a project due in 40 seconds", () => {
   });
 
   test("CON-6 submissions racing the due date: accepted ones are before it, late ones get 409, none are 5xx", async () => {
-    const sessions = await Promise.all(teams.map((t) => login(t.members[1]).then((s) => ({ s, team: t }))));
+    // Every member of each team takes turns, every 250 ms: under the per-member limit of 10 a minute (H10).
+    const sessions = await Promise.all(teams.map(async (t) => ({ team: t, members: await Promise.all(t.members.map((email) => login(email))) })));
     const start = due.getTime() - 3_000;
     await new Promise((r) => setTimeout(r, Math.max(0, start - Date.now())));
     const replies: { reply: Reply; sentAt: number }[] = [];
     const pending: Promise<void>[] = [];
-    while (Date.now() < due.getTime() + 3_000) {
-      for (const { s, team } of sessions) {
+    for (let round = 0; Date.now() < due.getTime() + 3_000; round += 1) {
+      for (const { members, team } of sessions) {
+        const s = members[round % members.length];
         const sentAt = Date.now();
         pending.push(s.call("POST", `/teams/${team.id}/milestones/${m1}/submissions`, { links: [{ type: "GITHUB", url: "https://github.com/race/deadline" }] }).then((reply) => {
           replies.push({ reply, sentAt });
         }));
       }
-      await new Promise((r) => setTimeout(r, 100));
+      await new Promise((r) => setTimeout(r, 250));
     }
     await Promise.all(pending);
     const late = await sql(`SELECT count(*)::int AS n FROM "Submission" WHERE "milestoneId" = $1 AND "submittedAt" >= $2`, [m1, due]);
     note(`${replies.length} submits from due-3s to due+3s: ${statuses(replies.map((r) => r.reply))}`);
     expect(late[0].n).toBe(0);
     expect(replies.filter((r) => r.reply.status >= 500)).toEqual([]);
+    expect(replies.filter((r) => r.reply.status === 429)).toEqual([]);
     expect(replies.filter((r) => r.reply.status === 409).every((r) => r.reply.body.code === "SUBMISSION_CLOSED")).toBeTruthy();
     const broken = [];
     for (const team of teams) if (!continuous(await versionsOf(team.id, m1))) broken.push(team.id);
@@ -213,9 +218,8 @@ test.describe("deadline races on a project due in 40 seconds", () => {
   test("CON-5b release while grading continues, and release double-clicked", async () => {
     const golf = await Promise.all([login(m.faculty[6]), login(m.faculty[6])]);
     await new Promise((r) => setTimeout(r, Math.max(0, due.getTime() + 500 - Date.now())));
-    const scale = await golf[0].call("PUT", `/course-cycles/${cycleId}/milestones/${m1}/grading`, { maxMarks: 10 });
-    expect(scale.status, scale.text).toBe(200);
-    const saves = teams.map((t, i) => golf[i % 2].call("PUT", `/course-cycles/${cycleId}/milestones/${m1}/teams/${t.id}/evaluation`, { marks: 5, feedback: `Race ${i}` }));
+    // Feedback only: no scale is needed to grade or release (H3).
+    const saves = teams.map((t, i) => golf[i % 2].call("PUT", `/course-cycles/${cycleId}/milestones/${m1}/teams/${t.id}/evaluation`, { feedback: `Race ${i}` }));
     const releases = [golf[0].call("POST", `/course-cycles/${cycleId}/milestones/${m1}/grading/release`), golf[1].call("POST", `/course-cycles/${cycleId}/milestones/${m1}/grading/release`)];
     const [saveReplies, releaseReplies] = await Promise.all([Promise.all(saves), Promise.all(releases)]);
     note(`20 saves during release: ${statuses(saveReplies)}; 2 release clicks: ${statuses(releaseReplies)}`);
@@ -230,7 +234,8 @@ test.describe("deadline races on a project due in 40 seconds", () => {
     const member = await login(teams[0].members[2]);
     const seen = await member.call("GET", `/course-cycles/${cycleId}/milestones/${m1}/teams/${teams[0].id}/evaluations`);
     expect(seen.status).toBe(200);
-    expect(seen.body[0]?.marks).toBe(5);
+    expect(seen.body[0]?.feedback).toBe("Race 0");
+    expect(seen.body[0]).not.toHaveProperty("marks");
   });
 });
 

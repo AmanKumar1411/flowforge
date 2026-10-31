@@ -13,6 +13,7 @@ import {
 } from "class-validator";
 import type { Role, UserStatus } from "../../auth/domain/role";
 import type { FacultyRequestStatus } from "../../auth/application/ports/faculty-directory";
+import { IsCleanText } from "../../common/validation/clean-text";
 
 const ROLES: Role[] = ["STUDENT", "FACULTY", "ADMIN", "PENDING_STAFF"];
 const STATUSES: UserStatus[] = ["ACTIVE", "DEACTIVATED"];
@@ -31,6 +32,7 @@ export class AddAllowlistEntryDto {
   @ApiPropertyOptional({ example: "Prakriti P" })
   @IsOptional()
   @IsString()
+  @IsCleanText()
   @MaxLength(120)
   name?: string;
 }

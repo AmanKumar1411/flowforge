@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { RequestScope } from "../../common/request-scope";
 import { Transaction } from "../../common/transaction";
 import { Prisma } from "../../generated/prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -33,6 +34,9 @@ const toDomain = (row: TeamRow): Team => ({
   updatedAt: row.updatedAt,
 });
 
+// Reads outside a transaction are made once per request (H4); any team write forgets them all.
+const MEMO = "team";
+
 const isUniqueViolation = (error: unknown): boolean =>
   error instanceof Prisma.PrismaClientKnownRequestError &&
   error.code === "P2002";
@@ -43,12 +47,14 @@ export class PrismaTeamRepository extends TeamRepository {
     super();
   }
 
-  async findById(id: string): Promise<Team | null> {
-    const row = await this.prisma.team.findUnique({
-      where: { id },
-      include: withMembers,
+  findById(id: string): Promise<Team | null> {
+    return RequestScope.memo(`${MEMO}:${id}`, async () => {
+      const row = await this.prisma.team.findUnique({
+        where: { id },
+        include: withMembers,
+      });
+      return row ? toDomain(row) : null;
     });
-    return row ? toDomain(row) : null;
   }
 
   async findByIdForUpdate(id: string, tx: Transaction): Promise<Team | null> {
@@ -69,13 +75,15 @@ export class PrismaTeamRepository extends TeamRepository {
     return row ? toDomain(row) : null;
   }
 
-  async listByCycle(cycleId: string): Promise<Team[]> {
-    const rows = await this.prisma.team.findMany({
-      where: { cycleId },
-      include: withMembers,
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+  listByCycle(cycleId: string): Promise<Team[]> {
+    return RequestScope.memo(`${MEMO}s-of:${cycleId}`, async () => {
+      const rows = await this.prisma.team.findMany({
+        where: { cycleId },
+        include: withMembers,
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      });
+      return rows.map(toDomain);
     });
-    return rows.map(toDomain);
   }
 
   async listByMember(userId: string): Promise<Team[]> {
@@ -110,6 +118,7 @@ export class PrismaTeamRepository extends TeamRepository {
   }
 
   async create(team: NewTeam, tx: Transaction): Promise<Team> {
+    RequestScope.forgetAll(MEMO);
     return this.mapConflict(async () =>
       toDomain(
         await this.prisma.client(tx).team.create({
@@ -135,6 +144,7 @@ export class PrismaTeamRepository extends TeamRepository {
   }
 
   async update(id: string, change: TeamChange, tx: Transaction): Promise<Team> {
+    RequestScope.forgetAll(MEMO);
     return this.mapConflict(async () =>
       toDomain(
         await this.prisma.client(tx).team.update({
@@ -161,6 +171,7 @@ export class PrismaTeamRepository extends TeamRepository {
 
   async delete(id: string, tx: Transaction): Promise<void> {
     // Member rows go with it (ON DELETE CASCADE).
+    RequestScope.forgetAll(MEMO);
     await this.prisma.client(tx).team.delete({ where: { id } });
   }
 

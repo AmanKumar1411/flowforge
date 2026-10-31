@@ -8,6 +8,7 @@ import {
 } from "@nestjs/common";
 import { ThrottlerException } from "@nestjs/throttler";
 import { Response } from "express";
+import { isDatabaseUnavailable, isInvalidText } from "./database-errors";
 import { DomainError, ErrorDetail } from "./domain-error";
 import { statusForCode } from "./error-status";
 
@@ -33,7 +34,10 @@ export class ApiExceptionFilter implements ExceptionFilter {
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const { status, body } = this.toResponse(exception);
-    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+    if (status === HttpStatus.SERVICE_UNAVAILABLE) {
+      // An outage fails every request at once: one line each, not a stack each.
+      this.logger.warn(`503 ${body.code}: ${body.message}`);
+    } else if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(
         exception instanceof Error ? exception.stack : String(exception),
       );
@@ -71,6 +75,26 @@ export class ApiExceptionFilter implements ExceptionFilter {
         body: {
           code: codeByHttpStatus[status] ?? "HTTP_ERROR",
           message: this.messageOf(exception),
+        },
+      };
+    }
+    // Neither carries anything from the database: no host, port, query or driver message.
+    if (isDatabaseUnavailable(exception)) {
+      return {
+        status: HttpStatus.SERVICE_UNAVAILABLE,
+        body: {
+          code: "SERVICE_UNAVAILABLE",
+          message:
+            "FlowForge can't reach its database right now. Try again in a moment.",
+        },
+      };
+    }
+    if (isInvalidText(exception)) {
+      return {
+        status: HttpStatus.BAD_REQUEST,
+        body: {
+          code: "INVALID_TEXT",
+          message: "Text can't contain control characters",
         },
       };
     }

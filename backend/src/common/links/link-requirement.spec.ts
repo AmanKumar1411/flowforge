@@ -16,6 +16,47 @@ const codeOf = (work: () => unknown): string | undefined => {
   return undefined;
 };
 
+describe("public links (SEC-F4, H13)", () => {
+  const demo = linkValidators.for("DEMO");
+  const github = linkValidators.for("GITHUB");
+
+  it.each([
+    "https://127.0.0.1/admin",
+    "https://169.254.169.254/latest/meta-data/",
+    "https://10.0.0.5:8080/",
+    "https://192.168.1.20/report",
+    "https://[::1]/",
+    "https://[fd00::1]/",
+    "https://2130706433/",
+    "https://localhost/",
+    "https://grades.localhost/",
+    "https://printer.local/",
+    "https://wiki.internal/page",
+    "https://user:token@example.org/report",
+    "https://user@example.org/report",
+    "http://example.org/report",
+  ])("refuses %s", (url) => {
+    expect(demo.accepts(new URL(url))).toBe(false);
+  });
+
+  it("refuses credentials even on GitHub", () => {
+    expect(
+      github.accepts(new URL("https://user:token@github.com/qa/repo")),
+    ).toBe(false);
+  });
+
+  it.each([
+    ["GITHUB", "https://github.com/owner/repo"],
+    ["DRIVE", "https://drive.google.com/file/d/abc/view"],
+    ["DRIVE", "https://docs.google.com/document/d/abc/edit"],
+    ["DEMO", "https://seat-finder.vercel.app"],
+    ["DEMO", "https://seat-finder.netlify.app/"],
+    ["REPORT", "https://example.org/reports/final.pdf"],
+  ] as const)("still accepts a %s link like %s", (type, url) => {
+    expect(linkValidators.for(type).accepts(new URL(url))).toBe(true);
+  });
+});
+
 describe("link validators", () => {
   it.each([
     ["GITHUB", "https://github.com/falcon/lost-and-found", true],

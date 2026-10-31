@@ -1,7 +1,13 @@
 import { Injectable } from "@nestjs/common";
 import { timingSafeEqual } from "node:crypto";
 import { AuditService } from "../../audit/audit.service";
+import {
+  ONE_MINUTE_MS,
+  RateLimitedError,
+  RateLimiter,
+} from "../../common/rate-limit";
 import { TransactionRunner } from "../../common/transaction";
+import { AppConfig } from "../../config/app-config";
 import { UsersService } from "../../users/users.service";
 import { AuthDomainError } from "../domain/auth.errors";
 import { ExternalIdentity } from "../domain/external-identity";
@@ -57,6 +63,8 @@ export class AuthService {
     private readonly facultyDirectory: FacultyDirectory,
     private readonly audit: AuditService,
     private readonly transactions: TransactionRunner,
+    private readonly limiter: RateLimiter,
+    private readonly config: AppConfig,
   ) {}
 
   beginGoogleSignIn(): AuthorizationRequest {
@@ -76,6 +84,17 @@ export class AuthService {
         await this.signIn.recordDenial(error.code, { provider: "google" });
       }
       throw error;
+    }
+    // Per Google account, once Google has vouched for it; the IP limit ran before (ADR 023).
+    const limit = await this.limiter.consume(
+      `sign-in:${identity.sub}`,
+      this.config.values.rateLimits.accountLoginPerMinute,
+      ONE_MINUTE_MS,
+    );
+    if (!limit.allowed) {
+      throw new RateLimitedError(
+        "Too many sign-ins for this account; try again in a minute",
+      );
     }
     return this.signIn.signIn(identity, "google", userAgent);
   }
@@ -100,13 +119,9 @@ export class AuthService {
       );
     }
     const session = await this.sessions.rotate(presented, userAgent);
-    const state = await this.users.findAccessState(session.userId);
-    if (!state) {
-      throw new AuthDomainError("INVALID_REFRESH_TOKEN", "Unknown user");
-    }
     const signed = await this.tokenSigner.sign({
-      sub: state.id,
-      ver: state.tokenVersion,
+      sub: session.userId,
+      ver: session.tokenVersion,
     });
     return {
       accessToken: signed.token,

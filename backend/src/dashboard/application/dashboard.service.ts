@@ -4,6 +4,7 @@ import type {
   CycleView,
   StudentEvent,
 } from "../../course-cycles/application/cycle-views";
+import { pickMarks } from "../../evaluations/application/evaluation-views";
 import { buildUpdates } from "../domain/dashboard-feed";
 import { StudentTodoRules, TodoItem } from "../domain/student-todo-rules";
 import {
@@ -125,8 +126,7 @@ export class DashboardService {
             const m = milestones.get(result.milestoneId)!;
             return {
               milestone: { id: m.id, position: m.position, name: m.name },
-              marks: result.marks,
-              maxMarks: result.maxMarks,
+              ...pickMarks(result),
               feedback: result.feedback,
               releasedAt: result.releasedAt!,
               updatedAt: result.updatedAt,

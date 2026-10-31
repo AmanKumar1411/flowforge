@@ -3,6 +3,7 @@
 // moved through the past, so the rules and the audit log apply as in real use.
 import { TestingModule } from "@nestjs/testing";
 import { FixedClock } from "../src/common/testing/fixed-clock";
+import { AppConfig } from "../src/config/app-config";
 import { CourseCycleService } from "../src/course-cycles/application/course-cycle.service";
 import { EvaluationService } from "../src/evaluations/application/evaluation.service";
 import { IdeaService } from "../src/ideas/application/idea.service";
@@ -87,10 +88,16 @@ export async function seedJourney(
     await ideas.review(faculty!, teamId, { version: second.version, decision: "APPROVED", feedback: "Clear and doable." });
   }
 
+  // Feedback only unless EVALUATION_MARKS_ENABLED is on (H3).
+  const marksEnabled = get(AppConfig).values.evaluationMarksEnabled;
   async function gradeAndRelease(p: Awaited<ReturnType<typeof project>>, at: number, max: number, marks: number, feedback: string) {
     goTo(at);
-    await evaluations.setMaxMarks(faculty!, p.cycle.id, p.m1.id, max);
-    await evaluations.saveEvaluation(faculty!, p.cycle.id, p.m1.id, p.team.id, { marks, feedback });
+    if (marksEnabled) {
+      await evaluations.setMaxMarks(faculty!, p.cycle.id, p.m1.id, max);
+      await evaluations.saveEvaluation(faculty!, p.cycle.id, p.m1.id, p.team.id, { marks, feedback });
+    } else {
+      await evaluations.saveEvaluation(faculty!, p.cycle.id, p.m1.id, p.team.id, { feedback });
+    }
     await evaluations.release(faculty!, p.cycle.id, p.m1.id);
   }
 

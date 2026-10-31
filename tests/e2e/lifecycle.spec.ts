@@ -274,12 +274,11 @@ test("E2E-F1 full project lifecycle in the browser, with every deadline edge", a
     expect(versions.map((v) => v.version)).toEqual([1, 2, 3]);
   });
 
-  await test.step("faculty grade M1 out of 20 (marks and feedback, feedback only), then release to all teams", async () => {
+  await test.step("faculty give M1 feedback (this version has no marks or scale), then release it to all teams", async () => {
     await faculty.goto(`${WEB}/faculty/cycles/${cycleId}?tab=milestones`);
     const grading = faculty.getByRole("region", { name: "Grading of M1" });
-    await grading.getByLabel("Marked out of").fill("20");
-    await grading.getByRole("button", { name: "Save", exact: true }).first().click();
-    await grading.getByLabel("Marks for Alpha").fill("14");
+    await expect(grading.getByLabel("Marked out of")).toHaveCount(0);
+    await expect(grading.getByLabel("Marks for Alpha")).toHaveCount(0);
     await grading.getByLabel("Feedback for Alpha").fill("Clear plan; show the timetable import next.");
     await grading.locator(".grading-row", { hasText: "Alpha" }).getByRole("button", { name: "Save" }).click();
     await expect(grading.locator(".grading-row", { hasText: "Alpha" }).getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
@@ -290,21 +289,22 @@ test("E2E-F1 full project lifecycle in the browser, with every deadline edge", a
     await leader.reload();
     await expect(leader.locator(".milestone-card", { hasText: "Design review" }).getByText(/Not released yet/)).toBeVisible();
     faculty.once("dialog", (dialog) => dialog.accept());
-    await grading.getByRole("button", { name: "Release results to all teams" }).click();
+    await grading.getByRole("button", { name: "Release feedback to all teams" }).click();
     await expect(grading.getByText(/^Released on /)).toBeVisible();
   });
 
-  await test.step("the leader sees the released marks and feedback; a correction shows as updated", async () => {
+  await test.step("the leader sees the released feedback; a correction shows as updated", async () => {
     await leader.reload();
-    await expect(leader.locator(".evaluation-marks", { hasText: "14 / 20" })).toBeVisible();
     await expect(leader.getByText("Clear plan; show the timetable import next.")).toBeVisible();
+    await expect(leader.getByText(/^Feedback released on /)).toBeVisible();
+    await expect(leader.locator(".evaluation-marks")).toHaveCount(0);
     const grading = faculty.getByRole("region", { name: "Grading of M1" });
     await faculty.reload();
-    await grading.getByLabel("Marks for Alpha").fill("15");
+    await grading.getByLabel("Feedback for Alpha").fill("Clear plan; show the timetable import and its tests next.");
     await grading.locator(".grading-row", { hasText: "Alpha" }).getByRole("button", { name: "Save" }).click();
     await expect(grading.locator(".grading-row", { hasText: "Alpha" }).getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
     await leader.reload();
-    await expect(leader.locator(".evaluation-marks", { hasText: "15 / 20" })).toBeVisible();
+    await expect(leader.getByText("Clear plan; show the timetable import and its tests next.")).toBeVisible();
     await expect(leader.getByText(/^Updated on /)).toBeVisible();
     await leader.goto(`${WEB}/student`);
     await expect(leader.getByRole("link", { name: /Your result for M1 · Design review was updated/ })).toBeVisible();
@@ -320,7 +320,7 @@ test("E2E-F1 full project lifecycle in the browser, with every deadline edge", a
     await leader.getByText(/Past projects \(\d+\)/).click();
     await expect(leader.locator(".past-projects").getByText(title)).toBeVisible();
     await leader.goto(`${WEB}/student/projects/${cycleId}?tab=milestones`);
-    await expect(leader.locator(".evaluation-marks", { hasText: "15 / 20" })).toBeVisible();
+    await expect(leader.getByText("Clear plan; show the timetable import and its tests next.")).toBeVisible();
     await expect(leader.getByRole("button", { name: /Submit|Edit|Revise/ })).toHaveCount(0);
     const stranger = await signIn(browser, watch, outsider.email, outsider.name);
     await stranger.goto(`${WEB}/student/projects/${cycleId}`);

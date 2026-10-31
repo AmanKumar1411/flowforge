@@ -18,6 +18,16 @@ export abstract class SubmissionTeams {
     actor: TeamActor,
     teamId: string,
   ): Promise<TeamWithIdea & { cycle: SubmissionCycle }>;
+  /** The team and its cycle (with milestones) if the actor may see the team, without its idea. */
+  abstract getVisibleTeam(
+    actor: TeamActor,
+    teamId: string,
+  ): Promise<{ team: SubmissionTeam; cycle: SubmissionCycle }>;
+  /** A cycle the actor may see; CYCLE_NOT_FOUND otherwise. */
+  abstract getVisibleCycle(
+    actor: TeamActor,
+    cycleId: string,
+  ): Promise<SubmissionCycle>;
   /** A cycle the actor may see, and every team of it the actor may see, with its idea. */
   abstract listForCycle(
     actor: TeamActor,

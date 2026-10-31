@@ -88,7 +88,7 @@ test("SEC-IDOR-3 faculty of another project get 404 for its grading, ideas, team
     ["GET", `/course-cycles/${capstone.id}/milestones/${m1}/grading`],
     ["PUT", `/course-cycles/${capstone.id}/milestones/${m1}/grading`, { maxMarks: 10 }],
     ["POST", `/course-cycles/${capstone.id}/milestones/${m1}/grading/release`],
-    ["PUT", `/course-cycles/${capstone.id}/milestones/${m1}/teams/${team}/evaluation`, { marks: 1, expectedVersion: 1 }],
+    ["PUT", `/course-cycles/${capstone.id}/milestones/${m1}/teams/${team}/evaluation`, { feedback: "x", expectedVersion: 1 }],
     ["GET", `/course-cycles/${capstone.id}/milestones/${m1}/teams/${team}/evaluations`],
     ["GET", `/course-cycles/${capstone.id}/milestones/${m1}/submissions`],
     ["GET", `/course-cycles/${capstone.id}/ideas`],
@@ -109,8 +109,8 @@ test("SEC-IDOR-4 ids from different projects never combine", async () => {
   const ownTeam = capstone.teams[10].id;
   const foreignMilestone = systems.milestones[1].id;
   await expectStatuses(alpha, [
-    ["PUT", `/course-cycles/${capstone.id}/milestones/${systems.milestones[0].id}/teams/${capstone.teams[0].id}/evaluation`, { marks: 1, expectedVersion: 1 }],
-    ["PUT", `/course-cycles/${capstone.id}/milestones/${capstone.milestones[0].id}/teams/${systems.teams[0].id}/evaluation`, { marks: 1, expectedVersion: 1 }],
+    ["PUT", `/course-cycles/${capstone.id}/milestones/${systems.milestones[0].id}/teams/${capstone.teams[0].id}/evaluation`, { feedback: "x", expectedVersion: 1 }],
+    ["PUT", `/course-cycles/${capstone.id}/milestones/${capstone.milestones[0].id}/teams/${systems.teams[0].id}/evaluation`, { feedback: "x", expectedVersion: 1 }],
     ["GET", `/course-cycles/${capstone.id}/milestones/${systems.milestones[0].id}/grading`],
     ["GET", `/course-cycles/${capstone.id}/milestones/${systems.milestones[0].id}/submissions`],
   ], [404], "faculty mixing ids");
@@ -133,35 +133,61 @@ test("SEC-IDOR-5 malformed and unknown ids answer 400/404, never 500", async () 
   }
 });
 
-test("SEC-LEAK-1 unreleased marks never reach students: evaluations, dashboard, project, teams, errors", async () => {
+test("SEC-LEAK-1 no marks or scale reach anyone, on any route, even marks stored earlier; unreleased feedback never reaches students", async () => {
+  // Marks are off in this version (H3): the API returns feedback only. Marks saved while they were on stay in
+  // the database, so put some there and sweep every route as every role.
   const team = systems.teams[0];
   const m1 = systems.milestones[0].id;
-  const graded = await sql(`SELECT marks, feedback FROM "Evaluation" WHERE "teamId" = $1 AND "milestoneId" = $2`, [team.id, m1]);
-  expect(graded).toHaveLength(1);
-  const secretFeedback = graded[0].feedback as string;
-  const memberSession = await login(team.members[2]);
-  for (const session of [other2024, memberSession]) {
-    const replies = await Promise.all([
-      session.call("GET", `/course-cycles/${systems.id}/milestones/${m1}/teams/${team.id}/evaluations`),
-      session.call("GET", "/me/dashboard"),
-      session.call("GET", `/course-cycles/${systems.id}`),
-      session.call("GET", "/teams/mine"),
-      session.call("GET", `/teams/${team.id}`),
-      session.call("GET", `/teams/${team.id}/milestones/${m1}/submissions`),
-      session.call("GET", `/course-cycles/${systems.id}/milestones/${m1}/grading`),
-      session.call("PUT", `/course-cycles/${systems.id}/milestones/${m1}/teams/${team.id}/evaluation`, { marks: 1 }),
-      session.call("GET", "/me/upcoming"),
-    ]);
-    const evaluations = replies[0];
-    expect(evaluations.status === 404 || (Array.isArray(evaluations.body) && evaluations.body.length === 0)).toBeTruthy();
-    for (const reply of replies) {
-      expect(reply.text).not.toContain(secretFeedback);
-      expect(reply.text).not.toMatch(/"marks":\s*\d/);
+  const capstoneM1 = capstone.milestones[0].id;
+  const memberTeam = capstone.teams[10].id;
+  await sql(`UPDATE "MilestoneGrading" SET "maxMarks" = 20 WHERE "milestoneId" = ANY($1)`, [[m1, capstoneM1]]);
+  await sql(`UPDATE "Evaluation" SET marks = 14 WHERE "milestoneId" = ANY($1) AND "teamId" = ANY($2)`, [[m1, capstoneM1], [team.id, memberTeam]]);
+  try {
+    const graded = await sql(`SELECT feedback FROM "Evaluation" WHERE "teamId" = $1 AND "milestoneId" = $2`, [team.id, m1]);
+    expect(graded).toHaveLength(1);
+    const secretFeedback = graded[0].feedback as string;
+    const memberSession = await login(team.members[2]);
+    const routes: [string, string, unknown?][] = [
+      ["GET", "/me/dashboard"],
+      ["GET", "/me/upcoming"],
+      ["GET", "/teams/mine"],
+      ["GET", "/course-cycles/my"],
+      ["GET", `/course-cycles/${systems.id}`],
+      ["GET", `/course-cycles/${capstone.id}`],
+      ["GET", `/teams/${team.id}`],
+      ["GET", `/teams/${memberTeam}`],
+      ["GET", `/teams/${team.id}/milestones/${m1}/submissions`],
+      ["GET", `/course-cycles/${systems.id}/milestones/${m1}/teams/${team.id}/evaluations`],
+      ["GET", `/course-cycles/${capstone.id}/milestones/${capstoneM1}/teams/${memberTeam}/evaluations`],
+      ["GET", `/course-cycles/${systems.id}/milestones/${m1}/grading`],
+      ["GET", `/course-cycles/${capstone.id}/milestones/${capstoneM1}/grading`],
+      ["GET", `/course-cycles/${systems.id}/milestones/${m1}/submissions`],
+      ["GET", `/course-cycles/${capstone.id}/milestones/${capstoneM1}/submissions`],
+      ["PUT", `/course-cycles/${systems.id}/milestones/${m1}/grading`, { maxMarks: 30 }],
+      ["PUT", `/course-cycles/${systems.id}/milestones/${m1}/teams/${team.id}/evaluation`, { marks: 1, feedback: "x" }],
+    ];
+    const leaks: string[] = [];
+    let checked = 0;
+    for (const [role, session] of [["student", student], ["other 2024 student", other2024], ["systems member", memberSession], ["capstone owner", alpha], ["systems owner", bravo], ["admin", admin]] as const) {
+      for (const [method, route, body] of routes) {
+        const reply = await session.call(method, route, body);
+        checked += 1;
+        if (/"(marks|maxMarks)"\s*:/.test(reply.text)) leaks.push(`${role}: ${method} ${route} -> ${reply.text.slice(0, 120)}`);
+        if (role !== "systems owner" && role !== "admin" && reply.text.includes(secretFeedback)) leaks.push(`${role} read unreleased feedback: ${method} ${route}`);
+      }
     }
+    expect(leaks).toEqual([]);
+    test.info().annotations.push({ type: "observation", description: `${checked} responses, 6 roles: no marks or scale, no unreleased feedback` });
+    // Writing a mark or a scale is refused outright.
+    const scale = await bravo.call("PUT", `/course-cycles/${systems.id}/milestones/${m1}/grading`, { maxMarks: 30 });
+    expect([scale.status, scale.body?.code]).toEqual([400, "MARKS_DISABLED"]);
+    // The released feedback of the student's own project is visible: the filter is per milestone.
+    const released = await student.call("GET", `/course-cycles/${capstone.id}/milestones/${capstoneM1}/teams/${memberTeam}/evaluations`);
+    expect(released.body[0].feedback).toEqual(expect.any(String));
+  } finally {
+    await sql(`UPDATE "Evaluation" SET marks = NULL WHERE "milestoneId" = ANY($1)`, [[m1, capstoneM1]]);
+    await sql(`UPDATE "MilestoneGrading" SET "maxMarks" = NULL WHERE "milestoneId" = ANY($1)`, [[m1, capstoneM1]]);
   }
-  // The released marks of the same student's other project are visible: the filter is per milestone.
-  const released = await student.call("GET", `/course-cycles/${capstone.id}/milestones/${capstone.milestones[0].id}/teams/${capstone.teams[10].id}/evaluations`);
-  expect(released.body[0].marks).toEqual(expect.any(Number));
 });
 
 test("SEC-LEAK-2 a closed project is read-only and visible only to its former members", async () => {
@@ -196,7 +222,7 @@ test("SEC-ROLE-1 students and pending staff are refused faculty and admin endpoi
     ["POST", `/course-cycles/${draftElective.id}/publish`],
     ["PUT", `/course-cycles/${capstone.id}/milestones/${m1}/grading`, { maxMarks: 10 }],
     ["POST", `/course-cycles/${capstone.id}/milestones/${m1}/grading/release`],
-    ["PUT", `/course-cycles/${capstone.id}/milestones/${m1}/teams/${team}/evaluation`, { marks: 100, expectedVersion: 1 }],
+    ["PUT", `/course-cycles/${capstone.id}/milestones/${m1}/teams/${team}/evaluation`, { feedback: "x", expectedVersion: 1 }],
     ["POST", `/teams/${team}/idea/review`, { version: 2, decision: "APPROVED" }],
     ["POST", `/teams/${team}/members`, { userId: ZERO }],
     ["GET", `/course-cycles/${capstone.id}/ideas`],
@@ -217,7 +243,7 @@ test("SEC-ROLE-2 faculty cannot reach admin endpoints and admins cannot grade or
   ], [403], "faculty to admin");
   const m1 = capstone.milestones[0].id;
   await expectStatuses(admin, [
-    ["PUT", `/course-cycles/${capstone.id}/milestones/${m1}/teams/${capstone.teams[0].id}/evaluation`, { marks: 1, expectedVersion: 1 }],
+    ["PUT", `/course-cycles/${capstone.id}/milestones/${m1}/teams/${capstone.teams[0].id}/evaluation`, { feedback: "x", expectedVersion: 1 }],
     ["POST", `/course-cycles/${capstone.id}/milestones/${m1}/grading/release`],
     ["POST", `/course-cycles/${capstone.id}/close`],
   ], [403], "admin writes");

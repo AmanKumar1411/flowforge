@@ -21,6 +21,7 @@ import {
 import { IDEA_SOURCES } from "./create-cycle.dto";
 import { UpdateCycleCommand } from "../../application/cycle-commands";
 import { LinkRequirementDto, MilestoneDto } from "./milestone.dto";
+import { IsCleanText } from "../../../common/validation/clean-text";
 
 const COURSE_KINDS: CourseKind[] = ["CORE", "ELECTIVE"];
 
@@ -28,18 +29,21 @@ export class UpdateCycleDto implements UpdateCycleCommand {
   @ApiPropertyOptional({ example: "Software Design & System Development" })
   @IsOptional()
   @IsString()
+  @IsCleanText()
   @MaxLength(120)
   courseName?: string;
 
   @ApiPropertyOptional({ example: "2026 Software Development Projects" })
   @IsOptional()
   @IsString()
+  @IsCleanText()
   @MaxLength(120)
   title?: string;
 
   @ApiPropertyOptional({ example: "The first project cycle." })
   @IsOptional()
   @IsString()
+  @IsCleanText()
   @MaxLength(2000)
   description?: string | null;
 
@@ -60,6 +64,7 @@ export class UpdateCycleDto implements UpdateCycleCommand {
   @ApiPropertyOptional({ example: "2026-27" })
   @IsOptional()
   @IsString()
+  @IsCleanText()
   @Matches(/^\d{4}-\d{2}$/)
   academicYear?: string;
 

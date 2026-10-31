@@ -35,7 +35,8 @@ export interface NewSubmission {
   version: number;
   links: Link[];
   notes: string | null;
-  submittedById: string;
+  /** A member of the team, with the name its member list already holds. */
+  submittedBy: Person;
   submittedAt: Date;
 }
 

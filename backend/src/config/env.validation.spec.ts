@@ -9,6 +9,39 @@ const withEnv = (overrides: Record<string, string | undefined>) =>
   parseEnvironment({ ...testEnvironment(), ...overrides });
 
 describe("parseEnvironment", () => {
+  it("has campus-sized limits by default (H2, H10)", () => {
+    const env = testEnvironment();
+    for (const key of [
+      "AUTH_LOGIN_RATE_LIMIT_PER_MINUTE",
+      "AUTH_REFRESH_RATE_LIMIT_PER_MINUTE",
+      "SUBMISSION_RATE_LIMIT_PER_MINUTE",
+      "WRITE_RATE_LIMIT_PER_MINUTE",
+    ]) {
+      delete env[key];
+    }
+    const { rateLimits, submissionVersionLimit, trustProxy } =
+      parseEnvironment(env);
+    expect(rateLimits).toEqual({
+      loginPerMinute: 600,
+      accountLoginPerMinute: 10,
+      refreshPerMinute: 10,
+      submissionsPerMinute: 10,
+      writesPerMinute: 120,
+    });
+    expect(submissionVersionLimit).toBe(50);
+    expect(trustProxy).toBe(false);
+  });
+
+  it("refuses TRUST_PROXY=true, which would let any client choose its own IP", () => {
+    expect(() =>
+      parseEnvironment({ ...testEnvironment(), TRUST_PROXY: "true" }),
+    ).toThrow(/would trust any X-Forwarded-For/);
+    expect(
+      parseEnvironment({ ...testEnvironment(), TRUST_PROXY: "loopback" })
+        .trustProxy,
+    ).toBe("loopback");
+  });
+
   it("types and normalizes a valid environment", () => {
     const config = withEnv({ FRONTEND_URL: "http://localhost:5173/" });
 
@@ -17,6 +50,7 @@ describe("parseEnvironment", () => {
     expect(config.sessions).toEqual({
       refreshTokenTtlDays: 1,
       refreshFamilyMaxDays: 1,
+      refreshReuseGraceSeconds: 10,
     });
     expect(
       config.identity.studentEmailPattern.exec(

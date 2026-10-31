@@ -101,35 +101,36 @@ const DUE_S = 115;
     }, student);
 
     const faculty = await devSignIn(await browser.newContext(), FRONTEND, FACULTY, "Farah Q");
-    await run.check("After the due date the faculty grade out of 20 and release; the team sees its marks", async () => {
+    await run.check("After the due date the faculty give feedback and release it; the team sees it", async () => {
       await faculty.waitForTimeout(Math.max(0, t0 + (DUE_S + 1) * 1000 - Date.now()));
       // Before release the team sees that results are not out.
       await student.reload();
       await student.getByText(/Not released yet/).waitFor();
       await faculty.goto(`${FRONTEND}/faculty/cycles/${cycleId}?tab=milestones`);
+      // Feedback only: this version has no marks or scale (H3). Rows are found by team, so other teams never match.
       const grading = faculty.getByRole("region", { name: "Grading of M1" });
-      await grading.getByLabel("Marked out of").fill("20");
-      await grading.getByRole("button", { name: "Save", exact: true }).first().click();
-      await grading.getByLabel("Marks for Solo Falcon").fill("14");
+      const row = grading.locator(".grading-row", { hasText: "Solo Falcon" });
       await grading.getByLabel("Feedback for Solo Falcon").fill("Clear plan; show the sensor data next.");
-      await grading.locator(".grading-row").getByRole("button", { name: "Save" }).click();
-      await grading.locator(".grading-row").getByRole("status").filter({ hasText: "Saved" }).waitFor();
+      await row.getByRole("button", { name: "Save" }).click();
+      await row.getByRole("status").filter({ hasText: "Saved" }).waitFor();
       faculty.once("dialog", (dialog) => dialog.accept());
-      await grading.getByRole("button", { name: "Release results to all teams" }).click();
+      await grading.getByRole("button", { name: "Release feedback to all teams" }).click();
       await grading.getByText(/^Released on /).waitFor();
       await student.reload();
-      await student.locator(".evaluation-marks", { hasText: "14 / 20" }).waitFor();
       await student.getByText("Clear plan; show the sensor data next.").waitFor();
+      await student.getByText(/^Feedback released on /).waitFor();
+      assert((await student.locator(".evaluation-marks").count()) === 0, "no marks are shown");
     }, faculty);
 
     await run.check("A correction after release reaches the team as updated, and the dashboard says so", async () => {
       await faculty.reload();
       const grading = faculty.getByRole("region", { name: "Grading of M1" });
-      await grading.getByLabel("Marks for Solo Falcon").fill("15");
-      await grading.locator(".grading-row").getByRole("button", { name: "Save" }).click();
-      await grading.locator(".grading-row").getByRole("status").filter({ hasText: "Saved" }).waitFor();
+      const row = grading.locator(".grading-row", { hasText: "Solo Falcon" });
+      await grading.getByLabel("Feedback for Solo Falcon").fill("Clear plan; show the sensor data and its tests next.");
+      await row.getByRole("button", { name: "Save" }).click();
+      await row.getByRole("status").filter({ hasText: "Saved" }).waitFor();
       await student.reload();
-      await student.locator(".evaluation-marks", { hasText: "15 / 20" }).waitFor();
+      await student.getByText("Clear plan; show the sensor data and its tests next.").waitFor();
       await student.getByText(/^Updated on /).waitFor();
       await student.goto(`${FRONTEND}/student`);
       await student.getByRole("link", { name: "Your result for M1 · Final submission was updated" }).waitFor();

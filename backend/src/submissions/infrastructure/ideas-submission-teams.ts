@@ -1,15 +1,19 @@
 import { Injectable } from "@nestjs/common";
 import { CourseCycleService } from "../../course-cycles/application/course-cycle.service";
 import { IdeaService } from "../../ideas/application/idea.service";
-import { Idea } from "../../ideas/domain/idea";
+import { IdeaSummary } from "../../ideas/domain/idea";
 import { TeamActor } from "../../teams/domain/team-access.policy";
 import {
   SubmissionTeams,
   TeamWithIdea,
 } from "../application/ports/submission-teams";
-import { SubmissionCycle, SubmissionIdea } from "../domain/submission";
+import {
+  SubmissionCycle,
+  SubmissionIdea,
+  SubmissionTeam,
+} from "../domain/submission";
 
-const toSubmissionIdea = (idea: Idea | null): SubmissionIdea | null =>
+const toSubmissionIdea = (idea: IdeaSummary | null): SubmissionIdea | null =>
   idea ? { title: idea.title, status: idea.status, source: idea.source } : null;
 
 /**
@@ -30,12 +34,24 @@ export class IdeasSubmissionTeams extends SubmissionTeams {
     actor: TeamActor,
     teamId: string,
   ): Promise<TeamWithIdea & { cycle: SubmissionCycle }> {
-    const { team, idea } = await this.ideas.getTeamIdea(actor, teamId);
+    const { team, idea } = await this.ideas.getTeamIdeaSummary(actor, teamId);
     return {
       team,
       cycle: await this.cycles.getById(team.cycleId),
-      idea: toSubmissionIdea(idea),
+      idea: idea && toSubmissionIdea(idea),
     };
+  }
+
+  async getVisibleTeam(
+    actor: TeamActor,
+    teamId: string,
+  ): Promise<{ team: SubmissionTeam; cycle: SubmissionCycle }> {
+    const { team } = await this.ideas.getVisibleTeam(actor, teamId);
+    return { team, cycle: await this.cycles.getById(team.cycleId) };
+  }
+
+  getVisibleCycle(actor: TeamActor, cycleId: string): Promise<SubmissionCycle> {
+    return this.cycles.getVisibleCycle(actor, cycleId);
   }
 
   async listForCycle(

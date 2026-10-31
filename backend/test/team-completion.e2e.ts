@@ -466,9 +466,10 @@ describe("Team completion and electives", () => {
         sorted(grown.body.members.map((member) => member.userId)),
         sorted([ids.aman, ids.neha, ids.kiran]),
       );
+      // A full team is a conflict with its state, like losing the race for its last slot (H9).
       const full = await addTo(studentTeam.id, "dev");
-      assert.equal(full.status, 400);
-      assert.equal(full.body.code, "TEAM_SIZE_OUT_OF_RANGE");
+      assert.equal(full.status, 409);
+      assert.equal(full.body.code, "TEAM_FULL");
       const taken = await addTo(created.body.id, "neha");
       assert.equal(taken.body.code, "STUDENT_ALREADY_IN_TEAM");
       const foreign = await otherFaculty.post(

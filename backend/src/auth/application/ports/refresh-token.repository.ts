@@ -43,6 +43,12 @@ export abstract class RefreshTokenRepository {
     replacedById: string,
     tx: Transaction,
   ): Promise<void>;
+  /** Whether the family still has a token that is neither revoked nor expired. */
+  abstract hasActiveToken(
+    familyId: string,
+    now: Date,
+    tx: Transaction,
+  ): Promise<boolean>;
   abstract revokeFamily(
     familyId: string,
     at: Date,

@@ -5,6 +5,8 @@
   --paper: #fbfaf5;
   --lime: #d8ec75;
   --coral: #eb775e;
+  /* Coral for text: the same hue, dark enough for 4.5:1 on paper and white (H16). */
+  --coral-text: #a75443;
   --navy: #263b52;
 }
 
@@ -83,7 +85,7 @@
 .eyebrow,
 .card-kicker {
   margin: 0 0 14px;
-  color: var(--coral);
+  color: var(--coral-text);
   font-size: .76rem;
   font-weight: 800;
   letter-spacing: .14em;
@@ -195,7 +197,7 @@ h2 {
 }
 
 .card-link:hover h2 {
-  color: var(--coral);
+  color: var(--coral-text);
 }
 
 .card-top,
@@ -215,7 +217,7 @@ h2 {
 
 .status-draft {
   background: #e5e3d8;
-  color: #67685f;
+  color: #63645b;
 }
 
 .status-published {
@@ -264,7 +266,7 @@ h2 {
 }
 
 .empty-mark {
-  color: var(--coral);
+  color: var(--coral-text);
   font-size: 3rem;
 }
 
@@ -385,6 +387,41 @@ h2 {
   padding: 14px;
   border: 1px solid #efc0b8;
   background: #fff5f2;
+}
+
+/* The first stop for Tab on every page: past the header to the page itself (H16). */
+.skip-link {
+  position: absolute;
+  top: -60px;
+  left: 12px;
+  z-index: 30;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 700;
+}
+
+.skip-link:focus {
+  top: 12px;
+}
+
+/* "Jump to grading of M1": straight to a milestone's grading, by keyboard too (H16). */
+.jump-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-bottom: 14px;
+}
+
+/* Shown while the API or its database can't be reached; the session is kept (H6). */
+.connection-banner {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin: 0;
+  text-align: center;
+  font-weight: 600;
 }
 
 .form-page {
@@ -970,7 +1007,7 @@ td.row-actions {
 
 .idea-status.idea-rejected {
   border-color: var(--coral);
-  color: var(--coral);
+  color: var(--coral-text);
 }
 
 .idea-details dl {

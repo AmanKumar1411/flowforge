@@ -25,14 +25,18 @@ const evaluationConflicts = new Counter("evaluation_conflicts");
 const loginFailures = new Rate("login_failures");
 const refreshFailures = new Rate("refresh_failures");
 const unexpectedResponses = new Counter("unexpected_responses");
+const rateLimited = new Counter("rate_limited");
 
 const PROFILES = {
   smoke: { stages: [{ duration: "30s", target: 20 }, { duration: "1m", target: 20 }], submitShare: 0.2 },
   normal: { stages: [{ duration: "5m", target: 500 }, { duration: "15m", target: 500 }, { duration: "1m", target: 0 }], submitShare: 0.05 },
   // 3,000 users; in the last 15 minutes 40% of the users who can submit hand in work.
   peak: { stages: [{ duration: "10m", target: 3000 }, { duration: "20m", target: 3000 }, { duration: "1m", target: 0 }], submitShare: 0.02, rushFromSeconds: 15 * 60, rushShare: 0.4 },
-  // Results released: 0 to 1,500 in a minute, everyone opens their marks.
-  spike: { stages: [{ duration: "1m", target: 1500 }, { duration: "3m", target: 1500 }, { duration: "30s", target: 0 }], submitShare: 0.02, results: true },
+  // The peak from one campus IP through a proxy that sets X-Forwarded-For (run.sh starts load/campus-proxy.cjs).
+  campus: { stages: [{ duration: "10m", target: 3000 }, { duration: "20m", target: 3000 }, { duration: "1m", target: 0 }], submitShare: 0.02, rushFromSeconds: 15 * 60, rushShare: 0.4 },
+  // Results released: 0 to 1,500 in a minute, everyone opens their results. They signed in earlier in the
+  // day, so setup() signs them in beforehand at a pace the campus sign-in limit allows.
+  spike: { stages: [{ duration: "1m", target: 1500 }, { duration: "3m", target: 1500 }, { duration: "30s", target: 0 }], submitShare: 0.02, results: true, signedInBefore: 1500 },
   soak: { stages: [{ duration: "1m", target: 300 }, { duration: "60m", target: 300 }, { duration: "30s", target: 0 }], submitShare: 0.05 },
 };
 const profile = PROFILES[PROFILE];
@@ -44,6 +48,8 @@ const thresholds = {
   http_req_failed: ["rate<0.01"],
   server_errors: ["count<1"],
   refresh_failures: ["rate<0.01"],
+  // Real limits are on (Phase 10): no student may ever be rate limited by normal use.
+  rate_limited: ["count<1"],
 };
 for (const name of [...READS, "POST submission", "PUT evaluation", "POST /auth/dev-login", "POST /auth/refresh"]) {
   thresholds[`http_req_duration{name:${name}}`] = ["p(95)<1000"];
@@ -54,7 +60,7 @@ export const options = {
   thresholds,
   discardResponseBodies: true,
   summaryTrendStats: ["avg", "min", "med", "p(90)", "p(95)", "p(99)", "max", "count"],
-  setupTimeout: "2m",
+  setupTimeout: "5m",
   // k6 empties each VU's cookie jar between iterations by default, which loses the refresh cookie.
   noCookiesReset: true,
 };
@@ -74,6 +80,7 @@ function request(method, url, body, name, kind, parse = false) {
   };
   const response = http.request(method, `${API}${url}`, body ? JSON.stringify(body) : null, params);
   if (response.status >= 500 || response.status === 0) serverErrors.add(1, { name });
+  if (response.status === 429) rateLimited.add(1, { name });
   if (response.status >= 400 && response.status !== 409) {
     unexpectedResponses.add(1, { name, status: String(response.status) });
     // The first two per VU, by endpoint and status only (never a token or a body).
@@ -149,19 +156,46 @@ function facultyVisit(user) {
   const rows = grading.json("rows") || [];
   if (rows.length === 0 || !grading.json("open")) return;
   const row = rows[Math.floor(Math.random() * rows.length)];
-  const body = { marks: 5 + Math.floor(Math.random() * 15), feedback: "Load test feedback" };
+  // Feedback only: marks are off in this version (H3).
+  const body = { feedback: `Load test feedback ${Math.floor(Math.random() * 1000)}` };
   if (row.evaluation) body.expectedVersion = row.evaluation.version;
   const saved = request("PUT", `/course-cycles/${user.c}/milestones/${user.m1}/teams/${row.team.id}/evaluation`, body, "PUT evaluation", "write");
   if (saved.status === 409) evaluationConflicts.add(1);
   think(5, 15);
 }
 
-export default function () {
+/** Results day: sessions from earlier in the day, signed in at 500 a minute (under the campus limit of 600). */
+export function setup() {
+  if (!profile.signedInBefore) return {};
+  const cookies = [];
+  for (let i = 0; i < profile.signedInBefore; i += 1) {
+    const user = students[i % students.length];
+    const signedIn = http.post(`${API}/auth/dev-login`, JSON.stringify({ email: user.e, name: user.n }), {
+      headers: { "Content-Type": "application/json", Origin: ORIGIN },
+      tags: { name: "setup sign-in", kind: "setup" },
+    });
+    // Only the cookie's value is kept, for the same student's VU; it is never logged.
+    cookies.push(signedIn.status === 204 ? signedIn.cookies.flowforge_refresh[0].value : null);
+    sleep(60 / 500);
+  }
+  return { cookies };
+}
+
+/** A VU that already has a session cookie: the web app only refreshes. */
+function resume(cookie) {
+  http.cookieJar().set(`${API}/auth/refresh`, "flowforge_refresh", cookie, { path: "/api/auth" });
+  const refreshed = request("POST", "/auth/refresh", null, "POST /auth/refresh", "auth", true);
+  loginFailures.add(refreshed.status !== 200);
+  return refreshed.status === 200 ? { token: refreshed.json("accessToken"), at: Date.now() } : null;
+}
+
+export default function (data) {
   const vu = exec.vu.idInTest;
   const isFaculty = vu % 100 === 0;
   const user = isFaculty ? faculty[(vu / 100) % faculty.length] : students[(vu - 1) % students.length];
   if (!session) {
-    session = signIn(user);
+    const cookie = !isFaculty && data.cookies ? data.cookies[(vu - 1) % data.cookies.length] : null;
+    session = cookie ? resume(cookie) : signIn(user);
     if (!session) {
       sleep(5);
       return;

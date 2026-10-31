@@ -34,7 +34,17 @@ import { ALL_ROLES, Roles } from "./decorators/roles.decorator";
 import { AccessTokenResponseDto } from "./dto/access-token-response.dto";
 import { DemoAccountDto } from "./dto/demo-account.dto";
 import { DevLoginDto } from "./dto/dev-login.dto";
+import { DevLoginGuard } from "./guards/dev-login.guard";
 import { MeResponseDto } from "./dto/me-response.dto";
+
+/** Refresh answers that mean the session is over; anything else leaves the cookie in place. */
+const SESSION_ENDED = new Set<string>([
+  "UNAUTHENTICATED",
+  "INVALID_REFRESH_TOKEN",
+  "TOKEN_REVOKED",
+  "REFRESH_TOKEN_REUSED",
+  "ACCOUNT_DEACTIVATED",
+]);
 
 const userAgentOf = (request: Request): string | null =>
   request.headers["user-agent"]?.slice(0, 256) ?? null;
@@ -52,7 +62,6 @@ export class AuthController {
 
   @Get("google")
   @Public()
-  @SkipThrottle({ refresh: true })
   @ApiOperation({
     summary: "Start Google Sign-In",
     description:
@@ -67,7 +76,6 @@ export class AuthController {
 
   @Get("google/callback")
   @Public()
-  @SkipThrottle({ refresh: true })
   @ApiOperation({
     summary: "Google redirects here",
     description:
@@ -106,13 +114,12 @@ export class AuthController {
 
   @Post("dev-login")
   @Public()
-  @SkipThrottle({ refresh: true })
-  @UseGuards(OriginGuard)
+  @UseGuards(DevLoginGuard, OriginGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: "Development-only sign-in",
     description:
-      "Same role resolution, audit and session as Google Sign-In. Returns 404 DEV_LOGIN_DISABLED unless AUTH_DEV_LOGIN_ENABLED=true outside production. Requires the Origin header to equal FRONTEND_URL.",
+      "Same role resolution, audit and session as Google Sign-In. Returns 404 DEV_LOGIN_DISABLED unless AUTH_DEV_LOGIN_ENABLED=true and either NODE_ENV=test, or NODE_ENV=development with the request coming from this machine (loopback, not forwarded). Requires the Origin header to equal FRONTEND_URL.",
   })
   @ApiNoContentResponse({ description: "Refresh cookie set" })
   async devLogin(
@@ -130,7 +137,8 @@ export class AuthController {
 
   @Get("dev-login/accounts")
   @Public()
-  @SkipThrottle({ login: true, refresh: true })
+  @UseGuards(DevLoginGuard)
+  @SkipThrottle({ login: true })
   @ApiOperation({
     summary: "Demo accounts for dev login",
     description:
@@ -167,7 +175,11 @@ export class AuthController {
       this.cookies.setRefreshToken(response, session.refreshToken);
       return AccessTokenResponseDto.from(session);
     } catch (error) {
-      this.cookies.clearRefreshToken(response);
+      // Only an answer about the session ends it. A database outage (503) or a limit (429) keeps
+      // the cookie, so the browser tries again instead of signing the student out (H6).
+      if (error instanceof DomainError && SESSION_ENDED.has(error.code)) {
+        this.cookies.clearRefreshToken(response);
+      }
       throw error;
     }
   }
@@ -190,7 +202,7 @@ export class AuthController {
 
   @Post("logout-all")
   @Roles(...ALL_ROLES)
-  @SkipThrottle({ login: true, refresh: true })
+  @SkipThrottle({ login: true })
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: "End every session of the current user",
@@ -208,7 +220,7 @@ export class AuthController {
 
   @Get("me")
   @Roles(...ALL_ROLES)
-  @SkipThrottle({ login: true, refresh: true })
+  @SkipThrottle({ login: true })
   @ApiOperation({ summary: "The signed-in user, including PENDING_STAFF" })
   @ApiOkResponse({ type: MeResponseDto })
   async me(@CurrentUser() user: AuthenticatedUser): Promise<MeResponseDto> {

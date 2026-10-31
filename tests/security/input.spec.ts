@@ -1,5 +1,5 @@
 import { expect, request, test } from "@playwright/test";
-import { API, Session, WEB, login, manifest, send, sql } from "../support/api";
+import { API, DAY, Session, WEB, cycleBody, fromNow, login, manifest, send, sql } from "../support/api";
 
 // SEC-INJ, SEC-LINK, SEC-ABUSE: hostile input through every writable field.
 const m = manifest();
@@ -53,7 +53,7 @@ test("SEC-INJ-2 stored XSS payloads come back as plain text and never run in the
   const grading = await alpha.call("GET", `/course-cycles/${capstone.id}/milestones/${capstone.milestones[0].id}/grading`);
   const row = grading.body.rows.find((r: { team: { id: string } }) => r.team.id === target.id);
   const saved = await alpha.call("PUT", `/course-cycles/${capstone.id}/milestones/${capstone.milestones[0].id}/teams/${target.id}/evaluation`, {
-    marks: 70, feedback: `${XSS[0]} ${XSS[1]} ${XSS[2]}`, expectedVersion: row.evaluation.version,
+    feedback: `${XSS[0]} ${XSS[1]} ${XSS[2]}`, expectedVersion: row.evaluation.version,
   });
   expect(saved.status).toBe(200);
 
@@ -117,13 +117,39 @@ test("SEC-INJ-3 malformed, oversized, nested and wrongly typed bodies are refuse
   expect((await leader.call("GET", "/auth/me")).status).toBe(200);
 });
 
-test("SEC-INJ-4 control characters (NUL) in text fields are refused, not a 500", async () => {
+test("SEC-INJ-4 control characters (NUL) in every kind of text field are refused with 400, not a 500", async () => {
+  const NUL = "nul\u0000byte";
   const leader = await login(designFree[6]);
   const partner = await login(designFree[7]);
-  const reply = await leader.call("POST", `/course-cycles/${design.id}/teams`, { name: "nul\u0000byte", memberIds: [partner.userId] });
-  test.info().annotations.push({ type: "observation", description: `team name with NUL: ${reply.status} ${reply.text.slice(0, 200)}` });
-  noLeak(reply.text);
-  expect(reply.status).toBe(400);
+  const ideaLeader = await login(web.teams[185].leader); // a web team without an idea yet
+  const capstoneTeam = capstone.teams[31];
+  const submitter = await login(capstoneTeam.members[1]);
+  const alpha = await login(capstone.owner);
+  const charlie = await login(web.owner);
+  const grading = await alpha.call("GET", `/course-cycles/${capstone.id}/milestones/${capstone.milestones[0].id}/grading`);
+  const row = grading.body.rows.find((r: { team: { id: string } }) => r.team.id === capstoneTeam.id);
+  const plan = { teamDeadline: fromNow(DAY), ideaDeadline: fromNow(2 * DAY), milestones: [{ opens: fromNow(2 * DAY), due: fromNow(3 * DAY) }] };
+  const cases: [string, Session, string, string, unknown][] = [
+    ["team name", leader, "POST", `/course-cycles/${design.id}/teams`, { name: NUL, memberIds: [partner.userId] }],
+    ["idea title", ideaLeader, "PUT", `/teams/${web.teams[185].id}/idea`, { title: NUL, problem: "P", solution: "S" }],
+    ["idea problem", ideaLeader, "PUT", `/teams/${web.teams[185].id}/idea`, { title: "T", problem: NUL, solution: "S" }],
+    ["idea solution", ideaLeader, "PUT", `/teams/${web.teams[185].id}/idea`, { title: "T", problem: "P", solution: NUL }],
+    ["submission notes", submitter, "POST", `/teams/${capstoneTeam.id}/milestones/${capstone.milestones[1].id}/submissions`, { links: [{ type: "GITHUB", url: "https://github.com/qa/nul" }], notes: NUL }],
+    ["evaluation feedback", alpha, "PUT", `/course-cycles/${capstone.id}/milestones/${capstone.milestones[0].id}/teams/${capstoneTeam.id}/evaluation`, { feedback: NUL, expectedVersion: row?.evaluation?.version ?? 0 }],
+    ["catalog title", charlie, "POST", `/course-cycles/${web.id}/idea-catalog`, { title: NUL, description: "D" }],
+    ["catalog description", charlie, "POST", `/course-cycles/${web.id}/idea-catalog`, { title: "T", description: NUL }],
+    ["project title", alpha, "POST", "/course-cycles", { ...cycleBody({}, plan), title: NUL }],
+    ["project course name", alpha, "POST", "/course-cycles", { ...cycleBody({}, plan), courseName: NUL }],
+    ["project description", alpha, "PATCH", `/course-cycles/${capstone.id}`, { description: NUL }],
+  ];
+  const results: string[] = [];
+  for (const [label, session, method, route, body] of cases) {
+    const reply = await session.call(method, route, body);
+    results.push(`${label}: ${reply.status}`);
+    noLeak(reply.text);
+    expect.soft(reply.status, `${label}: ${reply.text.slice(0, 160)}`).toBe(400);
+  }
+  test.info().annotations.push({ type: "observation", description: results.join("; ") });
 });
 
 test("SEC-INJ-5 header injection: CRLF and a forged Host do not change redirects or cookies", async () => {
@@ -193,16 +219,18 @@ test.describe("SEC-LINK submission links", () => {
     });
   }
 
-  test("SEC-LINK catalog links: javascript: refused; http:// observed", async () => {
+  test("SEC-LINK catalog links: javascript:, http:// and internal addresses refused, like every other link", async () => {
     const charlie = await login(web.owner);
-    const js = await charlie.call("POST", `/course-cycles/${web.id}/idea-catalog`, { title: "JS link", description: "x", link: "javascript:alert(1)" });
-    expect(js.status).toBe(400);
-    const http = await charlie.call("POST", `/course-cycles/${web.id}/idea-catalog`, { title: "Plain http link", description: "x", link: "http://example.org/brief" });
-    test.info().annotations.push({ type: "observation", description: `catalog http:// link: ${http.status}` });
+    for (const link of ["javascript:alert(1)", "http://example.org/brief", "https://10.0.0.5/brief", "https://user:pw@example.org/brief"]) {
+      const reply = await charlie.call("POST", `/course-cycles/${web.id}/idea-catalog`, { title: "Bad link", description: "x", link });
+      expect(reply.status, link).toBe(400);
+    }
+    const fine = await charlie.call("POST", `/course-cycles/${web.id}/idea-catalog`, { title: "Good link", description: "x", link: "https://example.org/brief" });
+    expect(fine.status).toBe(201);
   });
 });
 
-test("SEC-ABUSE-1 a member can post many submission versions in a burst (no per-user write limit)", async () => {
+test("SEC-ABUSE-1 a member's burst of 100 submission versions is limited per user", async () => {
   const team = capstone.teams[201];
   const member = await login(team.members[2]);
   const m2 = capstone.milestones[1].id;
@@ -213,7 +241,8 @@ test("SEC-ABUSE-1 a member can post many submission versions in a burst (no per-
   const throttled = replies.filter((r) => r.status === 429).length;
   test.info().annotations.push({ type: "observation", description: `100 submissions in ${Date.now() - started} ms: ${accepted} accepted, ${throttled} throttled, others ${replies.filter((r) => ![201, 429].includes(r.status)).map((r) => r.status).join(",")}` });
   expect(replies.every((r) => r.status < 500)).toBeTruthy();
-  expect(throttled, "authenticated writes have no rate limit").toBeGreaterThan(0);
+  expect(throttled, "the burst is throttled").toBeGreaterThan(0);
+  expect(accepted, "at most 10 versions per member per milestone per minute").toBeLessThanOrEqual(10);
 });
 
 test("SEC-ABUSE-2 pagination and search are bounded; the candidate search shows only the student's own batch", async () => {

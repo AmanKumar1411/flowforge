@@ -67,6 +67,7 @@ function FacultyRequests() {
       <div className="panel-heading">
         <h2>Faculty access requests</h2>
         <select
+          aria-label="Show requests that are"
           value={status}
           onChange={(event) => setStatus(event.target.value as FacultyRequestStatus)}
         >
@@ -164,12 +165,14 @@ function FacultyAllowlist() {
       <form className="inline-form" onSubmit={add}>
         <input
           type="email"
+          aria-label="Faculty email"
           placeholder="firstname.s@nst.rishihood.edu.in"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           required
         />
         <input
+          aria-label="Faculty name (optional)"
           placeholder="Name (optional)"
           value={name}
           onChange={(event) => setName(event.target.value)}
@@ -253,6 +256,7 @@ function Users() {
         <h2>Users</h2>
         <div className="filters">
           <select
+            aria-label="Role"
             value={filters.role ?? ""}
             onChange={(event) =>
               setFilters({
@@ -269,6 +273,7 @@ function Users() {
           </select>
           <input
             type="number"
+            aria-label="Batch year"
             placeholder="Batch"
             value={filters.batchYear ?? ""}
             onChange={(event) =>
@@ -341,11 +346,16 @@ function UserRow({
           <span className="batch-editor">
             <input
               type="number"
+              aria-label={`Batch year of ${user.name}`}
               value={batch}
               onChange={(event) => setBatch(event.target.value)}
             />
             {Number(batch) !== user.batchYear && (
-              <button className="text-button" onClick={() => onCorrectBatch(Number(batch))}>
+              <button
+                className="text-button"
+                aria-label={`Save the batch year of ${user.name}`}
+                onClick={() => onCorrectBatch(Number(batch))}
+              >
                 Save
               </button>
             )}

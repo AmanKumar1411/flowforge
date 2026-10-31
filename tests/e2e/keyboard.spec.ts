@@ -48,7 +48,7 @@ test("KEY-1 a student submits milestone work with the keyboard only", async ({ b
   watch.expectClean();
 });
 
-test("KEY-2 a faculty member grades a team with the keyboard only", async ({ browser }) => {
+test("KEY-2 a faculty member grades a team with the keyboard only, within a press budget", async ({ browser }) => {
   test.setTimeout(180_000);
   const watch = new Watch();
   const page = await signIn(browser, watch, systems.owner, nameOf(systems.owner));
@@ -56,21 +56,23 @@ test("KEY-2 a faculty member grades a team with the keyboard only", async ({ bro
   const grading = page.getByRole("region", { name: "Grading of M1" });
   const firstRow = grading.locator(".grading-row").first();
   await firstRow.waitFor();
-  const label = await firstRow.locator("input").first().getAttribute("aria-label");
-  const teamName = label!.replace(/^Marks for /, "");
+  const label = await firstRow.locator("textarea").first().getAttribute("aria-label");
+  const teamName = label!.replace(/^Feedback for /, "");
   await page.locator("body").focus();
-  const presses = await tabTo(page, (el) => el.tag === "INPUT" && el.label === `Marks for ${teamName}`);
-  await page.keyboard.press("ControlOrMeta+A");
-  await page.keyboard.type("33");
-  await tabTo(page, (el) => el.label === `Feedback for ${teamName}`, 5);
+  // "Jump to grading of M1" (H16) takes the keyboard past the tabs and every team's submissions.
+  const toJump = await tabTo(page, (el) => el.tag === "A" && el.text === "Jump to grading of M1", 60);
+  await page.keyboard.press("Enter");
+  const toField = await tabTo(page, (el) => el.tag === "TEXTAREA" && el.label === `Feedback for ${teamName}`, 20);
   await page.keyboard.press("ControlOrMeta+A");
   await page.keyboard.type("Graded with the keyboard only.");
-  await tabTo(page, (el) => el.tag === "BUTTON" && el.text === "Save", 5);
+  const toSave = await tabTo(page, (el) => el.tag === "BUTTON" && el.text === "Save", 5);
   expect(await focusIsVisible(page)).toBeTruthy();
   await page.keyboard.press("Enter");
   await expect(firstRow.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
-  const saved = await sql(`SELECT e.marks FROM "Evaluation" e JOIN "Team" t ON t.id = e."teamId" WHERE t.name = $1 AND e."milestoneId" = $2`, [teamName, systems.milestones[0].id]);
-  expect(Number(saved[0].marks)).toBe(33);
-  test.info().annotations.push({ type: "observation", description: `Tab presses from the top to the first marks field: ${presses}` });
+  const saved = await sql(`SELECT e.feedback FROM "Evaluation" e JOIN "Team" t ON t.id = e."teamId" WHERE t.name = $1 AND e."milestoneId" = $2`, [teamName, systems.milestones[0].id]);
+  expect(saved[0].feedback).toBe("Graded with the keyboard only.");
+  const presses = toJump + 1 + toField + toSave + 1;
+  test.info().annotations.push({ type: "observation", description: `key presses from the top of the page to a saved evaluation: ${presses} (Tab to the jump link ${toJump}, Enter, Tab to the field ${toField}, Tab to Save ${toSave}, Enter); 513 Tab presses before H16` });
+  expect(presses, "press budget").toBeLessThanOrEqual(40);
   watch.expectClean();
 });

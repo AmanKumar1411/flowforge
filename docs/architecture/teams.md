@@ -176,6 +176,7 @@ Team responses list members leader first, with `isLeader`, `name`, `email` and `
 | `NOT_TEAM_LEADER` | 403 | A member tried to change or disband the team |
 | `TEAM_FORMATION_CLOSED` | 409 | Deadline passed or cycle not published |
 | `TEAM_SIZE_OUT_OF_RANGE` | 400 | Size (leader included) outside the cycle's range; the message gives the numbers |
+| `TEAM_FULL` | 409 | Adding a member to a team that already has the most members (the loser of a race for the last slot) |
 | `INELIGIBLE_TEAM_MEMBER` | 400 | Not an active student of the cycle's batch, or an unknown id (same answer) |
 | `STUDENT_ALREADY_IN_TEAM` | 409 | Someone, possibly the caller, is in another team of the cycle; the message names them |
 | `INVALID_TEAM_SIZE` | 400 | Cycle sizes are not `1 <= min <= max <= 10` |
