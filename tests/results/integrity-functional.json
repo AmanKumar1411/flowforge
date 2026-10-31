@@ -1,0 +1,33 @@
+{
+ "at": "2026-10-30T19:29:52.463Z",
+ "results": {
+  "team members whose team is missing": 0,
+  "teams without members": 0,
+  "teams whose leader is not a member": 0,
+  "teams above the project's largest size": 0,
+  "teams below the smallest size after the team deadline (published projects)": 0,
+  "students in two teams of one project": 0,
+  "team members outside the project's batch (core projects)": 0,
+  "elective team members who are not enrolled": 0,
+  "teams with more than one idea": 0,
+  "ideas whose review history skips a version or decides twice": 0,
+  "approved ideas without an approval at their version (proposals)": 0,
+  "submission versions with gaps or duplicates": 0,
+  "submissions after the milestone's due date": 0,
+  "submissions before the milestone opened": 0,
+  "submissions by someone not in the team": 0,
+  "submissions from teams without an approved idea": 0,
+  "evaluations above the milestone's scale": 0,
+  "evaluations whose revisions do not end at their version": 0,
+  "evaluations by someone other than the project's faculty": 0,
+  "milestones out of order or overlapping": 0,
+  "refresh tokens of deactivated users still live": 0
+ },
+ "totals": {
+  "users": "3023",
+  "teams": "807",
+  "submissions": "1779",
+  "evaluations": "521",
+  "audit_rows": "1315"
+ }
+}

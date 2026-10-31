@@ -1,0 +1,193 @@
+[
+ {
+  "page": "login",
+  "violations": []
+ },
+ {
+  "page": "student dashboard",
+  "violations": []
+ },
+ {
+  "page": "student project: overview",
+  "violations": []
+ },
+ {
+  "page": "student project: team",
+  "violations": [
+   {
+    "id": "color-contrast",
+    "impact": "serious",
+    "nodes": 1,
+    "help": "Elements must meet minimum color contrast ratio thresholds",
+    "sample": "section[aria-labelledby=\"team-heading\"] > .panel-heading > div > .eyebrow :: Element has insufficient color contrast of 2.74 (foreground color: #eb775e, background color: #fbfaf5, font size: 9.1pt (12.16px), font weight: bold). Expected contrast ratio of 4.5:1"
+   }
+  ]
+ },
+ {
+  "page": "student project: idea",
+  "violations": [
+   {
+    "id": "color-contrast",
+    "impact": "serious",
+    "nodes": 1,
+    "help": "Elements must meet minimum color contrast ratio thresholds",
+    "sample": "div > .eyebrow :: Element has insufficient color contrast of 2.74 (foreground color: #eb775e, background color: #fbfaf5, font size: 9.1pt (12.16px), font weight: bold). Expected contrast ratio of 4.5:1"
+   }
+  ]
+ },
+ {
+  "page": "student project: milestones",
+  "violations": [
+   {
+    "id": "color-contrast",
+    "impact": "serious",
+    "nodes": 3,
+    "help": "Elements must meet minimum color contrast ratio thresholds",
+    "sample": ".is-closed > .panel-heading > div > .eyebrow :: Element has insufficient color contrast of 2.74 (foreground color: #eb775e, background color: #fbfaf5, font size: 9.1pt (12.16px), font weight: bold). Expected contrast ratio of 4.5:1 || .is-open > .panel-heading > div > .eyebrow :: Element has insufficient color contrast of 2.74 (foreground color: #eb775e, background color: #fbfaf5, font size: 9.1pt (12.16px), font weight: bold). Expected contrast ratio of 4.5:1 || .is-not_open > .panel-heading > div > .eyebrow :: Element has insufficient color contrast of 2.74 (foreground color: #eb775e, background color: #fbfaf5, font size: 9.1pt (12.16px), font weight: bold). Expected contrast ratio of 4.5:1"
+   }
+  ]
+ },
+ {
+  "page": "student: create a team form",
+  "violations": [
+   {
+    "id": "color-contrast",
+    "impact": "serious",
+    "nodes": 1,
+    "help": "Elements must meet minimum color contrast ratio thresholds",
+    "sample": "div > .eyebrow :: Element has insufficient color contrast of 2.74 (foreground color: #eb775e, background color: #fbfaf5, font size: 9.1pt (12.16px), font weight: bold). Expected contrast ratio of 4.5:1"
+   }
+  ]
+ },
+ {
+  "page": "faculty projects",
+  "violations": [
+   {
+    "id": "color-contrast",
+    "impact": "serious",
+    "nodes": 1,
+    "help": "Elements must meet minimum color contrast ratio thresholds",
+    "sample": ".status-draft :: Element has insufficient color contrast of 4.38 (foreground color: #67685f, background color: #e5e3d8, font size: 8.6pt (11.52px), font weight: bold). Expected contrast ratio of 4.5:1"
+   }
+  ]
+ },
+ {
+  "page": "faculty project: overview",
+  "violations": []
+ },
+ {
+  "page": "faculty project: students",
+  "violations": [
+   {
+    "id": "color-contrast",
+    "impact": "serious",
+    "nodes": 1,
+    "help": "Elements must meet minimum color contrast ratio thresholds",
+    "sample": "div > .eyebrow :: Element has insufficient color contrast of 2.74 (foreground color: #eb775e, background color: #fbfaf5, font size: 9.1pt (12.16px), font weight: bold). Expected contrast ratio of 4.5:1"
+   }
+  ]
+ },
+ {
+  "page": "faculty project: teams",
+  "violations": [
+   {
+    "id": "color-contrast",
+    "impact": "serious",
+    "nodes": 1,
+    "help": "Elements must meet minimum color contrast ratio thresholds",
+    "sample": "div > .eyebrow :: Element has insufficient color contrast of 2.74 (foreground color: #eb775e, background color: #fbfaf5, font size: 9.1pt (12.16px), font weight: bold). Expected contrast ratio of 4.5:1"
+   }
+  ]
+ },
+ {
+  "page": "faculty project: ideas",
+  "violations": [
+   {
+    "id": "color-contrast",
+    "impact": "serious",
+    "nodes": 1,
+    "help": "Elements must meet minimum color contrast ratio thresholds",
+    "sample": "div > .eyebrow :: Element has insufficient color contrast of 2.74 (foreground color: #eb775e, background color: #fbfaf5, font size: 9.1pt (12.16px), font weight: bold). Expected contrast ratio of 4.5:1"
+   }
+  ]
+ },
+ {
+  "page": "faculty project: milestones",
+  "violations": [
+   {
+    "id": "color-contrast",
+    "impact": "serious",
+    "nodes": 3,
+    "help": "Elements must meet minimum color contrast ratio thresholds",
+    "sample": ".is-closed > .panel-heading > div > .eyebrow :: Element has insufficient color contrast of 2.74 (foreground color: #eb775e, background color: #fbfaf5, font size: 9.1pt (12.16px), font weight: bold). Expected contrast ratio of 4.5:1 || .is-open > .panel-heading > div > .eyebrow :: Element has insufficient color contrast of 2.74 (foreground color: #eb775e, background color: #fbfaf5, font size: 9.1pt (12.16px), font weight: bold). Expected contrast ratio of 4.5:1 || .is-not_open > .panel-heading > div > .eyebrow :: Element has insufficient color contrast of 2.74 (foreground color: #eb775e, background color: #fbfaf5, font size: 9.1pt (12.16px), font weight: bold). Expected contrast ratio of 4.5:1"
+   }
+  ]
+ },
+ {
+  "page": "faculty: place students (idea stage)",
+  "violations": [
+   {
+    "id": "color-contrast",
+    "impact": "serious",
+    "nodes": 31,
+    "help": "Elements must meet minimum color contrast ratio thresholds",
+    "sample": ".team-row:nth-child(141) > .team-row-idea > .idea-rejected.idea-status :: Element has insufficient color contrast of 2.74 (foreground color: #eb775e, background color: #fbfaf5, font size: 8.6pt (11.52px), font weight: bold). Expected contrast ratio of 4.5:1 || .team-row:nth-child(142) > .team-row-idea > .idea-rejected.idea-status :: Element has insufficient color contrast of 2.74 (foreground color: #eb775e, background color: #fbfaf5, font size: 8.6pt (11.52px), font weight: bold). Expected contrast ratio of 4.5:1 || .team-row:nth-child(143) > .team-row-idea > .idea-rejected.idea-status :: Element has insufficient color contrast of 2.74 (foreground color: #eb775e, background color: #fbfaf5, font size: 8.6pt (11.52px), font weight: bold). Expected contrast ratio of 4.5:1"
+   }
+  ]
+ },
+ {
+  "page": "wizard: details",
+  "violations": []
+ },
+ {
+  "page": "wizard: teams",
+  "violations": []
+ },
+ {
+  "page": "wizard: milestones",
+  "violations": []
+ },
+ {
+  "page": "wizard: ideas",
+  "violations": []
+ },
+ {
+  "page": "wizard: students",
+  "violations": []
+ },
+ {
+  "page": "wizard: review",
+  "violations": []
+ },
+ {
+  "page": "faculty: grading (unreleased)",
+  "violations": [
+   {
+    "id": "color-contrast",
+    "impact": "serious",
+    "nodes": 3,
+    "help": "Elements must meet minimum color contrast ratio thresholds",
+    "sample": ".is-closed > .panel-heading > div > .eyebrow :: Element has insufficient color contrast of 2.74 (foreground color: #eb775e, background color: #fbfaf5, font size: 9.1pt (12.16px), font weight: bold). Expected contrast ratio of 4.5:1 || .is-open > .panel-heading > div > .eyebrow :: Element has insufficient color contrast of 2.74 (foreground color: #eb775e, background color: #fbfaf5, font size: 9.1pt (12.16px), font weight: bold). Expected contrast ratio of 4.5:1 || .is-not_open > .panel-heading > div > .eyebrow :: Element has insufficient color contrast of 2.74 (foreground color: #eb775e, background color: #fbfaf5, font size: 9.1pt (12.16px), font weight: bold). Expected contrast ratio of 4.5:1"
+   }
+  ]
+ },
+ {
+  "page": "admin home",
+  "violations": [
+   {
+    "id": "label",
+    "impact": "critical",
+    "nodes": 50,
+    "help": "Form elements must have labels",
+    "sample": "tr:nth-child(1) > td:nth-child(4) > .batch-editor > input[value=\"2024\"][type=\"number\"] :: Element does not have an implicit (wrapped) <label> || tr:nth-child(2) > td:nth-child(4) > .batch-editor > input[value=\"2024\"][type=\"number\"] :: Element does not have an implicit (wrapped) <label> || tr:nth-child(3) > td:nth-child(4) > .batch-editor > input[value=\"2024\"][type=\"number\"] :: Element does not have an implicit (wrapped) <label>"
+   },
+   {
+    "id": "select-name",
+    "impact": "critical",
+    "nodes": 2,
+    "help": "Select element must have an accessible name",
+    "sample": ".panel-heading > select :: Element does not have an implicit (wrapped) <label> || .filters > select :: Element does not have an implicit (wrapped) <label>"
+   }
+  ]
+ }
+]

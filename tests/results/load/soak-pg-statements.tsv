@@ -1,0 +1,17 @@
+calls	total_ms	mean_ms	max_ms	rows	query
+1145516	10916	0.01	2	3046995	SELECT "public"."Milestone"."id", "public"."Milestone"."cycleId", "public"."Milestone"."position", "public"."Milestone"."name", "public"."Milestone"."description", "public"."Milestone"."submissionOpensAt", "public"."Mile
+155808	8952	0.06	4	3711883	SELECT "public"."Submission"."id", "public"."Submission"."teamId", "public"."Submission"."cycleId", "public"."Submission"."milestoneId", "public"."Submission"."version", "public"."Submission"."links", "public"."Submissio
+216477	7776	0.04	4	273793	SELECT "public"."CourseProjectCycle"."id", "public"."CourseProjectCycle"."courseName", "public"."CourseProjectCycle"."title", "public"."CourseProjectCycle"."description", "public"."CourseProjectCycle"."batchYear", "publi
+460135	7038	0.02	1	1840540	SELECT "public"."User"."id", "public"."User"."name", "public"."User"."email" FROM "public"."User" WHERE "public"."User"."id" IN ($1 /*, ... */) OFFSET $2
+953179	6832	0.01	3	953179	SELECT "public"."CourseProjectCycle"."id", "public"."CourseProjectCycle"."courseName", "public"."CourseProjectCycle"."title", "public"."CourseProjectCycle"."description", "public"."CourseProjectCycle"."batchYear", "publi
+281985	6000	0.02	2	450234	SELECT "public"."Team"."id", "public"."Team"."cycleId", "public"."Team"."name", "public"."Team"."leaderId", "public"."Team"."origin"::text, "public"."Team"."createdAt", "public"."Team"."updatedAt" FROM "public"."Team" WH
+56083	5436	0.10	2	3388855	SELECT "public"."Submission"."id", "public"."Submission"."teamId", "public"."Submission"."milestoneId" FROM "public"."Submission" WHERE "public"."Submission"."teamId" IN ($1 /*, ... */) OFFSET $2
+460135	5417	0.01	2	1840540	SELECT "public"."TeamMember"."teamId", "public"."TeamMember"."userId", "public"."TeamMember"."cycleId", "public"."TeamMember"."addedById", "public"."TeamMember"."addedAt" FROM "public"."TeamMember" WHERE ("public"."TeamM
+661887	4673	0.01	3	661887	SELECT "public"."User"."id", "public"."User"."role"::text, "public"."User"."status"::text, "public"."User"."tokenVersion", "public"."User"."batchYear", "public"."User"."email" FROM "public"."User" WHERE ("public"."User".
+168249	3821	0.02	1	1345992	SELECT "public"."TeamMember"."teamId", "public"."TeamMember"."userId", "public"."TeamMember"."cycleId", "public"."TeamMember"."addedById", "public"."TeamMember"."addedAt" FROM "public"."TeamMember" WHERE ("public"."TeamM
+2272	3154	1.39	15	1482749	SELECT "public"."Submission"."id", "public"."Submission"."teamId", "public"."Submission"."cycleId", "public"."Submission"."milestoneId", "public"."Submission"."version", "public"."Submission"."links", "public"."Submissio
+168249	3131	0.02	2	672996	SELECT "public"."User"."id", "public"."User"."name", "public"."User"."email" FROM "public"."User" WHERE "public"."User"."id" IN ($1 /*, ... */) OFFSET $2
+501995	2617	0.01	1	501995	SELECT "public"."User"."id", "public"."User"."name" FROM "public"."User" WHERE "public"."User"."id" IN ($1) OFFSET $2
+131660	2404	0.02	0	31881	SELECT "public"."Evaluation"."id", "public"."Evaluation"."milestoneId", "public"."Evaluation"."teamId", "public"."Evaluation"."cycleId", "public"."Evaluation"."marks", "public"."Evaluation"."feedback", "public"."Evaluati
+252429	2215	0.01	1	252429	SELECT "public"."ProjectIdea"."id", "public"."ProjectIdea"."teamId", "public"."ProjectIdea"."cycleId", "public"."ProjectIdea"."title", "public"."ProjectIdea"."problem", "public"."ProjectIdea"."solution", "public"."Projec
+(15 rows)

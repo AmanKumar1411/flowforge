@@ -1,0 +1,393 @@
+{
+    "root_group": {
+        "groups": {},
+        "checks": {
+                "submission saved": {
+                    "name": "submission saved",
+                    "path": "::submission saved",
+                    "id": "df7aa0fb006117656a61618f77db2757",
+                    "passes": 1547,
+                    "fails": 0
+                }
+            },
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "metrics": {
+        "data_sent": {
+            "count": 148524166,
+            "rate": 116451.02927638203
+        },
+        "iteration_duration": {
+            "avg": 11537.285528001798,
+            "min": 3060.008875,
+            "med": 11481.061833,
+            "p(90)": 15329.218896,
+            "p(95)": 16594.711030999995,
+            "p(99)": 18530.0790667,
+            "max": 22521.041125,
+            "count": 47056
+        },
+        "http_req_duration{name:GET /course-cycles/:id/milestones/:m/submissions}": {
+            "avg": 20.72480968858133,
+            "min": 12.984,
+            "med": 18.664,
+            "p(90)": 28.691,
+            "p(95)": 30.880149999999993,
+            "p(99)": 44.32955,
+            "max": 56.473,
+            "count": 578,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "http_req_blocked": {
+            "avg": 0.018292643502246984,
+            "min": 0,
+            "med": 0.001,
+            "p(90)": 0.006,
+            "p(95)": 0.18,
+            "p(99)": 0.243,
+            "max": 9.976,
+            "count": 329124
+        },
+        "submissions_created": {
+            "count": 1547,
+            "rate": 1.2129321923986633
+        },
+        "http_req_tls_handshaking": {
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "p(99)": 0,
+            "max": 0,
+            "count": 329124
+        },
+        "http_req_duration{name:GET /me/upcoming}": {
+            "med": 2.04,
+            "p(90)": 3.5711000000000004,
+            "p(95)": 4.679099999999999,
+            "p(99)": 8.730059999999995,
+            "max": 42.307,
+            "count": 13740,
+            "avg": 2.4478609170305674,
+            "min": 1.266,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "http_req_waiting": {
+            "count": 329124,
+            "avg": 5.068473584424129,
+            "min": 1.09,
+            "med": 4.844,
+            "p(90)": 8.184,
+            "p(95)": 10.029,
+            "p(99)": 16.576,
+            "max": 64.595
+        },
+        "http_req_duration{name:GET grading}": {
+            "p(95)": 39.2045,
+            "p(99)": 51.00587999999998,
+            "max": 64.836,
+            "count": 578,
+            "avg": 26.36445674740486,
+            "min": 16.645,
+            "med": 25.3575,
+            "p(90)": 34.3822,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "http_req_duration{name:GET /course-cycles/:id}": {
+            "p(90)": 3.255,
+            "p(95)": 4.248249999999998,
+            "p(99)": 7.86445,
+            "max": 39.6,
+            "count": 47056,
+            "avg": 2.2632426045562766,
+            "min": 1.107,
+            "med": 1.912,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "http_req_duration{name:GET /teams/:id/milestones/:m/submissions}": {
+            "p(90)": 9.574100000000001,
+            "p(95)": 11.503549999999997,
+            "p(99)": 17.08071,
+            "max": 56.053,
+            "count": 77430,
+            "avg": 6.8041977140643795,
+            "min": 3.334,
+            "med": 6.014,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "data_received": {
+            "count": 936993917,
+            "rate": 734654.2249586433
+        },
+        "server_errors": {
+            "count": 0,
+            "rate": 0,
+            "thresholds": {
+                "count<1": false
+            }
+        },
+        "vus": {
+            "value": 2,
+            "min": 1,
+            "max": 500
+        },
+        "http_req_duration{name:GET /teams/mine}": {
+            "p(99)": 7.713919999999998,
+            "max": 20.57,
+            "count": 46478,
+            "avg": 2.674466629373018,
+            "min": 1.264,
+            "med": 2.309,
+            "p(90)": 3.887,
+            "p(95)": 4.855,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "http_reqs": {
+            "count": 329124,
+            "rate": 258.0511279192099
+        },
+        "http_req_duration{expected_response:true}": {
+            "med": 4.866,
+            "p(90)": 8.216,
+            "p(95)": 10.065,
+            "p(99)": 16.632539999999995,
+            "max": 64.836,
+            "count": 329124,
+            "avg": 5.094633894823794,
+            "min": 1.107
+        },
+        "http_req_connecting": {
+            "avg": 0.013929731651292517,
+            "min": 0,
+            "med": 0,
+            "p(90)": 0,
+            "p(95)": 0.15,
+            "p(99)": 0.208,
+            "max": 9.931,
+            "count": 329124
+        },
+        "http_req_duration{name:POST /auth/refresh}": {
+            "count": 1000,
+            "avg": 6.078234999999993,
+            "min": 2.843,
+            "med": 5.0895,
+            "p(90)": 9.756800000000002,
+            "p(95)": 12.24284999999999,
+            "p(99)": 17.652209999999997,
+            "max": 23.582,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "refresh_failures": {
+            "passes": 0,
+            "fails": 500,
+            "thresholds": {
+                "rate<0.01": false
+            },
+            "value": 0
+        },
+        "http_req_duration{name:POST /auth/dev-login}": {
+            "med": 5.5965,
+            "p(90)": 13.524400000000002,
+            "p(95)": 15.390099999999997,
+            "p(99)": 20.171659999999996,
+            "max": 38.722,
+            "count": 500,
+            "avg": 7.1441320000000035,
+            "min": 2.438,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "http_req_duration{name:GET /me/dashboard}": {
+            "p(95)": 11.678,
+            "p(99)": 18.478299999999994,
+            "max": 49.363,
+            "count": 46478,
+            "avg": 6.617405353070273,
+            "min": 3.299,
+            "med": 5.851,
+            "p(90)": 9.417,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "http_req_duration{kind:read}": {
+            "p(99)": 16.380289999999995,
+            "max": 64.836,
+            "count": 325872,
+            "avg": 5.055430362228064,
+            "min": 1.107,
+            "med": 4.854,
+            "p(90)": 8.111,
+            "p(95)": 9.900449999999985,
+            "thresholds": {
+                "p(95)<500": false
+            }
+        },
+        "iterations": {
+            "count": 47056,
+            "rate": 36.89446492922527
+        },
+        "http_req_duration": {
+            "max": 64.836,
+            "count": 329124,
+            "avg": 5.094633894823794,
+            "min": 1.107,
+            "med": 4.866,
+            "p(90)": 8.216,
+            "p(95)": 10.065,
+            "p(99)": 16.632539999999995
+        },
+        "http_req_duration{kind:write}": {
+            "avg": 11.24017237442922,
+            "min": 5.92,
+            "med": 9.9675,
+            "p(90)": 15.787600000000001,
+            "p(95)": 19.891399999999994,
+            "p(99)": 30.21213,
+            "max": 42.94,
+            "count": 1752,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "http_req_receiving": {
+            "p(95)": 0.043,
+            "p(99)": 0.071,
+            "max": 9.558,
+            "count": 329124,
+            "avg": 0.02003679464275067,
+            "min": 0.007,
+            "med": 0.016,
+            "p(90)": 0.029
+        },
+        "http_req_duration{name:GET /teams/:id/idea}": {
+            "med": 4.773,
+            "p(90)": 7.859600000000002,
+            "p(95)": 9.534149999999999,
+            "p(99)": 14.36169,
+            "max": 44.605,
+            "count": 46478,
+            "avg": 5.448855630620962,
+            "min": 2.577,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "vus_max": {
+            "value": 500,
+            "min": 500,
+            "max": 500
+        },
+        "http_req_duration{name:POST submission}": {
+            "med": 9.913,
+            "p(90)": 15.592400000000001,
+            "p(95)": 19.571799999999996,
+            "p(99)": 30.21398,
+            "max": 42.94,
+            "count": 1547,
+            "avg": 11.180252100840335,
+            "min": 5.92,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "http_req_duration{name:PUT evaluation}": {
+            "max": 34.647,
+            "count": 205,
+            "avg": 11.69235121951219,
+            "min": 6.597,
+            "med": 10.461,
+            "p(90)": 17.282,
+            "p(95)": 20.1722,
+            "p(99)": 27.964999999999996,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "http_req_failed": {
+            "fails": 329124,
+            "passes": 0,
+            "thresholds": {
+                "rate<0.01": false
+            },
+            "value": 0
+        },
+        "http_req_duration{name:GET evaluations}": {
+            "avg": 5.739147209432382,
+            "min": 3.058,
+            "med": 5.117,
+            "p(90)": 7.880300000000001,
+            "p(95)": 9.396,
+            "p(99)": 14.123379999999997,
+            "max": 56.283,
+            "count": 46478,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "login_failures": {
+            "passes": 0,
+            "fails": 500,
+            "value": 0
+        },
+        "http_req_duration{name:GET /auth/me}": {
+            "min": 0,
+            "med": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "p(99)": 0,
+            "max": 0,
+            "count": 0,
+            "avg": 0,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "checks": {
+            "passes": 1547,
+            "fails": 0,
+            "value": 1
+        },
+        "http_req_duration{name:GET /course-cycles/my}": {
+            "avg": 2.353292387543253,
+            "min": 1.333,
+            "med": 2.0389999999999997,
+            "p(90)": 3.4403,
+            "p(95)": 4.15285,
+            "p(99)": 6.947099999999994,
+            "max": 9.516,
+            "count": 578,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "http_req_sending": {
+            "count": 329124,
+            "avg": 0.006123515756985556,
+            "min": 0.001,
+            "med": 0.005,
+            "p(90)": 0.009,
+            "p(95)": 0.013,
+            "p(99)": 0.025,
+            "max": 1.812
+        }
+    }
+}

@@ -1,0 +1,6 @@
+node_modules/
+.qa/
+test-results/
+playwright-report/
+results/raw/
+load/.users.json

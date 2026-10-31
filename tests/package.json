@@ -1,0 +1,20 @@
+{
+  "name": "flowforge-qa",
+  "version": "0.1.0",
+  "private": true,
+  "description": "End-to-end, load, concurrency and security tests for FlowForge. Runs only against the isolated QA stack (see README.md).",
+  "scripts": {
+    "seed": "node seed/seed.cjs",
+    "test:security": "playwright test --project=security",
+    "test:concurrency": "playwright test --project=concurrency",
+    "test:e2e": "playwright test --project=desktop-chrome --project=mobile-chrome",
+    "test:browsers": "playwright test --project=firefox --project=webkit",
+    "test:a11y": "playwright test --project=a11y",
+    "integrity": "node support/integrity.cjs"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.64.1",
+    "pg": "^8.23.1"
+  }
+}
