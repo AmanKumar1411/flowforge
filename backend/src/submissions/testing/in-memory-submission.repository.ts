@@ -63,7 +63,7 @@ export class InMemorySubmissionRepository extends SubmissionRepository {
     );
   }
 
-  create(submission: NewSubmission): Promise<Submission> {
+  async create(submission: NewSubmission): Promise<Submission> {
     if (
       this.rows.some(
         (row) =>
@@ -80,7 +80,7 @@ export class InMemorySubmissionRepository extends SubmissionRepository {
       submittedBy: this.people(submission.submittedBy.id),
     };
     this.rows.push(created);
-    return Promise.resolve(structuredClone(created));
+    return structuredClone(created);
   }
 
   private newestFirst(keep: (row: Submission) => boolean): Submission[] {

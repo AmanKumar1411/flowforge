@@ -15,15 +15,18 @@ export class InMemoryRateLimiter extends RateLimiter {
     windowMs: number,
   ): Promise<RateLimitDecision> {
     const now = this.clock.now().getTime();
-    const windowStart = Math.floor(now / windowMs) * windowMs;
+    const thisWindow = Math.floor(now / windowMs) * windowMs;
     const current = this.counters.get(key);
-    const count =
-      current && current.windowStart >= windowStart ? current.count + 1 : 1;
+    // A later window (another process's clock a little ahead) keeps counting.
+    const continues =
+      current !== undefined && current.windowStart >= thisWindow;
+    const count = continues ? current.count + 1 : 1;
+    const windowStart = continues ? current.windowStart : thisWindow;
     this.counters.set(key, { windowStart, count });
     return Promise.resolve({
       allowed: count <= limit,
       hits: count,
-      retryAfterMs: windowStart + windowMs - now,
+      retryAfterMs: Math.max(0, windowStart + windowMs - now),
     });
   }
 }
