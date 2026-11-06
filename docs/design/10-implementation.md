@@ -44,7 +44,7 @@ The web app is a Cloudflare Worker that serves the build and forwards `/api/*` t
 
 ### Test suites
 
-From the final run on `lld-complete`, on 6 November 2026.
+From the final run on `lld-complete`, on 6 November 2026. The backend suites ran again after the 503 fix. The frontend, browser and QA suites ran just before it, and the fix only changes how one database error is answered.
 
 | Suite | Command | Result |
 | --- | --- | --- |
@@ -52,7 +52,7 @@ From the final run on `lld-complete`, on 6 November 2026.
 | Backend lint, with the layering rule | `npm run lint` | Pass |
 | Backend build | `npm run build` | Pass |
 | Backend unit (Jest) | `npm test` | 477 passed in 33 files |
-| Backend integration (`node:test`, real PostgreSQL) | `npm run test:integration` | 641 passed in 33 files |
+| Backend integration (`node:test`, real PostgreSQL) | `npm run test:integration` | 644 passed in 33 files |
 | Frontend unit (Vitest) | `npm test` in `frontend/` | 68 passed in 16 files |
 | Frontend build and lint | `npm run build`, `npm run lint` | Pass |
 | Browser checks (Chrome against the real API) | `e2e/browser/README.md` | 73 of 73 checks in 7 scripts |
@@ -113,7 +113,7 @@ and a submission rush in the last 15 minutes (`tests/load/flowforge.js`).
 - **Capacity rose about 40%,** from about 650 to about 900 requests per second, with all 3,000 users on one IP under the real limits and no sign-in refused. **The 3,000-user latency target is still missed on this machine.** The p95 improved only from 5.94 s to 4.64 s. This run can't say what production hardware would do.
 - **What limited it isn't established.** During the hold, averaged: API 215% CPU, PostgreSQL 279% (peak 516%), k6 49%, on 8 cores, with PostgreSQL in a Docker VM. The API wasn't using its 4 cores in full, and on average only 3 of 40 connections were active.
 - **No work was lost or saved late:** the accepted submissions equal the new rows, and the 21 integrity checks pass.
-- **New finding: 25 responses were 500, not 503.** Under this load, Prisma's default 2-second wait to start a transaction expired ("Unable to start a transaction in the given time"). The requests were refused cleanly: 21 refreshes, 3 submissions and 1 sign-in. `backend/src/common/errors/database-errors.ts` maps Prisma's "no pooled connection" (`P2024`) to 503 but not this error (`P2028`), so these read as bugs rather than as "try again". It isn't changed in this work, and it's a one-line fix.
+- **25 responses were 500, since fixed to 503.** Under this load, Prisma's default 2-second wait to start a transaction expired ("Unable to start a transaction in the given time"). The requests were refused cleanly: 21 refreshes, 3 submissions and 1 sign-in. They now answer `503 SERVICE_UNAVAILABLE`, so the browser retries instead of showing a bug (`backend/src/common/errors/database-errors.ts`, proved by `backend/test/database-outage.e2e.ts`). The numbers above are from before that fix, which changes the status of these responses and not their timing; the load wasn't rerun.
 - **One refresh answered 401,** with the cause not determined. The audit log shows no reuse detection in the run.
 - **An earlier attempt on this branch isn't counted.** The QA script started the API with a 10-a-minute sign-in limit, so nearly every simulated user was refused. The script is fixed (`tests/support/qa-stack.sh`).
 
@@ -160,4 +160,4 @@ Each diagram, and the files it was verified against.
 | Every cited path, excerpt and code exists | `npm run docs:check` | Pass: no problems |
 | Every Mermaid block renders | `docs/design/scripts/render-mermaid.sh` | Pass: 76 of 76 |
 
-**Recorded at:** branch `lld-complete`, base commit `b738691`, with this work's changes uncommitted.
+**Recorded at:** branch `lld-complete`, commit `18163ae`, and again after the 503 fix that follows it.

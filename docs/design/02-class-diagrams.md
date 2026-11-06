@@ -1337,5 +1337,5 @@ out a port or a production implementation.
 cd backend && npm run docs:ports -- --check
 ```
 
-**Recorded run:** on the `lld-complete` branch, base commit `b738691` plus the uncommitted changes of this work. The
+**Recorded run:** on the `lld-complete` branch, commit `18163ae`, and again after the 503 fix that follows it. The
 result is in [doc 10](10-implementation.md#104-confirmations).

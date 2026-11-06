@@ -20,7 +20,7 @@ const UNAVAILABLE_SQLSTATES = /^(08\d{3}|57P01|57P02|57P03|53300)$/;
 // Prisma: database not reachable, timed out, connection closed, no pooled connection in time.
 const UNAVAILABLE_PRISMA_CODES = new Set(["P1001", "P1002", "P1017", "P2024"]);
 const UNAVAILABLE_MESSAGES =
-  /Connection terminated|timeout exceeded when trying to connect|Client has encountered a connection error|the database system is (shutting down|starting up)|Can't reach database server/i;
+  /Connection terminated|timeout exceeded when trying to connect|Client has encountered a connection error|the database system is (shutting down|starting up)|Can't reach database server|Unable to start a transaction in the given time/i;
 
 /** The error and everything it wraps, without visiting one twice. */
 function* chain(error: unknown, seen = new Set<unknown>()): Generator<unknown> {

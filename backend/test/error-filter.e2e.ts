@@ -95,6 +95,27 @@ describe("One filter for every DomainError", () => {
     });
   });
 
+  it("answers 503 when the database is too busy to start a transaction", () => {
+    const { status, body } = respond(
+      new Error(
+        "Transaction API error: Unable to start a transaction in the given time.",
+      ),
+    );
+
+    assert.equal(status, 503);
+    assert.equal((body as { code: string }).code, "SERVICE_UNAVAILABLE");
+    assert.doesNotMatch(JSON.stringify(body), /transaction/i);
+  });
+
+  it("keeps a transaction used after it closed as a 500: that is a bug, not a busy database", () => {
+    const { status, body } = respond(
+      new Error("Transaction API error: Transaction already closed."),
+    );
+
+    assert.equal(status, 500);
+    assert.equal((body as { code: string }).code, "INTERNAL_ERROR");
+  });
+
   it("hides anything it does not recognise behind INTERNAL_ERROR", () => {
     const { status, body } = respond(new Error("secret SQL here"));
 

@@ -138,6 +138,7 @@ flowchart TB
 | The database goes down during a session | Requests answer 503 with no details. The cookie stays, and the app shows a retry banner | `503 SERVICE_UNAVAILABLE` | `backend/test/database-outage.e2e.ts`, `tests/e2e/resilience.spec.ts` (RES-1) |
 | The database comes back | Next retry succeeds. No API restart, and nobody signed out | none | The same tests |
 | A write during the outage | Not half-applied | `503` | `tests/e2e/resilience.spec.ts` (RES-1) |
+| The database is too busy to start a transaction within 2 s | Requests answer 503 with no details, and the cookie stays. A later retry succeeds | `503 SERVICE_UNAVAILABLE` | `backend/test/database-outage.e2e.ts`, `backend/test/error-filter.e2e.ts` |
 | A session really ended during that time | Still ended: an answer about the session clears the cookie | `401` | `backend/test/database-outage.e2e.ts` |
 | An API worker dies | The primary starts a new one, and the others keep serving | none | `backend/test/cluster.e2e.ts` |
 
@@ -153,4 +154,4 @@ The counts and load numbers are from the final run, in [doc 10](10-implementatio
 | **Concurrency** | 10 of 10 races pass: no lost, duplicate or late writes. Each loser gets a 409 with a real code, and none gets a 5xx | `tests/concurrency/races.spec.ts` |
 | **Security** | 58 of 58 checks pass. No Critical or High finding, and all 8 findings of the first QA pass were fixed in Phase 10 | `tests/security/` |
 | **Integrity** | 21 of 21 database checks pass after the functional suites: no gaps in versions, no double membership, nothing after a deadline | `tests/support/integrity.cjs` |
-| **Load** | 3,000 users on one laptop, after Phase 10: 1,244,459 requests, p95 4.64 s (5.94 s before), and capacity up about 40%. **The latency target is still missed.** 2,952 submissions accepted and 2,952 saved. A 1,500-user spike: p95 12 ms, no failures. 25 requests answered 500 under overload, a [finding](10-implementation.md#what-the-numbers-mean) not yet fixed | `tests/load/`, `tests/results/load/` |
+| **Load** | 3,000 users on one laptop, after Phase 10: 1,244,459 requests, p95 4.64 s (5.94 s before), and capacity up about 40%. **The latency target is still missed.** 2,952 submissions accepted and 2,952 saved. A 1,500-user spike: p95 12 ms, no failures. 25 requests answered 500 under overload; [that's fixed to 503](10-implementation.md#what-the-numbers-mean), and the load wasn't rerun | `tests/load/`, `tests/results/load/` |
