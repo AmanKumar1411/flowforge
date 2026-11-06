@@ -114,6 +114,20 @@ describe("GoogleIdentityProvider", () => {
     ).rejects.toMatchObject({ code: "INVALID_ID_TOKEN" });
   });
 
+  it("keeps the library's failure as the cause, for the log line only", async () => {
+    google.verifyError = new Error("Token used too late");
+
+    const failure = await provider
+      .verifyCallback("code-1", pending)
+      .catch((error: unknown) => error);
+
+    expect(failure).toMatchObject({
+      code: "INVALID_ID_TOKEN",
+      message: "Google ID token could not be verified",
+    });
+    expect((failure as Error).cause).toBe(google.verifyError);
+  });
+
   it("rejects a token without an email", async () => {
     google.claims = { ...google.claims, email: undefined };
 

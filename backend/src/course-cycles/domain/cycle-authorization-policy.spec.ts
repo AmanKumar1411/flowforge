@@ -3,16 +3,16 @@ import {
   CycleAuthorizationPolicy,
 } from "./cycle-authorization-policy";
 import { Cycle, CycleStatus } from "./cycle.types";
+import { aCycle } from "../testing/cycle.builder";
 
 const policy = new CycleAuthorizationPolicy();
 const cycle = (status: CycleStatus, kind: Cycle["kind"] = "CORE") =>
-  ({
-    id: "c",
-    status,
-    kind,
-    batchYear: 2026,
-    createdByFacultyId: "owner",
-  }) as Cycle;
+  aCycle()
+    .inStatus(status)
+    .ofKind(kind)
+    .forBatch(2026)
+    .ownedBy("owner")
+    .build();
 const student: CycleActor = {
   id: "s",
   role: "STUDENT",

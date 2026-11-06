@@ -2,6 +2,7 @@ import type { Role } from "../../auth/domain/role";
 import { TeamAccessPolicy, TeamActor } from "./team-access.policy";
 import { TeamDomainError } from "./team.errors";
 import { Team, TeamCycle } from "./team";
+import { aTeam } from "../testing/team.builder";
 
 const policy = new TeamAccessPolicy();
 
@@ -17,22 +18,11 @@ const cycle: TeamCycle = {
   ideaDeadline: new Date("2026-11-05T12:00:00.000Z"),
 };
 
-const team: Team = {
-  id: "team",
-  cycleId: "cycle",
-  name: "Falcon",
-  leaderId: "leader",
-  origin: "STUDENT",
-  members: ["leader", "member"].map((userId) => ({
-    userId,
-    name: userId,
-    email: `${userId}@x`,
-    addedById: "leader",
-    addedAt: new Date(),
-  })),
-  createdAt: new Date(),
-  updatedAt: new Date(),
-};
+const team: Team = aTeam()
+  .inCycle("cycle")
+  .ledBy("leader")
+  .withMemberIds("member")
+  .build();
 
 const actor = (id: string, role: Role): TeamActor => ({
   id,
