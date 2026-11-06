@@ -17,7 +17,10 @@
     "prisma:migrate:status": "prisma migrate status",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "seed:demo": "ts-node prisma/seed.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "docs:erd": "ts-node -T --project tsconfig.json ../docs/design/scripts/generate-erd.ts",
+    "docs:ports": "ts-node -T --project tsconfig.json ../docs/design/scripts/list-ports.ts",
+    "docs:check": "ts-node -T --project tsconfig.json ../docs/design/scripts/check-docs.ts"
   },
   "dependencies": {
     "@nestjs/common": "^12.1.1",
@@ -41,6 +44,7 @@
   },
   "devDependencies": {
     "@nestjs/testing": "^12.1.1",
+    "@prisma/internals": "7.10.1",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
