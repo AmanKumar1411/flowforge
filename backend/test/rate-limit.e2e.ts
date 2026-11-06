@@ -8,6 +8,7 @@ import {
   startTestApp,
   TestApp,
 } from "./support/test-app";
+import { nextMinute } from "./support/schedule";
 import { TestBrowser } from "./support/test-browser";
 
 const MINUTE_MS = 60_000;
@@ -196,7 +197,7 @@ describe("Behind a trusted proxy", () => {
 });
 
 describe("Campus-sized limits: thousands of students behind one IP", () => {
-  const clock = new FixedClock("2026-11-02T09:00:00.000Z");
+  const clock = new FixedClock(nextMinute());
   const env = {
     AUTH_LOGIN_RATE_LIMIT_PER_MINUTE: "600",
     AUTH_REFRESH_RATE_LIMIT_PER_MINUTE: "10",
@@ -266,7 +267,7 @@ async function refreshAt(apiUrl: string, token: string) {
 }
 
 describe("Two API instances on one database", () => {
-  const clock = new FixedClock("2026-11-03T09:00:00.000Z");
+  const clock = new FixedClock(nextMinute());
   const env = {
     AUTH_LOGIN_RATE_LIMIT_PER_MINUTE: "3",
     AUTH_REFRESH_RATE_LIMIT_PER_MINUTE: "4",

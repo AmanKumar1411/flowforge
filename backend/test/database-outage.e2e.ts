@@ -103,3 +103,52 @@ describe("A database outage", () => {
     assert.equal(answer.body.code, "INVALID_REFRESH_TOKEN");
   });
 });
+
+// The peak load run: Prisma's wait to start a transaction expired, and 25 requests answered 500.
+describe("A database too busy to start a transaction", () => {
+  let app: TestApp;
+
+  before(async () => {
+    app = await startTestApp({ env: { DB_POOL_MAX: "1" } });
+    await app.reset();
+  });
+  after(() => app.close());
+
+  it("answers 503 without details and keeps the session, which refreshes once a connection is free", async () => {
+    const student = await app.browser().signIn(`meera.25${DOMAIN}`);
+    const cookie = student.cookie("flowforge_refresh");
+    assert.ok(cookie);
+
+    // Holds the pool's only connection for longer than Prisma waits to start a transaction (2 s).
+    let release = () => {};
+    const released = new Promise<void>((resolve) => (release = resolve));
+    let held = () => {};
+    const isHeld = new Promise<void>((resolve) => (held = resolve));
+    const holding = app.prisma.$transaction(
+      async () => {
+        held();
+        await released;
+      },
+      { timeout: 30_000 },
+    );
+    await isHeld;
+
+    const refresh = await student.refresh();
+    release();
+    await holding;
+
+    assert.equal(refresh.status, 503);
+    assert.equal(refresh.body.code, "SERVICE_UNAVAILABLE");
+    assert.doesNotMatch(JSON.stringify(refresh.body), /transaction|prisma/i);
+    assert.equal(
+      student.cookie("flowforge_refresh"),
+      cookie,
+      "the refresh cookie is kept",
+    );
+    assert.equal(
+      (await student.refresh()).status,
+      200,
+      "the same session refreshes, no new sign-in",
+    );
+  });
+});

@@ -108,7 +108,8 @@ stateDiagram-v2
   [*] --> T1: login
   T1 --> T2: refresh (T1 revoked, replacedBy T2)
   T2 --> T3: refresh
-  T3 --> Revoked: T1 or T2 presented again → whole family revoked + audit
+  T3 --> T3: T2 presented again within 10 s, family live → a sibling token (ADR 023)
+  T3 --> Revoked: T1 or T2 presented again after 10 s → whole family revoked + audit
   T3 --> Revoked: logout / logout-all / deactivation
   T3 --> Expired: 1 day after login (configurable)
 ```

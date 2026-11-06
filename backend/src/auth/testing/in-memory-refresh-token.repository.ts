@@ -35,7 +35,9 @@ export class InMemoryRefreshTokenRepository extends RefreshTokenRepository {
 
   async markReplaced(id: string, replacedById: string): Promise<void> {
     const record = this.records.get(id);
-    if (record) record.replacedById = replacedById;
+    // Like the database's UPDATE of a row that is not there.
+    if (!record) throw new Error(`No refresh token ${id}`);
+    record.replacedById = replacedById;
   }
 
   async hasActiveToken(familyId: string, now: Date): Promise<boolean> {

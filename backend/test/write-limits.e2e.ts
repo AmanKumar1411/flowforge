@@ -7,7 +7,7 @@ import {
   startTestApp,
   TestApp,
 } from "./support/test-app";
-import { milestone } from "./support/schedule";
+import { milestone, nextMinute } from "./support/schedule";
 import { TestBrowser } from "./support/test-browser";
 
 const MINUTE_MS = 60_000;
@@ -17,7 +17,7 @@ const DAY_MS = 24 * HOUR_MS;
 // H10 (SEC-F1): one member posted 100 versions in 0.9 s, and every write was unlimited.
 describe("Write limits per user", () => {
   // On a minute boundary, so each check starts a fresh window.
-  const clock = new FixedClock("2026-11-04T09:00:00.000Z");
+  const clock = new FixedClock(nextMinute());
   let app: TestApp;
   let leader: TestBrowser;
   let member: TestBrowser;

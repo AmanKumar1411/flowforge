@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Logger, Module } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 import { JwtModule } from "@nestjs/jwt";
 import { ThrottlerModule } from "@nestjs/throttler";
@@ -30,6 +30,7 @@ import {
   GoogleOAuthClient,
 } from "./infrastructure/google-oauth.client";
 import { JwtTokenSigner } from "./infrastructure/jwt-token.signer";
+import { LoggingIdentityProvider } from "./infrastructure/logging-identity.provider";
 import { PrismaFacultyDirectory } from "./infrastructure/prisma-faculty-directory";
 import { PrismaRefreshTokenRepository } from "./infrastructure/prisma-refresh-token.repository";
 import { RishihoodIdentityParser } from "./infrastructure/rishihood-identity-parser";
@@ -99,7 +100,15 @@ import { AccessTokenStrategy } from "./presentation/strategies/access-token.stra
           google.clientId,
         ),
     },
-    { provide: IdentityProvider, useClass: GoogleIdentityProvider },
+    {
+      provide: IdentityProvider,
+      inject: [GoogleOAuthClient, AppConfig],
+      useFactory: (google: GoogleOAuthClient, config: AppConfig) =>
+        new LoggingIdentityProvider(
+          new GoogleIdentityProvider(google, config),
+          new Logger("GoogleSignIn"),
+        ),
+    },
     { provide: DevIdentityProvider, useClass: LocalDevIdentityProvider },
     { provide: TokenSigner, useClass: JwtTokenSigner },
     { provide: RefreshTokenRepository, useClass: PrismaRefreshTokenRepository },

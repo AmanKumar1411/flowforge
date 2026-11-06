@@ -5,24 +5,24 @@ import type { Cycle } from "../../course-cycles/domain/cycle.types";
 export type TeamOrigin = "STUDENT" | "FACULTY" | "AUTO_GROUP";
 
 export interface TeamMember {
-  userId: string;
-  name: string;
-  email: string;
+  readonly userId: string;
+  readonly name: string;
+  readonly email: string;
   /** The leader, or the faculty member who placed the student. */
-  addedById: string;
-  addedAt: Date;
+  readonly addedById: string;
+  readonly addedAt: Date;
 }
 
 /** A team inside one cycle. The leader is one of `members` and never changes. */
 export interface Team {
-  id: string;
-  cycleId: string;
-  name: string;
-  leaderId: string;
-  origin: TeamOrigin;
-  members: TeamMember[];
-  createdAt: Date;
-  updatedAt: Date;
+  readonly id: string;
+  readonly cycleId: string;
+  readonly name: string;
+  readonly leaderId: string;
+  readonly origin: TeamOrigin;
+  readonly members: readonly TeamMember[];
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
 }
 
 export interface NewTeam {

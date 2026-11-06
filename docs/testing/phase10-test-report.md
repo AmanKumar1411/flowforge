@@ -2,13 +2,14 @@
 
 Branch `phase10-hardening` (from `phase10-qa-testing`, `12c5edc`). Every finding of the
 [QA report](report.md) was fixed and proved with a test that fails on the code before Phase 10 and
-passes after it. The full before/after comparison, including load, is in the report's
-[Phase 10 results](report.md#phase-10-results). The analysis behind each fix is in
+passes after it. The final results, including load, are in
+[10-implementation.md](../design/10-implementation.md). The analysis behind each fix is in
 [phase10-hardening-baseline.md](../analysis/phase10-hardening-baseline.md).
 
 ## Full regression
 
-REGRESSION_TABLE
+The final counts, re-run on the `lld-complete` branch, are in
+[10-implementation.md](../design/10-implementation.md#test-suites).
 
 ## Each new test fails before its fix
 
@@ -37,8 +38,8 @@ Each new or changed test was copied into a worktree of the baseline (`12c5edc`) 
 
 ## QA suites after the fixes
 
-QA_TABLE
+The final counts are in [10-implementation.md](../design/10-implementation.md#qa-suites).
 
 ## Load
 
-LOAD_SUMMARY
+The before and after numbers are in [10-implementation.md](../design/10-implementation.md#load).

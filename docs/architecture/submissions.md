@@ -22,7 +22,7 @@ and the sections below read "the window" as **that milestone's window**:
   a milestone of another cycle is `404 MILESTONE_NOT_FOUND`.
 - Routes: `GET/POST /teams/:teamId/milestones/:milestoneId/submissions` and
   `GET /course-cycles/:cycleId/milestones/:milestoneId/submissions` (owning faculty and admins;
-  each team with its idea, latest version and every version). The cycle-wide routes are gone.
+  each team with its idea and latest version, see Reads below). The cycle-wide routes are gone.
 - `IdeasSubmissionTeams` reads the team and idea through `IdeaService`, and the cycle with its
   milestones through `CourseCycleService`.
 
@@ -30,11 +30,11 @@ and the sections below read "the window" as **that milestone's window**:
 
 | Rule | Where it is enforced |
 | --- | --- |
-| Open from `submissionStartAt` until `submissionDeadline`, while the cycle is published | `SubmissionRules.window` with the injected `Clock` (`409 SUBMISSION_NOT_OPEN` / `SUBMISSION_CLOSED`) |
+| Open from the milestone's `submissionOpensAt` until its `submissionDueAt`, while the cycle is published | `SubmissionRules.window` with the injected `Clock` (`409 SUBMISSION_NOT_OPEN` / `SUBMISSION_CLOSED`) |
 | Only teams with an approved or picked idea | `SubmissionRules.assertCanSubmit` (`409 IDEA_NOT_APPROVED`) |
-| Any member submits; members, the owning faculty and admins read | `SubmissionRules.assertCanSubmit`; visibility through `IdeaService.getTeamIdea` |
-| Repository URL required; demo and report links optional (http or https, at most 500 characters); notes at most 4000 | `SubmitWorkDto` |
-| Versions 1, 2, 3… per team, even when two members save at once | Team row `FOR UPDATE`, then the next number; unique `(teamId, version)`; CHECK `version >= 1` |
+| Any member submits; members, the owning faculty and admins read | `SubmissionRules.assertCanSubmit`; visibility through `IdeaService.getTeamIdeaSummary` and `getVisibleTeam` |
+| Links follow the milestone's requirement, each a public https link (`400 MISSING_REQUIRED_LINK`, `LINK_NOT_ALLOWED`, `INVALID_LINK`); notes at most 4000 characters | `LinkRequirement.check`, `SubmitWorkDto` |
+| Versions 1, 2, 3… per team and milestone, even when two members save at once | Team row `FOR UPDATE`, then the next number; unique `(teamId, milestoneId, version)`; CHECK `version >= 1` |
 | A submission stays in its team's cycle | Composite foreign key `(teamId, cycleId)` → `Team (id, cycleId)` |
 | Every version is audited | `SUBMISSION_CREATED` in the same transaction |
 | At most 10 versions per member per milestone per minute (`429 TOO_MANY_REQUESTS`) | `SubmissionService`, through the shared `RateLimiter` (ADR 023) |
@@ -46,7 +46,7 @@ and the sections below read "the window" as **that milestone's window**:
 ```mermaid
 flowchart LR
   subgraph submissions
-    P[presentation<br/>SubmissionsController (teams/:id/submissions)<br/>CycleSubmissionsController (course-cycles/:id/submissions)]
+    P[presentation<br/>SubmissionsController (teams/:id/milestones/:m/submissions)<br/>CycleSubmissionsController (course-cycles/:id/milestones/:m/submissions)]
     A[application<br/>SubmissionService<br/>ports: SubmissionRepository, SubmissionTeams]
     D[domain<br/>SubmissionRules, submission types]
     I[infrastructure<br/>PrismaSubmissionRepository, IdeasSubmissionTeams]
@@ -70,13 +70,14 @@ sequenceDiagram
   participant S as SubmissionService
   participant I as IdeaService
   participant DB as PostgreSQL
-  M->>S: POST /teams/:id/submissions {repositoryUrl, demoUrl?, reportUrl?, notes?}
-  S->>I: getTeamIdea(actor, teamId)
+  M->>S: POST /teams/:id/milestones/:m/submissions {links, notes?}
+  S->>I: getTeamIdeaSummary(actor, teamId)
   Note right of I: 404 TEAM_NOT_FOUND if the caller may not see the team
-  S->>S: window open? idea approved? caller a member?
+  S->>S: caller a member? window open? idea approved? links fit the requirement?
+  S->>DB: count the member's submissions this minute (429 over the limit)
   S->>DB: BEGIN
   S->>DB: SELECT … FROM "Team" WHERE id = ? FOR UPDATE
-  S->>DB: highest version of the team
+  S->>DB: highest version of the team for this milestone (409 at the limit)
   S->>DB: INSERT Submission (version + 1)
   S->>DB: INSERT AuditLog SUBMISSION_CREATED
   S->>DB: COMMIT

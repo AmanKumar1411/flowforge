@@ -52,7 +52,8 @@ db_up() {
 api_up() {
   stop_port "$API_PORT"
   if [ "${SKIP_BUILD:-0}" != 1 ]; then (cd "$ROOT/backend" && npm run build > "$QA/api-build.log" 2>&1); fi
-  local limit=10 refresh=30
+  # The API's real limits unless QA_LOAD raises them (ADR 023).
+  local limit=600 refresh=10
   if [ "${QA_LOAD:-0}" = 1 ]; then limit=10000; refresh=10000; fi
   (cd "$ROOT/backend" && NODE_ENV=test PORT=$API_PORT DATABASE_URL="$QA_DATABASE_URL" \
     FRONTEND_URL="http://localhost:$WEB_PORT" GOOGLE_REDIRECT_URI="http://localhost:$API_PORT/api/auth/google/callback" \

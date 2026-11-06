@@ -32,29 +32,27 @@ they sign in). Approved ideas unlock [submissions](submissions.md).
 ```mermaid
 timeline
   title One cycle, one stage after another
-  Formation (D1) : students form and change their own teams
-                 : "looking for a team"
-  Completion (D2) : owning faculty place students without a team
-                  : by hand or auto-group
-  Ideas (D3) : leaders propose (edit while waiting) or pick from the list
-             : faculty review any time
-  After D3 : rejected teams revise or pick, round after round, until the cycle closes
-  Submissions open : teams with an approved or picked idea submit work
+  Until teamDeadline : students form and change their own teams
+                     : "looking for a team"
+  Until ideaDeadline : owning faculty place students without a team, by hand or auto-group
+                     : leaders propose (edit while waiting) or pick from the list
+                     : faculty review any time
+  After ideaDeadline : rejected teams revise or pick, round after round, until the cycle closes
+  First milestone opens : teams with an approved or picked idea submit work
 ```
 
-`D1 <= D2 <= D3 <= submissionStartAt < submissionDeadline`, checked on every save and by a
-database CHECK. D2 defaults to D1 and D3 to D2; a later stage that ends together with a moved one
-moves with it. On a published cycle a stage deadline moves only while that stage is open, and
-only into the future.
+`teamDeadline < ideaDeadline <= M1.submissionOpensAt`, checked on every save by `MilestoneSchedule`,
+with a database CHECK on `teamDeadline <= ideaDeadline`. On a published cycle a stage deadline moves
+only while that stage is open, and only into the future.
 
 ## An idea's life
 
 ```mermaid
 stateDiagram-v2
-  [*] --> SUBMITTED: leader proposes (before D3), version 1
-  [*] --> APPROVED: leader picks from the list (before D3)
-  SUBMITTED --> SUBMITTED: leader edits (before D3), version + 1
-  SUBMITTED --> APPROVED: owning faculty approve the version they read, or leader picks (before D3)
+  [*] --> SUBMITTED: leader proposes (before ideaDeadline), version 1
+  [*] --> APPROVED: leader picks from the list (before ideaDeadline)
+  SUBMITTED --> SUBMITTED: leader edits (before ideaDeadline), version + 1
+  SUBMITTED --> APPROVED: owning faculty approve the version they read, or leader picks (before ideaDeadline)
   SUBMITTED --> REJECTED: owning faculty reject, with feedback
   REJECTED --> SUBMITTED: leader resubmits (any time while published), version + 1
   REJECTED --> APPROVED: leader picks from the list (any time while published)

@@ -130,13 +130,19 @@ stateDiagram-v2
   NoTeams --> Forming: a leader creates a team
   Forming --> Forming: leader changes members or renames
   Forming --> NoTeams: leader disbands
-  Forming --> Fixed: teamFormationDeadline passes, or the cycle is closed
-  NoTeams --> Fixed: deadline passes (students without a team stay without one)
+  Forming --> Placement: teamDeadline passes
+  NoTeams --> Placement: teamDeadline passes
+  Placement --> Placement: owning faculty place students without a team
+  Placement --> Fixed: ideaDeadline passes
+  Forming --> Fixed: the cycle is closed
+  NoTeams --> Fixed: the cycle is closed
+  Placement --> Fixed: the cycle is closed
   Fixed --> [*]
 ```
 
-The window is computed on every request (`status === "PUBLISHED" && now < teamFormationDeadline`).
-Nothing is stored or scheduled. Exactly at the deadline counts as closed.
+The window is computed on every request (`status === "PUBLISHED" && now < teamDeadline`, in
+`TeamRules.isFormationOpen`). Nothing is stored or scheduled. Exactly at the deadline counts as
+closed. The faculty's window follows it, until `ideaDeadline` (`TeamRules.isPlacementOpen`).
 
 ## Access matrix
 

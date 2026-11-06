@@ -11,19 +11,19 @@ export const MAX_MILESTONES = 10;
  * `cycleId`) without changing it.
  */
 export interface Milestone {
-  id: string;
-  cycleId: string;
+  readonly id: string;
+  readonly cycleId: string;
   /** 1…n, in the order the milestones happen. */
-  position: number;
-  name: string;
-  description: string | null;
-  submissionOpensAt: Date;
+  readonly position: number;
+  readonly name: string;
+  readonly description: string | null;
+  readonly submissionOpensAt: Date;
   /** Versions are accepted strictly before this moment. */
-  submissionDueAt: Date;
-  evaluationAt: Date;
-  linkRequirement: LinkRequirement;
-  createdAt: Date;
-  updatedAt: Date;
+  readonly submissionDueAt: Date;
+  readonly evaluationAt: Date;
+  readonly linkRequirement: LinkRequirement;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
 }
 
 /** A milestone as the faculty write it. `id` names one that exists already; its place in the list sets its position. */

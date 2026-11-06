@@ -61,8 +61,8 @@ export class GoogleIdentityProvider extends IdentityProvider {
         pending.codeVerifier,
       );
       claims = await this.google.verifyIdToken(idToken);
-    } catch {
-      throw this.invalid("Google ID token could not be verified");
+    } catch (cause) {
+      throw this.invalid("Google ID token could not be verified", cause);
     }
     if (claims.nonce !== pending.nonce) {
       throw this.invalid("Google ID token nonce does not match this login");
@@ -80,7 +80,10 @@ export class GoogleIdentityProvider extends IdentityProvider {
     };
   }
 
-  private invalid(message: string): AuthDomainError {
-    return new AuthDomainError("INVALID_ID_TOKEN", message);
+  private invalid(message: string, cause?: unknown): AuthDomainError {
+    const error = new AuthDomainError("INVALID_ID_TOKEN", message);
+    // For LoggingIdentityProvider's log line; no response carries it.
+    if (cause !== undefined) error.cause = cause;
+    return error;
   }
 }

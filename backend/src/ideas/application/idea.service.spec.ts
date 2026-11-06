@@ -72,7 +72,7 @@ const content = {
 /** Members see their team; the owning faculty and admins see every team; nobody else does. */
 class FakeIdeaTeams extends IdeaTeams {
   readonly teams = new Map([falcon, kestrel].map((team) => [team.id, team]));
-  readonly cycle: IdeaCycle = { ...cycle };
+  cycle: IdeaCycle = { ...cycle };
 
   /** Other faculty do not see the cycle; everyone else in these tests does. */
   getVisibleCycle(actor: TeamActor) {
@@ -316,7 +316,7 @@ describe("IdeaService", () => {
         decision: "REJECTED",
         feedback: "Still too broad",
       });
-      kit.teams.cycle.status = "CLOSED";
+      kit.teams.cycle = { ...kit.teams.cycle, status: "CLOSED" };
       await expect(
         kit.service.submit(leader, "falcon", content),
       ).rejects.toMatchObject({
@@ -492,7 +492,7 @@ describe("IdeaService", () => {
       await expect(
         kit.catalogService.add(leader, "cycle", brief),
       ).rejects.toMatchObject({ code: "CATALOG_IDEA_NOT_FOUND" });
-      kit.teams.cycle.status = "CLOSED";
+      kit.teams.cycle = { ...kit.teams.cycle, status: "CLOSED" };
       await expect(
         kit.catalogService.add(faculty, "cycle", brief),
       ).rejects.toMatchObject({ code: "CATALOG_CLOSED" });
