@@ -6,7 +6,7 @@ export interface TodoContext {
     status: "DRAFT" | "PUBLISHED" | "CLOSED";
     teamDeadline: Date;
     ideaDeadline: Date;
-    milestones: {
+    milestones: readonly {
       id: string;
       position: number;
       name: string;

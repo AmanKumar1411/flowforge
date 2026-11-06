@@ -70,7 +70,7 @@ describe("Team services", () => {
     return created.id;
   }
 
-  const memberIds = (team: { members: { userId: string }[] }) =>
+  const memberIds = (team: { members: readonly { userId: string }[] }) =>
     team.members.map((member) => member.userId).sort();
 
   describe("forming a team", () => {

@@ -18,30 +18,30 @@ export const TEAM_SIZE_LIMIT = 10;
 
 /** The cycle aggregate: the cycle and its milestones, in position order. */
 export interface Cycle {
-  id: string;
-  courseName: string;
-  title: string;
-  description: string | null;
-  batchYear: number;
-  semester: number;
-  academicYear: string;
-  minTeamSize: number;
-  maxTeamSize: number;
+  readonly id: string;
+  readonly courseName: string;
+  readonly title: string;
+  readonly description: string | null;
+  readonly batchYear: number;
+  readonly semester: number;
+  readonly academicYear: string;
+  readonly minTeamSize: number;
+  readonly maxTeamSize: number;
   /** Students change their own teams until this moment; the faculty then place the rest until `ideaDeadline`. */
-  teamDeadline: Date;
+  readonly teamDeadline: Date;
   /** Teams submit or pick their first idea until this moment; feedback rounds continue after it. */
-  ideaDeadline: Date;
-  ideaSource: CycleIdeaSource;
+  readonly ideaDeadline: Date;
+  readonly ideaSource: CycleIdeaSource;
   /** Which links an idea needs. */
-  ideaLinkRequirement: LinkRequirement;
-  milestones: Milestone[];
-  kind: CourseKind;
-  status: CycleStatus;
-  createdByFacultyId: string;
-  publishedAt: Date | null;
-  closedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
+  readonly ideaLinkRequirement: LinkRequirement;
+  readonly milestones: readonly Milestone[];
+  readonly kind: CourseKind;
+  readonly status: CycleStatus;
+  readonly createdByFacultyId: string;
+  readonly publishedAt: Date | null;
+  readonly closedAt: Date | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
 }
 
 /** The cycle's own fields when it is created; its milestones are saved with it. */
