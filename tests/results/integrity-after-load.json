@@ -1,5 +1,5 @@
 {
- "at": "2026-10-30T23:34:36.368Z",
+ "at": "2026-11-06T07:28:04.099Z",
  "results": {
   "team members whose team is missing": 0,
   "teams without members": 0,
@@ -26,8 +26,8 @@
  "totals": {
   "users": "3022",
   "teams": "780",
-  "submissions": "7924",
+  "submissions": "3826",
   "evaluations": "546",
-  "audit_rows": "14183"
+  "audit_rows": "8833"
  }
 }

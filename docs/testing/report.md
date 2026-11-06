@@ -1,6 +1,7 @@
 # FlowForge QA report: end-to-end, load, concurrency and security
 
-Commit `6166b60` (`main`, Phases 1–9), tested 30–31 October 2026.
+Commit `6166b60` (`main`, Phases 1–9), tested 30–31 October 2026. **Phase 10 fixed these findings; the results after
+it are in [10-implementation.md](../design/10-implementation.md).** This report keeps the numbers from before.
 No application code was changed; every test lives in [`tests/`](../../tests/README.md). Plan:
 [plan.md](plan.md).
 

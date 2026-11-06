@@ -47,7 +47,7 @@ Implemented so far:
   - safer links and text;
   - keyboard and contrast fixes.
 
-Evaluations come later.
+The low-level design, checked against the code, is in [docs/design/](docs/design/README.md).
 
 ## Prerequisites
 
